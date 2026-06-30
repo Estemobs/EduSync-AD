@@ -192,11 +192,12 @@ class IdentifierEngine:
         self, which: str, base: str, prenom: str, nom: str
     ) -> Iterator[str]:
         template = self._resolved_template()
-        token_present = bool(template) and re.search(rf"\{{{which}\d+\}}", template)
-        if not token_present:
+        match = re.search(rf"\{{{which}(\d+)\}}", template) if template else None
+        if not match:
             return
+        start_length = int(match.group(1)) + 1
         max_length = len(prenom) if which == "p" else len(nom)
-        for length in range(1, max_length + 1):
+        for length in range(start_length, max_length + 1):
             candidate = render_template(
                 template, prenom, nom, year=self.annee, override=(which, length)
             )
