@@ -1,1 +1,33 @@
 *.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Build / packaging
+build/
+dist/
+*.spec
+packaging/linux/.flatpak-builder/
+packaging/linux/build-dir/
+
+# Configuration locale et données utilisateur (jamais commitées)
+*.local.json
+*.db
+*.key
+
+# IDE
+.vscode/
+.idea/
