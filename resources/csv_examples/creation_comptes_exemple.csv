@@ -1,0 +1,4 @@
+prenom;nom;ou;email_perso;date_naissance;numero
+Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee-victor-hugo,DC=local;thomas.martin.perso@gmail.com;12/05/2011;20251001
+Léa;Dupont;OU=3emeA,OU=Eleves,DC=lycee-victor-hugo,DC=local;lea.dupont.perso@gmail.com;03/09/2011;20251002
+Jean-Pierre;O'Brien;OU=3emeB,OU=Eleves,DC=lycee-victor-hugo,DC=local;;22/01/2011;20251003
