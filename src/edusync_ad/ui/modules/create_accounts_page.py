@@ -1,0 +1,459 @@
+"""Module 1 — Création de comptes (§4 du cahier des charges).
+
+Import CSV -> sélection du type de compte -> sélection du format
+d'identifiant -> génération de la prévisualisation (identifiants, mots de
+passe, emails, groupe de classe, doublons résolus) -> validation (écriture
+dans l'AD ou simulation) -> export CSV des comptes créés.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from pathlib import Path
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QButtonGroup,
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QRadioButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
+
+from edusync_ad.core.ad.connection import ADConnection
+from edusync_ad.core.ad.exceptions import ADError
+from edusync_ad.core.audit import AuditLog
+from edusync_ad.core.config import AppConfig
+from edusync_ad.core.csv_io import (
+    CsvPreview,
+    EXPECTED_COLUMNS,
+    REQUIRED_COLUMNS,
+    export_created_accounts,
+    load_preview,
+    load_rows,
+)
+from edusync_ad.core.identifiers import (
+    CAMEL_PRESETS,
+    PRESETS,
+    IdentifierEngine,
+    apply_prenom_compose_rule,
+    clean_token,
+    render_template,
+)
+from edusync_ad.core.models import AccountType, GeneratedUser, RawUserRow
+from edusync_ad.core.passwords import generate_passwords_for_batch
+
+IDENTIFIER_PRESET_KEYS = list(PRESETS.keys()) + list(CAMEL_PRESETS)
+
+PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "Mot de passe", "Email", "OU cible", "Groupe", "État"]
+COL_IDENTIFIANT, COL_NOM, COL_MDP, COL_EMAIL, COL_OU, COL_GROUPE, COL_ETAT = range(7)
+
+
+def _ou_leaf_name(ou_dn: str) -> str:
+    leaf = ou_dn.split(",")[0].strip()
+    if "=" in leaf:
+        return leaf.split("=", 1)[1]
+    return leaf
+
+
+class CreateAccountsPage(QWidget):
+    def __init__(
+        self,
+        ad_connection: ADConnection,
+        config: AppConfig,
+        audit_log: AuditLog,
+        session_id: str,
+        parent=None,
+    ) -> None:
+        super().__init__(parent)
+        self.ad_connection = ad_connection
+        self.config = config
+        self.audit_log = audit_log
+        self.session_id = session_id
+
+        self._csv_path: Path | None = None
+        self._csv_preview: CsvPreview | None = None
+        self._mapping_combos: dict[str, QComboBox] = {}
+        self._generated: list[GeneratedUser] = []
+
+        self._build_ui()
+
+    def update_config(self, config: AppConfig) -> None:
+        self.config = config
+
+    # -- Construction de l'interface -----------------------------------------
+
+    def _build_ui(self) -> None:
+        import_group = QGroupBox("1. Import du fichier CSV")
+        import_layout = QVBoxLayout(import_group)
+
+        import_row = QHBoxLayout()
+        self.import_button = QPushButton("Choisir un fichier CSV…")
+        self.import_button.clicked.connect(self._on_import_clicked)
+        self.import_label = QLabel("Aucun fichier importé.")
+        import_row.addWidget(self.import_button)
+        import_row.addWidget(self.import_label)
+        import_row.addStretch()
+        import_layout.addLayout(import_row)
+
+        self.mapping_form = QFormLayout()
+        mapping_widget = QWidget()
+        mapping_widget.setLayout(self.mapping_form)
+        import_layout.addWidget(mapping_widget)
+
+        options_group = QGroupBox("2. Type de compte et identifiant")
+        options_layout = QVBoxLayout(options_group)
+
+        type_row = QHBoxLayout()
+        self.eleve_radio = QRadioButton("Élève")
+        self.eleve_radio.setChecked(True)
+        self.personnel_radio = QRadioButton("Personnel")
+        self._type_group = QButtonGroup(self)
+        self._type_group.addButton(self.eleve_radio)
+        self._type_group.addButton(self.personnel_radio)
+        self.eleve_radio.toggled.connect(self._on_account_type_changed)
+        type_row.addWidget(QLabel("Type de compte :"))
+        type_row.addWidget(self.eleve_radio)
+        type_row.addWidget(self.personnel_radio)
+        type_row.addStretch()
+        options_layout.addLayout(type_row)
+
+        format_row = QHBoxLayout()
+        self.format_combo = QComboBox()
+        self.format_combo.setEditable(True)
+        self.format_combo.addItems(IDENTIFIER_PRESET_KEYS)
+        self.format_combo.editTextChanged.connect(self._update_format_preview)
+        self.format_preview_label = QLabel("")
+        format_row.addWidget(QLabel("Format d'identifiant :"))
+        format_row.addWidget(self.format_combo)
+        format_row.addWidget(QLabel("Aperçu :"))
+        format_row.addWidget(self.format_preview_label)
+        format_row.addStretch()
+        options_layout.addLayout(format_row)
+
+        self._on_account_type_changed(True)
+
+        generate_row = QHBoxLayout()
+        self.generate_button = QPushButton("3. Générer la prévisualisation")
+        self.generate_button.clicked.connect(self._on_generate_clicked)
+        generate_row.addWidget(self.generate_button)
+        generate_row.addStretch()
+
+        self.preview_table = QTableWidget(0, len(PREVIEW_COLUMNS))
+        self.preview_table.setHorizontalHeaderLabels(PREVIEW_COLUMNS)
+        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.preview_table.setEditTriggers(
+            QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed
+        )
+
+        action_row = QHBoxLayout()
+        self.validate_button = QPushButton("Valider")
+        self.validate_button.clicked.connect(self._on_validate_clicked)
+        self.validate_button.setEnabled(False)
+        self.cancel_button = QPushButton("Annuler")
+        self.cancel_button.clicked.connect(self._on_cancel_clicked)
+        self.cancel_button.setEnabled(False)
+        action_row.addWidget(self.validate_button)
+        action_row.addWidget(self.cancel_button)
+        action_row.addStretch()
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(import_group)
+        layout.addWidget(options_group)
+        layout.addLayout(generate_row)
+        layout.addWidget(self.preview_table)
+        layout.addLayout(action_row)
+
+    # -- Import CSV et mapping de colonnes -----------------------------------
+
+    def _on_import_clicked(self) -> None:
+        path_str, _ = QFileDialog.getOpenFileName(self, "Importer un fichier CSV", "", "CSV (*.csv)")
+        if not path_str:
+            return
+        path = Path(path_str)
+        try:
+            preview = load_preview(path)
+        except (ValueError, OSError) as exc:
+            QMessageBox.critical(self, "Erreur d'import", str(exc))
+            return
+
+        self._csv_path = path
+        self._csv_preview = preview
+        self.import_label.setText(f"{path.name} — {len(preview.rows)} ligne(s) en aperçu")
+        self._rebuild_mapping_form(preview)
+
+    def _rebuild_mapping_form(self, preview: CsvPreview) -> None:
+        while self.mapping_form.rowCount():
+            self.mapping_form.removeRow(0)
+        self._mapping_combos.clear()
+
+        for column in EXPECTED_COLUMNS:
+            combo = QComboBox()
+            combo.addItem("(non utilisé)", "")
+            for header in preview.headers:
+                combo.addItem(header, header)
+            suggested = preview.suggested_mapping.get(column, "")
+            if suggested:
+                combo.setCurrentIndex(combo.findData(suggested))
+            label = column + (" *" if column in REQUIRED_COLUMNS else "")
+            self.mapping_form.addRow(label, combo)
+            self._mapping_combos[column] = combo
+
+    def _current_mapping(self) -> dict[str, str]:
+        return {column: combo.currentData() or "" for column, combo in self._mapping_combos.items()}
+
+    # -- Type de compte / format d'identifiant -------------------------------
+
+    def _on_account_type_changed(self, _checked: bool) -> None:
+        default_format = (
+            self.config.identifiant_format_eleve
+            if self.eleve_radio.isChecked()
+            else self.config.identifiant_format_personnel
+        )
+        self.format_combo.setCurrentText(default_format)
+        self._update_format_preview()
+
+    def _update_format_preview(self) -> None:
+        format_key = self.format_combo.currentText().strip()
+        if not format_key:
+            self.format_preview_label.setText("")
+            return
+        try:
+            engine = IdentifierEngine(format_key=format_key, annee=date.today().year)
+            self.format_preview_label.setText(engine.base_identifier("Thomas", "Martin"))
+        except Exception:
+            self.format_preview_label.setText("(format invalide)")
+
+    def _current_account_type(self) -> AccountType:
+        return AccountType.ELEVE if self.eleve_radio.isChecked() else AccountType.PERSONNEL
+
+    # -- Génération de la prévisualisation ------------------------------------
+
+    def _on_generate_clicked(self) -> None:
+        if self._csv_path is None:
+            QMessageBox.warning(self, "Aucun fichier", "Importez d'abord un fichier CSV.")
+            return
+        mapping = self._current_mapping()
+        missing = [c for c in REQUIRED_COLUMNS if not mapping.get(c)]
+        if missing:
+            QMessageBox.warning(
+                self, "Colonnes manquantes", f"Associez les colonnes obligatoires : {', '.join(missing)}"
+            )
+            return
+
+        result = load_rows(self._csv_path, mapping)
+        if not result.rows:
+            QMessageBox.warning(self, "Aucune ligne valide", "Le fichier ne contient aucune ligne exploitable.")
+            return
+        if result.skipped_row_numbers:
+            QMessageBox.warning(
+                self,
+                "Lignes ignorées",
+                "Lignes incomplètes ignorées : "
+                + ", ".join(str(n) for n in result.skipped_row_numbers),
+            )
+
+        if self.ad_connection.domain is None:
+            QMessageBox.critical(self, "Non connecté", "Aucune connexion à l'Active Directory.")
+            return
+
+        account_type = self._current_account_type()
+        policy = (
+            self.config.politique_mdp_eleve
+            if account_type == AccountType.ELEVE
+            else self.config.politique_mdp_personnel
+        )
+        format_key = self.format_combo.currentText().strip()
+        year = date.today().year
+
+        try:
+            base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+            existing_ids = self.ad_connection.search_existing_identifiers(base_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur AD", str(exc))
+            return
+
+        engine = IdentifierEngine(
+            format_key=format_key,
+            doublon_rule=self.config.regle_doublons,
+            prenom_compose_rule=self.config.regle_prenom_compose,
+            annee=year,
+        )
+
+        passwords = generate_passwords_for_batch(
+            policy, [(row.prenom, row.nom) for row in result.rows], year=year
+        )
+
+        generated: list[GeneratedUser] = []
+        for row, password in zip(result.rows, passwords):
+            try:
+                identifiant, doublon = engine.generate_unique(row.prenom, row.nom, existing_ids)
+            except ValueError as exc:
+                generated.append(
+                    GeneratedUser(
+                        source=row,
+                        identifiant="",
+                        mot_de_passe="",
+                        adresse_mail="",
+                        ou_cible=row.ou,
+                        erreur=str(exc),
+                    )
+                )
+                continue
+            existing_ids.add(identifiant)
+
+            prenom_clean = clean_token(
+                apply_prenom_compose_rule(row.prenom, self.config.regle_prenom_compose)
+            )
+            nom_clean = clean_token(row.nom)
+            mail_local = render_template(self.config.format_mail, prenom_clean, nom_clean, year=year)
+            mail = f"{mail_local}@{self.config.domaine_mail}"
+
+            groupe = _ou_leaf_name(row.ou) if self.config.groupes_classe_auto else None
+
+            generated.append(
+                GeneratedUser(
+                    source=row,
+                    identifiant=identifiant,
+                    mot_de_passe=password,
+                    adresse_mail=mail,
+                    ou_cible=row.ou,
+                    groupe=groupe,
+                    doublon_resolu=doublon,
+                )
+            )
+
+        self._generated = generated
+        self._populate_preview_table()
+        self.validate_button.setEnabled(True)
+        self.cancel_button.setEnabled(True)
+
+    def _populate_preview_table(self) -> None:
+        self.preview_table.setRowCount(len(self._generated))
+        for row_index, user in enumerate(self._generated):
+            self._set_preview_row(row_index, user)
+
+    def _set_preview_row(self, row_index: int, user: GeneratedUser) -> None:
+        self.preview_table.setItem(row_index, COL_IDENTIFIANT, QTableWidgetItem(user.identifiant))
+        item_nom = QTableWidgetItem(user.nom_complet)
+        item_nom.setFlags(item_nom.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.preview_table.setItem(row_index, COL_NOM, item_nom)
+        self.preview_table.setItem(row_index, COL_MDP, QTableWidgetItem(user.mot_de_passe))
+        item_email = QTableWidgetItem(user.adresse_mail)
+        item_email.setFlags(item_email.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.preview_table.setItem(row_index, COL_EMAIL, item_email)
+        item_ou = QTableWidgetItem(user.ou_cible)
+        item_ou.setFlags(item_ou.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.preview_table.setItem(row_index, COL_OU, item_ou)
+        item_groupe = QTableWidgetItem(user.groupe or "")
+        item_groupe.setFlags(item_groupe.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.preview_table.setItem(row_index, COL_GROUPE, item_groupe)
+
+        if user.erreur:
+            etat = f"Erreur : {user.erreur}"
+        elif user.doublon_resolu:
+            etat = "⚠ Doublon résolu"
+        else:
+            etat = "OK"
+        item_etat = QTableWidgetItem(etat)
+        item_etat.setFlags(item_etat.flags() & ~Qt.ItemFlag.ItemIsEditable)
+        self.preview_table.setItem(row_index, COL_ETAT, item_etat)
+
+    def _sync_generated_from_table(self) -> None:
+        for row_index, user in enumerate(self._generated):
+            user.identifiant = self.preview_table.item(row_index, COL_IDENTIFIANT).text().strip()
+            user.mot_de_passe = self.preview_table.item(row_index, COL_MDP).text()
+
+    # -- Validation / annulation ----------------------------------------------
+
+    def _on_validate_clicked(self) -> None:
+        self._sync_generated_from_table()
+        to_create = [u for u in self._generated if not u.erreur]
+        if not to_create:
+            QMessageBox.warning(self, "Rien à créer", "Aucune ligne valide à créer.")
+            return
+
+        simulation = self.ad_connection.dry_run
+        success_count = 0
+        for row_index, user in enumerate(self._generated):
+            if user.erreur:
+                continue
+            try:
+                self._create_one_user(user)
+            except ADError as exc:
+                user.erreur = str(exc)
+                self.audit_log.record(
+                    "creation_compte",
+                    user.identifiant,
+                    "echec",
+                    self.session_id,
+                    ou_destination=user.ou_cible,
+                    simulation=simulation,
+                    detail=str(exc),
+                )
+            else:
+                success_count += 1
+                self.audit_log.record(
+                    "creation_compte",
+                    user.identifiant,
+                    "succes",
+                    self.session_id,
+                    ou_destination=user.ou_cible,
+                    simulation=simulation,
+                )
+            self._set_preview_row(row_index, user)
+
+        suffix = " (mode simulation, aucune écriture réelle)" if simulation else ""
+        QMessageBox.information(
+            self,
+            "Création terminée",
+            f"{success_count}/{len(to_create)} compte(s) créé(s) avec succès{suffix}.",
+        )
+
+        if success_count:
+            self._propose_export()
+
+    def _create_one_user(self, user: GeneratedUser) -> None:
+        prenom, nom = user.source.prenom, user.source.nom
+        dn = f"CN={prenom} {nom},{user.ou_cible}"
+        attributes = {
+            "sAMAccountName": user.identifiant,
+            "givenName": prenom,
+            "sn": nom,
+            "displayName": f"{prenom} {nom}",
+            "userPrincipalName": f"{user.identifiant}@{self.ad_connection.domain}",
+            "mail": user.adresse_mail,
+        }
+        self.ad_connection.create_user(dn, attributes, password=user.mot_de_passe)
+
+        if user.groupe:
+            group_dn = f"CN={user.groupe},{user.ou_cible}"
+            if not self.ad_connection.group_exists(group_dn):
+                self.ad_connection.create_group(group_dn, user.groupe)
+            self.ad_connection.add_user_to_group(dn, group_dn)
+
+    def _propose_export(self) -> None:
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter les comptes créés", "comptes_crees.csv", "CSV (*.csv)"
+        )
+        if not path:
+            return
+        export_created_accounts(Path(path), [u for u in self._generated if not u.erreur])
+        QMessageBox.information(self, "Export terminé", f"Export enregistré vers {path}")
+
+    def _on_cancel_clicked(self) -> None:
+        self._generated = []
+        self.preview_table.setRowCount(0)
+        self.validate_button.setEnabled(False)
+        self.cancel_button.setEnabled(False)
