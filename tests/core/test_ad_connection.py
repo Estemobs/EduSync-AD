@@ -138,3 +138,26 @@ def test_dry_run_still_allows_reads(ad):
     ad.dry_run = True
     identifiers = ad.search_existing_identifiers(OU_3EMEA_DN)
     assert identifiers == {"existing.user"}
+
+
+def test_create_user_with_password_sets_password_and_enables_account(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    new_dn = f"cn=Thomas Martin,{OU_3EMEA_DN}"
+    ad.create_user(new_dn, {"sAMAccountName": "thomas.martin"}, password="NewPass123!")
+    identifiers = ad.search_existing_identifiers(OU_3EMEA_DN)
+    assert "thomas.martin" in identifiers
+
+
+def test_domain_to_base_dn():
+    assert ADConnection.domain_to_base_dn("lycee-victor-hugo.local") == (
+        "DC=lycee-victor-hugo,DC=local"
+    )
+
+
+def test_create_user_with_password_dry_run_does_not_call_ad(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    ad.dry_run = True
+    new_dn = f"cn=Simulated User,{OU_3EMEA_DN}"
+    ad.create_user(new_dn, {"sAMAccountName": "simulated.user"}, password="NewPass123!")
+    identifiers = ad.search_existing_identifiers(OU_3EMEA_DN)
+    assert "simulated.user" not in identifiers

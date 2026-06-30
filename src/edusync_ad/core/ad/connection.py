@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-from ldap3 import ALL, MODIFY_ADD, SIMPLE, SUBTREE, BASE, Connection, Server
+from ldap3 import ALL, MODIFY_ADD, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server
 from ldap3.core.exceptions import LDAPException
 
 from edusync_ad.core.ad.exceptions import (
@@ -25,6 +25,8 @@ from edusync_ad.core.ad.exceptions import (
 )
 
 ConnectionFactory = Callable[[str, str, str, bool], Connection]
+
+UAC_NORMAL_ACCOUNT_ENABLED = 512
 
 
 class ConnectionState(str, Enum):
@@ -65,6 +67,12 @@ class ADConnection:
         if "@" in username or "\\" in username:
             return username
         return f"{username}@{domain}"
+
+    @staticmethod
+    def domain_to_base_dn(domain: str) -> str:
+        """Convertit un nom de domaine (ex. lycee-victor-hugo.local) en DN racine
+        standard (ex. DC=lycee-victor-hugo,DC=local)."""
+        return ",".join(f"DC={part}" for part in domain.split("."))
 
     def connect(self, domain: str, controller: str, username: str, password: str) -> ConnectResult:
         self.state = ConnectionState.CONNECTING
@@ -149,12 +157,41 @@ class ADConnection:
 
     # -- Écriture (court-circuitée en mode simulation) -----------------------
 
-    def create_user(self, dn: str, attributes: dict) -> None:
+    def create_user(
+        self,
+        dn: str,
+        attributes: dict,
+        *,
+        password: str | None = None,
+        force_password_change: bool = False,
+    ) -> None:
         conn = self._require_connected()
         if self.dry_run:
             return
         if not conn.add(dn, ["top", "person", "organizationalPerson", "user"], attributes):
             raise ADError(conn.result.get("description", "Échec de création du compte."))
+        if password is not None:
+            self.set_password(dn, password)
+            self.enable_account(dn, force_password_change=force_password_change)
+
+    def set_password(self, dn: str, password: str) -> None:
+        """Définit le mot de passe AD via l'opération étendue Microsoft dédiée
+        (nécessite une connexion chiffrée — LDAPS — sur un AD réel)."""
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.extend.microsoft.modify_password(dn, password):
+            raise ADError(conn.result.get("description", "Échec de définition du mot de passe."))
+
+    def enable_account(self, dn: str, *, force_password_change: bool = False) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        changes = {"userAccountControl": [(MODIFY_REPLACE, [UAC_NORMAL_ACCOUNT_ENABLED])]}
+        if force_password_change:
+            changes["pwdLastSet"] = [(MODIFY_REPLACE, [0])]
+        if not conn.modify(dn, changes):
+            raise ADError(conn.result.get("description", "Échec d'activation du compte."))
 
     def create_group(self, dn: str, sam_account_name: str) -> None:
         conn = self._require_connected()
