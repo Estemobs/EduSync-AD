@@ -92,21 +92,26 @@ class MainWindow(QMainWindow):
         self.migration_page = MigrationPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.depart_page = DepartPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.settings_page = SettingsPage(self.config, self._on_config_saved)
 
         self.pages.addWidget(self.create_accounts_page)   # index 0
         self.pages.addWidget(self.migration_page)          # index 1
-        self.pages.addWidget(self.audit_page)              # index 2
-        self.pages.addWidget(self.settings_page)           # index 3
+        self.pages.addWidget(self.depart_page)             # index 2
+        self.pages.addWidget(self.audit_page)              # index 3
+        self.pages.addWidget(self.settings_page)           # index 4
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
         nav_items = [
             ("Création de comptes", 0),
             ("Migration (fin d'année)", 1),
-            ("Journal d'actions", 2),
-            ("Paramètres", 3),
+            ("Gestion des départs", 2),
+            ("Journal d'actions", 3),
+            ("Paramètres", 4),
         ]
         for label, index in nav_items:
             button = QPushButton(label)
