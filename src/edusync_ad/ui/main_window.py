@@ -19,6 +19,7 @@ from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
 from edusync_ad.ui.audit_page import AuditPage
 from edusync_ad.ui.modules.create_accounts_page import CreateAccountsPage
+from edusync_ad.ui.modules.migration_page import MigrationPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import stylesheet_for
 
@@ -87,19 +88,24 @@ class MainWindow(QMainWindow):
         self.create_accounts_page = CreateAccountsPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.migration_page = MigrationPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.settings_page = SettingsPage(self.config, self._on_config_saved)
 
-        self.pages.addWidget(self.create_accounts_page)
-        self.pages.addWidget(self.audit_page)
-        self.pages.addWidget(self.settings_page)
+        self.pages.addWidget(self.create_accounts_page)   # index 0
+        self.pages.addWidget(self.migration_page)          # index 1
+        self.pages.addWidget(self.audit_page)              # index 2
+        self.pages.addWidget(self.settings_page)           # index 3
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
         nav_items = [
             ("Création de comptes", 0),
-            ("Journal d'actions", 1),
-            ("Paramètres", 2),
+            ("Migration (fin d'année)", 1),
+            ("Journal d'actions", 2),
+            ("Paramètres", 3),
         ]
         for label, index in nav_items:
             button = QPushButton(label)
@@ -120,6 +126,7 @@ class MainWindow(QMainWindow):
         self.config = config
         save_config(config)
         self.create_accounts_page.update_config(config)
+        self.migration_page.update_config(config)
         self.apply_theme()
 
     def apply_theme(self) -> None:

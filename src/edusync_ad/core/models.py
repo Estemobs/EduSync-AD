@@ -73,6 +73,29 @@ class ConnectionInfo:
 
 
 @dataclass
+class DepartRow:
+    """Une ligne du fichier de départs (désactivation ou archivage)."""
+
+    identifiant: str
+    user_dn: str | None = None
+    nom_complet: str | None = None
+    groupe_dns: list[str] = field(default_factory=list)
+    erreur: str | None = None
+
+
+@dataclass
+class MigrationRow:
+    """Une ligne du fichier de migration (passage de classe en fin d'année)."""
+
+    identifiant: str
+    ou_source: str
+    ou_destination: str
+    user_dn: str | None = None
+    nom_complet: str | None = None
+    erreur: str | None = None
+
+
+@dataclass
 class ActionLogEntry:
     timestamp: str
     action_type: str

@@ -24,7 +24,7 @@ def config_file_path() -> Path:
 
 @dataclass
 class AppConfig:
-    """Paramètres globaux (§12) couverts par ce lot — utilisés par le Module 1."""
+    """Paramètres globaux (§12)."""
 
     # Nomenclature des identifiants
     identifiant_format_eleve: str = "prenom.nom"
@@ -54,6 +54,10 @@ class AppConfig:
 
     # Groupes de classe automatiques
     groupes_classe_auto: bool = True
+
+    # Gestion des départs
+    ou_archive: str = ""
+    delai_suppression_jours: int = 30
 
     # Apparence
     theme: str = "clair"  # "clair" | "sombre"

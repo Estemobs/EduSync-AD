@@ -61,6 +61,18 @@ class AuditLog:
             )
             """
         )
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pending_deletions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_dn TEXT NOT NULL UNIQUE,
+                sam_account_name TEXT NOT NULL,
+                nom_complet TEXT,
+                moved_at TEXT NOT NULL,
+                session_id TEXT NOT NULL
+            )
+            """
+        )
         self._conn.commit()
 
     def log(self, entry: ActionLogEntry) -> None:
@@ -187,6 +199,53 @@ class AuditLog:
                         entry.detail,
                     ]
                 )
+
+    # -- File d'attente de suppressions différées ----------------------------
+
+    def add_pending_deletion(
+        self, user_dn: str, sam_account_name: str, nom_complet: str, session_id: str
+    ) -> None:
+        moved_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        self._conn.execute(
+            """
+            INSERT OR REPLACE INTO pending_deletions
+                (user_dn, sam_account_name, nom_complet, moved_at, session_id)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (user_dn, sam_account_name, nom_complet, moved_at, session_id),
+        )
+        self._conn.commit()
+
+    def get_pending_deletions(self) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM pending_deletions ORDER BY moved_at ASC"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def count_due_deletions(self, delay_days: int) -> int:
+        threshold = self._threshold_iso(delay_days)
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM pending_deletions WHERE moved_at <= ?", (threshold,)
+        ).fetchone()
+        return row[0]
+
+    def get_due_deletions(self, delay_days: int) -> list[dict]:
+        threshold = self._threshold_iso(delay_days)
+        rows = self._conn.execute(
+            "SELECT * FROM pending_deletions WHERE moved_at <= ? ORDER BY moved_at ASC",
+            (threshold,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def remove_pending_deletion(self, user_dn: str) -> None:
+        self._conn.execute("DELETE FROM pending_deletions WHERE user_dn = ?", (user_dn,))
+        self._conn.commit()
+
+    @staticmethod
+    def _threshold_iso(delay_days: int) -> str:
+        from datetime import timedelta
+        threshold = datetime.now(timezone.utc) - timedelta(days=delay_days)
+        return threshold.isoformat(timespec="seconds")
 
     def close(self) -> None:
         self._conn.close()

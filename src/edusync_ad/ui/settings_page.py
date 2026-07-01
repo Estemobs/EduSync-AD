@@ -105,6 +105,15 @@ class SettingsPage(QWidget):
         self.groupes_auto_check = QCheckBox("Création automatique des groupes de classe")
         self.groupes_auto_check.setChecked(config.groupes_classe_auto)
 
+        self.ou_archive_edit = QLineEdit(config.ou_archive)
+        self.ou_archive_edit.setPlaceholderText("Ex. : OU=Archive,DC=lycee,DC=local")
+
+        self.delai_combo = QComboBox()
+        for days in (30, 60, 90):
+            self.delai_combo.addItem(f"{days} jours", days)
+        current_delay_index = {30: 0, 60: 1, 90: 2}.get(config.delai_suppression_jours, 0)
+        self.delai_combo.setCurrentIndex(current_delay_index)
+
         self.theme_combo = QComboBox()
         self.theme_combo.addItem("Clair", "clair")
         self.theme_combo.addItem("Sombre", "sombre")
@@ -132,6 +141,11 @@ class SettingsPage(QWidget):
         groupes_layout = QVBoxLayout(groupes_group)
         groupes_layout.addWidget(self.groupes_auto_check)
 
+        departs_group = QGroupBox("Gestion des départs")
+        departs_form = QFormLayout(departs_group)
+        departs_form.addRow("OU d'archivage", self.ou_archive_edit)
+        departs_form.addRow("Délai avant suppression", self.delai_combo)
+
         appearance_group = QGroupBox("Apparence")
         appearance_form = QFormLayout(appearance_group)
         appearance_form.addRow("Thème", self.theme_combo)
@@ -150,6 +164,7 @@ class SettingsPage(QWidget):
             identifiers_group,
             mail_group,
             groupes_group,
+            departs_group,
             appearance_group,
             eleve_group,
             personnel_group,
@@ -184,6 +199,8 @@ class SettingsPage(QWidget):
             format_mail=self.mail_format_edit.text().strip(),
             regle_prenom_compose=self.prenom_compose_combo.currentData(),
             groupes_classe_auto=self.groupes_auto_check.isChecked(),
+            ou_archive=self.ou_archive_edit.text().strip(),
+            delai_suppression_jours=self.delai_combo.currentData(),
             theme=self.theme_combo.currentData(),
         )
         self._on_save(config)

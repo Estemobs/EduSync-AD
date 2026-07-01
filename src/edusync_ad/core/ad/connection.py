@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-from ldap3 import ALL, MODIFY_ADD, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server
+from ldap3 import ALL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server
 from ldap3.core.exceptions import LDAPException
 
 from edusync_ad.core.ad.exceptions import (
@@ -27,6 +27,7 @@ from edusync_ad.core.ad.exceptions import (
 ConnectionFactory = Callable[[str, str, str, bool], Connection]
 
 UAC_NORMAL_ACCOUNT_ENABLED = 512
+UAC_NORMAL_ACCOUNT_DISABLED = 514  # NORMAL_ACCOUNT | ACCOUNTDISABLE
 
 
 class ConnectionState(str, Enum):
@@ -207,3 +208,56 @@ class ADConnection:
             return
         if not conn.modify(group_dn, {"member": [(MODIFY_ADD, [user_dn])]}):
             raise ADError(conn.result.get("description", "Échec d'ajout au groupe."))
+
+    def remove_user_from_group(self, user_dn: str, group_dn: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.modify(group_dn, {"member": [(MODIFY_DELETE, [user_dn])]}):
+            raise ADError(conn.result.get("description", "Échec de suppression du groupe."))
+
+    def search_user_by_sam(self, sam_account_name: str, base_dn: str) -> tuple[str, str] | None:
+        """Retourne (dn, cn) du premier utilisateur correspondant, ou None."""
+        conn = self._require_connected()
+        if not conn.search(
+            base_dn,
+            f"(sAMAccountName={sam_account_name})",
+            search_scope=SUBTREE,
+            attributes=["cn"],
+        ):
+            return None
+        if not conn.entries:
+            return None
+        entry = conn.entries[0]
+        return str(entry.entry_dn), str(entry["cn"].value)
+
+    def move_user(self, user_dn: str, new_ou_dn: str) -> None:
+        """Déplace un utilisateur vers une autre OU (modify_dn LDAP)."""
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        new_rdn = user_dn.split(",")[0]
+        if not conn.modify_dn(user_dn, new_rdn, new_superior=new_ou_dn):
+            raise ADError(conn.result.get("description", "Échec du déplacement du compte."))
+
+    def disable_account(self, dn: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        changes = {"userAccountControl": [(MODIFY_REPLACE, [UAC_NORMAL_ACCOUNT_DISABLED])]}
+        if not conn.modify(dn, changes):
+            raise ADError(conn.result.get("description", "Échec de désactivation du compte."))
+
+    def delete_user(self, dn: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.delete(dn):
+            raise ADError(conn.result.get("description", "Échec de suppression du compte."))
+
+    def search_user_groups(self, user_dn: str, base_dn: str) -> list[str]:
+        """Retourne les DN des groupes dont l'utilisateur est membre."""
+        conn = self._require_connected()
+        if not conn.search(base_dn, f"(member={user_dn})", search_scope=SUBTREE, attributes=["cn"]):
+            return []
+        return [str(entry.entry_dn) for entry in conn.entries]
