@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         protocol_text = "LDAPS" if self.ad_connection.used_ldaps else "LDAP (non chiffré)"
         self.connection_label = QLabel(f"●  Connecté — {domain_text} ({protocol_text})")
         self.connection_label.setStyleSheet("color: #6fe08a; font-weight: 600;")
+        # L'indicateur peut être mis à jour depuis l'extérieur via set_connection_state()
         layout.addWidget(self.connection_label)
         layout.addStretch()
 
