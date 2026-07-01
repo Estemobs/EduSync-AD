@@ -501,6 +501,34 @@ class DepartPage(QWidget):
             f"{success}/{len(due)} compte(s) supprimé(s).",
         )
 
+    def _on_pending_selection_changed(self) -> None:
+        self.cancel_pending_button.setEnabled(bool(self.pending_table.selectionModel().selectedRows()))
+
+    def _on_cancel_pending_clicked(self) -> None:
+        rows = self.pending_table.selectionModel().selectedRows()
+        if not rows:
+            return
+        idx = rows[0].row()
+        pending = self.audit_log.get_pending_deletions()
+        if idx >= len(pending):
+            return
+        entry = pending[idx]
+        sam = entry["sam_account_name"]
+        reply = QMessageBox.question(
+            self,
+            "Annuler la suppression",
+            f"Retirer {sam} de la file d'attente de suppression ?\nLe compte restera dans l'OU d'archivage.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self.audit_log.remove_pending_deletion(entry["user_dn"])
+        self.audit_log.record(
+            "annulation_suppression", sam, "succes", self.session_id,
+            simulation=self.ad_connection.dry_run,
+        )
+        self._refresh_pending_panel()
+
     # -- Annulation -----------------------------------------------------------
 
     def _on_cancel_clicked(self) -> None:
