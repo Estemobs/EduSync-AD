@@ -69,6 +69,20 @@ class MainWindow(QMainWindow):
 
         self.setMenuWidget(top_bar)
 
+    def set_connection_state(self, state: str, domain: str = "", protocol: str = "") -> None:
+        """Met à jour l'indicateur tricolore. state : 'connected' | 'connecting' | 'disconnected'."""
+        if state == "connected":
+            text = f"●  Connecté — {domain} ({protocol})"
+            color = "#6fe08a"  # vert
+        elif state == "connecting":
+            text = "●  Connexion en cours…"
+            color = "#e0a72b"  # orange
+        else:
+            text = "●  Déconnecté"
+            color = "#e05555"  # rouge
+        self.connection_label.setText(text)
+        self.connection_label.setStyleSheet(f"color: {color}; font-weight: 600;")
+
     def _on_simulation_toggled(self, checked: bool) -> None:
         self.ad_connection.dry_run = checked
         self.simulation_button.setText(
