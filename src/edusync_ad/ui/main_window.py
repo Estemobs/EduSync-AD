@@ -19,6 +19,7 @@ from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
 from edusync_ad.ui.audit_page import AuditPage
 from edusync_ad.ui.modules.create_accounts_page import CreateAccountsPage
+from edusync_ad.ui.modules.depart_page import DepartPage
 from edusync_ad.ui.modules.migration_page import MigrationPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import stylesheet_for
