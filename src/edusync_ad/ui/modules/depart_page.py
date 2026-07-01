@@ -166,13 +166,33 @@ class DepartPage(QWidget):
 
         # Panneau suppressions en attente
         self.pending_group = QGroupBox("Suppressions en attente")
-        pending_layout = QHBoxLayout(self.pending_group)
+        pending_layout = QVBoxLayout(self.pending_group)
+
+        pending_info_row = QHBoxLayout()
         self.pending_label = QLabel("")
         self.process_pending_button = QPushButton("Supprimer les comptes échus")
         self.process_pending_button.clicked.connect(self._on_process_pending_clicked)
-        pending_layout.addWidget(self.pending_label)
-        pending_layout.addStretch()
-        pending_layout.addWidget(self.process_pending_button)
+        pending_info_row.addWidget(self.pending_label)
+        pending_info_row.addStretch()
+        pending_info_row.addWidget(self.process_pending_button)
+        pending_layout.addLayout(pending_info_row)
+
+        self.pending_table = QTableWidget(0, 4)
+        self.pending_table.setHorizontalHeaderLabels(["Identifiant", "Nom complet", "Archivé le", "Échéance"])
+        self.pending_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.pending_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.pending_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.pending_table.setMaximumHeight(160)
+        pending_layout.addWidget(self.pending_table)
+
+        cancel_pending_row = QHBoxLayout()
+        self.cancel_pending_button = QPushButton("Annuler la suppression programmée")
+        self.cancel_pending_button.clicked.connect(self._on_cancel_pending_clicked)
+        self.cancel_pending_button.setEnabled(False)
+        self.pending_table.itemSelectionChanged.connect(self._on_pending_selection_changed)
+        cancel_pending_row.addStretch()
+        cancel_pending_row.addWidget(self.cancel_pending_button)
+        pending_layout.addLayout(cancel_pending_row)
 
         layout = QVBoxLayout(self)
         layout.addWidget(import_group)
