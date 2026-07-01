@@ -147,6 +147,7 @@ class PasswordResetPage(QWidget):
         self.chk_chiffres = QCheckBox("Chiffres")
         self.chk_speciaux = QCheckBox("Caractères spéciaux")
         self.chk_identique = QCheckBox("Mot de passe identique pour tout le lot")
+        self.chk_force_change = QCheckBox("Forcer le changement à la prochaine connexion")
         self.chk_maj.setChecked(True)
         self.chk_chiffres.setChecked(True)
         policy_layout.addRow("Longueur :", self.spin_length)
@@ -155,6 +156,7 @@ class PasswordResetPage(QWidget):
             chars_row.addWidget(chk)
         chars_row.addStretch()
         policy_layout.addRow("Options :", chars_row)
+        policy_layout.addRow("", self.chk_force_change)
 
         self.radio_policy_eleve.toggled.connect(self._sync_policy_fields)
         self.radio_policy_personnel.toggled.connect(self._sync_policy_fields)
