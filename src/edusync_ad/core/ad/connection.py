@@ -270,3 +270,109 @@ class ADConnection:
         if not conn.search(base_dn, f"(member={user_dn})", search_scope=SUBTREE, attributes=["cn"]):
             return []
         return [str(entry.entry_dn) for entry in conn.entries]
+
+    # -- Module 5 : réinitialisation de mot de passe en masse -----------------
+
+    def list_users_in_ou(self, ou_dn: str) -> list[dict]:
+        """Retourne les attributs essentiels des utilisateurs d'une OU."""
+        conn = self._require_connected()
+        if not conn.search(
+            ou_dn,
+            "(&(objectClass=user)(objectCategory=person))",
+            search_scope=SUBTREE,
+            attributes=["sAMAccountName", "cn", "userAccountControl"],
+        ):
+            return []
+        result = []
+        for e in conn.entries:
+            result.append({
+                "dn": str(e.entry_dn),
+                "sam": str(e["sAMAccountName"].value),
+                "cn": str(e["cn"].value),
+                "disabled": bool(int(e["userAccountControl"].value or 0) & 2),
+            })
+        return result
+
+    def list_users_in_group(self, group_dn: str, base_dn: str) -> list[dict]:
+        """Retourne les attributs essentiels des membres d'un groupe."""
+        conn = self._require_connected()
+        if not conn.search(group_dn, "(objectClass=group)", search_scope=BASE, attributes=["member"]):
+            return []
+        entries = conn.entries
+        if not entries:
+            return []
+        members = entries[0]["member"].values or []
+        result = []
+        for member_dn in members:
+            if not conn.search(
+                str(member_dn),
+                "(&(objectClass=user)(objectCategory=person))",
+                search_scope=BASE,
+                attributes=["sAMAccountName", "cn", "userAccountControl"],
+            ):
+                continue
+            for e in conn.entries:
+                result.append({
+                    "dn": str(e.entry_dn),
+                    "sam": str(e["sAMAccountName"].value),
+                    "cn": str(e["cn"].value),
+                    "disabled": bool(int(e["userAccountControl"].value or 0) & 2),
+                })
+        return result
+
+    # -- Module 6 : explorateur AD -------------------------------------------
+
+    def list_ous(self, base_dn: str) -> list[tuple[str, str]]:
+        """Retourne (dn, nom) de toutes les OUs sous base_dn."""
+        conn = self._require_connected()
+        if not conn.search(base_dn, "(objectClass=organizationalUnit)", search_scope=SUBTREE, attributes=["ou"]):
+            return []
+        return [(str(e.entry_dn), str(e["ou"].value)) for e in conn.entries if e["ou"].value]
+
+    def list_groups(self, base_dn: str) -> list[tuple[str, str]]:
+        """Retourne (dn, cn) de tous les groupes sous base_dn."""
+        conn = self._require_connected()
+        if not conn.search(base_dn, "(objectClass=group)", search_scope=SUBTREE, attributes=["cn"]):
+            return []
+        return [(str(e.entry_dn), str(e["cn"].value)) for e in conn.entries if e["cn"].value]
+
+    def get_user_attributes(self, user_dn: str) -> dict:
+        """Retourne les attributs principaux d'un utilisateur."""
+        conn = self._require_connected()
+        attrs = [
+            "sAMAccountName", "cn", "givenName", "sn", "displayName",
+            "mail", "userAccountControl", "memberOf", "description",
+            "telephoneNumber", "department", "title",
+        ]
+        if not conn.search(user_dn, "(objectClass=user)", search_scope=BASE, attributes=attrs):
+            return {}
+        if not conn.entries:
+            return {}
+        e = conn.entries[0]
+        result: dict = {"dn": user_dn}
+        for attr in attrs:
+            try:
+                val = e[attr].value
+                result[attr] = str(val) if val is not None else ""
+            except Exception:
+                result[attr] = ""
+        uac = int(e["userAccountControl"].value or 0)
+        result["disabled"] = bool(uac & 2)
+        result["memberOf"] = e["memberOf"].values or []
+        return result
+
+    def update_user_attribute(self, user_dn: str, attribute: str, value: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.modify(user_dn, {attribute: [(MODIFY_REPLACE, [value])]}):
+            raise ADError(conn.result.get("description", f"Échec de modification de {attribute}."))
+
+    def rename_user(self, user_dn: str, new_cn: str) -> None:
+        """Renomme un utilisateur (modifie le CN/RDN)."""
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        new_rdn = f"CN={new_cn}"
+        if not conn.modify_dn(user_dn, new_rdn):
+            raise ADError(conn.result.get("description", "Échec du renommage."))
