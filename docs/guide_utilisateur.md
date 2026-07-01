@@ -1,0 +1,361 @@
+# Guide utilisateur — EduSync AD
+
+**Version 1.0 — Français**
+
+EduSync AD est un outil de gestion du cycle de vie des comptes utilisateurs
+dans un Active Directory, conçu pour les administrateurs réseau des
+établissements scolaires.
+
+---
+
+## Sommaire
+
+1. [Première connexion](#1-première-connexion)
+2. [Mode simulation](#2-mode-simulation)
+3. [Module 1 — Création de comptes](#3-module-1--création-de-comptes)
+4. [Module 2 — Migration de classe](#4-module-2--migration-de-classe)
+5. [Module 3 — Gestion des départs](#5-module-3--gestion-des-départs)
+6. [Module 4 — Arrivées en cours d'année](#6-module-4--arrivées-en-cours-dannée)
+7. [Module 5 — Réinitialisation de mot de passe](#7-module-5--réinitialisation-de-mot-de-passe)
+8. [Module 6 — Explorateur AD](#8-module-6--explorateur-ad)
+9. [Journal d'actions](#9-journal-dactions)
+10. [Paramètres globaux](#10-paramètres-globaux)
+
+---
+
+## 1. Première connexion
+
+Au lancement, l'écran de connexion s'affiche.
+
+| Champ | Description | Exemple |
+|-------|-------------|---------|
+| Nom de domaine | Nom DNS complet du domaine | `lycee-victor-hugo.local` |
+| Contrôleur de domaine | Adresse IP ou nom du serveur AD | `10.0.0.5` |
+| Nom d'utilisateur | Compte administrateur du domaine | `admin` |
+| Mot de passe | Mot de passe du compte (jamais stocké) | — |
+
+L'indicateur coloré reflète l'état de la connexion :
+- **Rouge** — Déconnecté
+- **Orange** — Connexion en cours
+- **Vert** — Connecté
+
+La connexion chiffrée **LDAPS** (port 636) est tentée en priorité. Si elle
+est indisponible, un repli sur LDAP non chiffré est effectué avec un
+avertissement.
+
+Cochez **Mémoriser la connexion** pour sauvegarder le domaine et
+l'utilisateur (chiffrés AES-256). Le mot de passe n'est jamais conservé.
+
+---
+
+## 2. Mode simulation
+
+Le bouton **Mode simulation** dans le bandeau supérieur permet de tester
+toutes les opérations sans aucune écriture réelle dans l'AD.
+
+- En mode actif, le bandeau devient orange et toutes les actions affichent
+  **(simulé)** dans leur résultat.
+- Les lectures AD (résolution des utilisateurs, vérification des doublons)
+  restent réelles même en simulation.
+- Le journal d'actions enregistre les opérations simulées avec l'indicateur
+  « Simulation : Oui ».
+
+> **Conseil** : activez toujours le mode simulation avant la rentrée pour
+> vérifier vos imports sans risque.
+
+---
+
+## 3. Module 1 — Création de comptes
+
+**Usage typique** : créer les comptes élèves ou personnels en début d'année
+à partir d'un export de votre logiciel de gestion scolaire (PRONOTE, etc.).
+
+### Flux de travail
+
+**Étape 1 — Importer le fichier CSV**
+
+Cliquez sur **Choisir un fichier CSV…** et sélectionnez votre fichier.
+Un aperçu des 5 premières lignes s'affiche pour vérification.
+
+Format attendu (délimiteur `;` ou `,`) :
+
+```
+prenom;nom;ou;email_perso;date_naissance;numero
+Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee,DC=local;;2010-03-15;
+```
+
+Colonnes **obligatoires** : `prenom`, `nom`, `ou`
+Colonnes **facultatives** : `email_perso`, `date_naissance`, `numero`
+
+Si vos en-têtes sont différents, utilisez les menus déroulants de mapping
+pour associer chaque colonne.
+
+**Étape 2 — Choisir le type de compte et le format d'identifiant**
+
+- **Type** : Élève ou Personnel (détermine la politique de mot de passe)
+- **Format** : choisissez un format prédéfini ou saisissez un format libre
+
+Formats prédéfinis disponibles : `prenom.nom`, `p.nom`, `pnom`, `nom.pp`,
+`prenomNom`, `NomPrenom`, etc.
+
+Format personnalisé avec variables :
+
+| Variable | Résultat (Thomas Martin) |
+|----------|--------------------------|
+| `{P}` | `thomas` |
+| `{N}` | `martin` |
+| `{p1}` | `t` |
+| `{p2}` | `th` |
+| `{n3}` | `mar` |
+| `{AN}` | `25` |
+| `{ANNEE}` | `2025` |
+
+Exemple : `{p1}{p2}.{N}` → `th.martin`
+
+L'aperçu en temps réel (Thomas Martin) s'affiche à droite du champ.
+
+**Étape 3 — Générer la prévisualisation**
+
+Cliquez sur **Générer la prévisualisation**. Le tableau affiche pour chaque
+ligne : identifiant, nom complet, mot de passe, adresse mail, OU cible,
+groupe de classe, état.
+
+- Les **doublons résolus** sont signalés (⚠ Doublon résolu) — la règle de
+  résolution configurée dans les Paramètres a été appliquée automatiquement.
+- Vous pouvez **modifier individuellement** identifiant et mot de passe en
+  double-cliquant sur la cellule.
+
+**Étape 4 — Valider**
+
+Cliquez sur **Valider**. L'outil crée les comptes dans l'AD et propose
+automatiquement un export CSV contenant : prénom, nom, identifiant, mot de
+passe en clair, adresse mail. Ce fichier est destiné à l'impression et à la
+distribution.
+
+---
+
+## 4. Module 2 — Migration de classe
+
+**Usage typique** : passage de 4ème A vers 3ème A en fin d'année scolaire.
+
+Deux modes disponibles (onglets) :
+
+### Via CSV
+
+Format attendu :
+```
+identifiant;ou_source;ou_destination
+thomas.martin;OU=4emeA,OU=Eleves,DC=lycee,DC=local;OU=3emeA,OU=Eleves,DC=lycee,DC=local
+```
+
+1. Importez le fichier CSV
+2. Vérifiez le mapping des colonnes
+3. Cliquez **Résoudre dans l'AD** — les utilisateurs non trouvés sont signalés
+4. Cliquez **Valider la migration**
+
+### Via l'interface
+
+Sans fichier CSV, saisissez directement :
+- **OU source** : DN de l'OU de départ
+- **OU destination** : DN de l'OU d'arrivée
+
+Cliquez **Charger les utilisateurs de l'OU source** pour lister tous les
+comptes de l'OU, puis **Valider la migration**.
+
+### Ce que fait la migration
+
+- Déplace chaque utilisateur vers l'OU destination
+- Si **Groupes de classe automatiques** est activé dans les Paramètres :
+  retire l'utilisateur du groupe de l'OU source et l'ajoute au groupe de
+  l'OU destination (crée le groupe si nécessaire)
+- Les utilisateurs non trouvés génèrent un avertissement sans bloquer le reste
+
+---
+
+## 5. Module 3 — Gestion des départs
+
+**Usage typique** : traitement des élèves ou personnels quittant
+l'établissement.
+
+### Modes de traitement
+
+| Mode | Ce qui se passe |
+|------|-----------------|
+| **Désactivation immédiate** | Retire l'utilisateur de tous ses groupes et désactive le compte (reste dans l'AD) |
+| **Suppression différée** | Retire des groupes, déplace vers l'OU d'archivage, programme la suppression après le délai configuré |
+
+### Flux de travail
+
+1. Importez un CSV contenant la colonne `identifiant`
+2. Associez la colonne identifiant si nécessaire
+3. Choisissez le mode d'action
+4. Cliquez **Résoudre dans l'AD**
+5. Vérifiez la prévisualisation (groupes détectés, statut)
+6. Cliquez **Valider**
+
+### Suppressions en attente
+
+Le panneau **Suppressions en attente** liste les comptes en cours de délai
+avec leur date d'archivage et leur date d'échéance.
+
+- **Supprimer les comptes échus** : supprime définitivement tous les comptes
+  dont le délai est écoulé
+- **Annuler la suppression programmée** : sélectionnez une ligne et cliquez
+  ce bouton pour retirer le compte de la file d'attente (le compte reste
+  dans l'OU d'archivage)
+
+---
+
+## 6. Module 4 — Arrivées en cours d'année
+
+Identique au Module 1 — Création de comptes, avec une vérification
+préalable dans l'AD : si un utilisateur avec le même prénom et nom existe
+déjà dans l'OU cible, la ligne est marquée **⚠ Doublon AD** et ignorée lors
+de la validation.
+
+Cette vérification permet d'éviter les doublons lors d'inscriptions tardives
+ou de retours d'élèves.
+
+---
+
+## 7. Module 5 — Réinitialisation de mot de passe
+
+**Usage typique** : réinitialiser les mots de passe de toute une classe ou
+d'un groupe en début d'année.
+
+### Sources disponibles
+
+| Source | Description |
+|--------|-------------|
+| **OU entière** | Tous les utilisateurs d'une OU (et ses sous-OUs) |
+| **Groupe AD** | Membres d'un groupe (cliquez **Actualiser** pour charger la liste) |
+| **Fichier CSV** | Colonne `identifiant` ou `login` |
+
+### Flux de travail
+
+1. Choisissez la source et configurez-la
+2. Cliquez **Charger les utilisateurs**
+3. Ajustez la politique de mot de passe si nécessaire (longueur, complexité)
+4. Cochez **Forcer le changement à la prochaine connexion** si souhaité
+5. Cliquez **Générer les mots de passe** — les nouveaux mots de passe
+   apparaissent dans le tableau
+6. Cliquez **Valider la réinitialisation**
+7. Utilisez **Exporter CSV** pour récupérer le fichier identifiants/mots de passe
+
+---
+
+## 8. Module 6 — Explorateur AD
+
+L'Explorateur AD permet de naviguer dans l'annuaire et d'agir directement
+sur les comptes sans passer par un import CSV.
+
+### Navigation
+
+**Panneau gauche — Onglet OUs** : arborescence des Unités Organisationnelles.
+Cliquez sur une OU pour lister ses utilisateurs.
+
+**Panneau gauche — Onglet Groupes** : liste de tous les groupes AD.
+Cliquez sur un groupe pour lister ses membres.
+
+**Barre de recherche** : filtrez les utilisateurs affichés par nom complet
+ou identifiant (filtre en temps réel).
+
+### Actions sur un compte sélectionné
+
+Sélectionnez un utilisateur dans la liste centrale pour activer le panneau
+de droite :
+
+| Action | Description |
+|--------|-------------|
+| **Modifier un attribut** | Modifie displayName, description, téléphone, département, titre ou adresse mail |
+| **Changer d'OU** | Déplace le compte vers une autre OU (dialogue de sélection arborescente) |
+| **Réinitialiser le mot de passe** | Génère un nouveau mot de passe affiché avant confirmation |
+| **Activer / Désactiver** | Bascule l'état du compte (userAccountControl) |
+| **Gérer les groupes** | Liste tous les groupes avec cases à cocher pour ajouter/retirer |
+
+Toutes ces actions respectent le mode simulation et sont journalisées.
+
+---
+
+## 9. Journal d'actions
+
+Le journal enregistre chaque opération : type d'action, compte concerné,
+OU source et destination, résultat (succès/échec), identifiant de session,
+indicateur simulation.
+
+### Filtres
+
+| Filtre | Options |
+|--------|---------|
+| **Du / Au** | Plage de dates (sélecteur calendrier) |
+| **Type d'action** | Création, migration, désactivation, réinitialisation MDP, etc. |
+| **Résultat** | Tous / Succès / Échec |
+
+Cliquez **Appliquer les filtres** pour rafraîchir, **Réinitialiser** pour
+revenir aux 30 derniers jours.
+
+### Export
+
+Cliquez **Exporter en CSV** pour télécharger toutes les entrées filtrées.
+Le fichier contient : horodatage, type, compte, OUs, résultat, simulation, détail.
+
+Le journal est stocké localement sur la machine de l'administrateur
+(base SQLite dans le répertoire de données utilisateur).
+
+---
+
+## 10. Paramètres globaux
+
+Accessibles via **Paramètres** dans la sidebar.
+
+### Nomenclature des identifiants
+
+- **Format élèves / personnels** : format prédéfini ou personnalisé
+- **Règle de résolution des doublons** : que faire si `thomas.martin` existe déjà
+
+| Règle | Exemple |
+|-------|---------|
+| Suffixe numérique direct | `thomas.martin2` |
+| Suffixe numérique avec séparateur | `thomas.martin-2` |
+| Préfixe numérique | `2.thomas.martin` |
+| Lettres supplémentaires du prénom | `tho.martin` → `thor.martin` |
+| Lettres supplémentaires du nom | `thomas.mart` → `thomas.marti` |
+| Année en suffixe | `thomas.martin2025` |
+
+- **Prénoms composés** : Premier prénom / Concaténation / Troncature au tiret
+
+### Adresses mail
+
+- **Domaine mail** : domaine des adresses générées (ex. `lycee-victor-hugo.fr`)
+- **Format** : utilise les mêmes variables que les identifiants (`{P}`, `{N}`, `{p1}`…)
+
+### Groupes de classe
+
+Activez **Création automatique des groupes de classe** pour qu'un groupe
+portant le nom de l'OU soit créé automatiquement et que les utilisateurs y
+soient ajoutés lors de la création ou de la migration.
+
+### Gestion des départs
+
+- **OU d'archivage** : DN de l'OU vers laquelle les comptes en suppression
+  différée sont déplacés (ex. `OU=Archives,DC=lycee,DC=local`)
+- **Délai avant suppression** : nombre de jours entre l'archivage et la
+  suppression définitive (valeur libre, 1 à 3650 jours)
+
+### Politiques de mot de passe
+
+Configurées séparément pour les élèves et les personnels :
+
+| Option | Description |
+|--------|-------------|
+| Longueur | 6 à 32 caractères |
+| Majuscules | Inclusion obligatoire d'au moins une majuscule |
+| Chiffres | Inclusion obligatoire d'au moins un chiffre |
+| Caractères spéciaux | Inclusion de `!@#$%^&*-_+=?` |
+| Mot de passe identique | Même mot de passe pour tous les comptes du lot |
+| Pattern fixe | Ex. `Ecole{AN}!` → `Ecole25!` |
+
+### Apparence
+
+- **Thème** : Clair / Sombre
+- **Langue** : Français / English
