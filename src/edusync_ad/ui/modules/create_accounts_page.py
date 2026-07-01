@@ -311,6 +311,22 @@ class CreateAccountsPage(QWidget):
                     )
                 )
                 continue
+
+            ad_dup = self._ad_duplicate_check(row)
+            if ad_dup:
+                generated.append(
+                    GeneratedUser(
+                        source=row,
+                        identifiant=identifiant,
+                        mot_de_passe="",
+                        adresse_mail="",
+                        ou_cible=row.ou,
+                        doublon_ad=True,
+                        erreur=ad_dup,
+                    )
+                )
+                continue
+
             existing_ids.add(identifiant)
 
             prenom_clean = clean_token(
@@ -360,7 +376,9 @@ class CreateAccountsPage(QWidget):
         item_groupe.setFlags(item_groupe.flags() & ~Qt.ItemFlag.ItemIsEditable)
         self.preview_table.setItem(row_index, COL_GROUPE, item_groupe)
 
-        if user.erreur:
+        if user.doublon_ad:
+            etat = "⚠ Doublon AD (compte existant)"
+        elif user.erreur:
             etat = f"Erreur : {user.erreur}"
         elif user.doublon_resolu:
             etat = "⚠ Doublon résolu"
@@ -379,7 +397,7 @@ class CreateAccountsPage(QWidget):
 
     def _on_validate_clicked(self) -> None:
         self._sync_generated_from_table()
-        to_create = [u for u in self._generated if not u.erreur]
+        to_create = [u for u in self._generated if not u.erreur and not u.doublon_ad]
         if not to_create:
             QMessageBox.warning(self, "Rien à créer", "Aucune ligne valide à créer.")
             return
@@ -457,3 +475,10 @@ class CreateAccountsPage(QWidget):
         self.preview_table.setRowCount(0)
         self.validate_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
+
+    # -- Hook pour sous-classes -----------------------------------------------
+
+    def _ad_duplicate_check(self, row: "RawUserRow") -> str | None:
+        """Retourne un message si un doublon AD est détecté, sinon None.
+        Surchargé par InscriptionPage (Module 4)."""
+        return None

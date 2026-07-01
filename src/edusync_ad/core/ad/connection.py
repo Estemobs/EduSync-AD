@@ -216,6 +216,15 @@ class ADConnection:
         if not conn.modify(group_dn, {"member": [(MODIFY_DELETE, [user_dn])]}):
             raise ADError(conn.result.get("description", "Échec de suppression du groupe."))
 
+    def search_user_by_cn(self, cn: str, ou_dn: str) -> str | None:
+        """Retourne le DN du premier utilisateur avec ce CN dans l'OU, ou None."""
+        conn = self._require_connected()
+        if not conn.search(ou_dn, f"(cn={cn})", search_scope=SUBTREE, attributes=["cn"]):
+            return None
+        if not conn.entries:
+            return None
+        return str(conn.entries[0].entry_dn)
+
     def search_user_by_sam(self, sam_account_name: str, base_dn: str) -> tuple[str, str] | None:
         """Retourne (dn, cn) du premier utilisateur correspondant, ou None."""
         conn = self._require_connected()

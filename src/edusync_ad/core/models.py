@@ -57,6 +57,7 @@ class GeneratedUser:
     ou_cible: str
     groupe: str | None = None
     doublon_resolu: bool = False
+    doublon_ad: bool = False
     erreur: str | None = None
 
     @property

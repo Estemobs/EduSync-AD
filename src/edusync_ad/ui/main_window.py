@@ -20,6 +20,7 @@ from edusync_ad.core.config import AppConfig, save_config
 from edusync_ad.ui.audit_page import AuditPage
 from edusync_ad.ui.modules.create_accounts_page import CreateAccountsPage
 from edusync_ad.ui.modules.depart_page import DepartPage
+from edusync_ad.ui.modules.inscription_page import InscriptionPage
 from edusync_ad.ui.modules.migration_page import MigrationPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import stylesheet_for
@@ -92,6 +93,9 @@ class MainWindow(QMainWindow):
         self.migration_page = MigrationPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.inscription_page = InscriptionPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.depart_page = DepartPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
@@ -100,18 +104,20 @@ class MainWindow(QMainWindow):
 
         self.pages.addWidget(self.create_accounts_page)   # index 0
         self.pages.addWidget(self.migration_page)          # index 1
-        self.pages.addWidget(self.depart_page)             # index 2
-        self.pages.addWidget(self.audit_page)              # index 3
-        self.pages.addWidget(self.settings_page)           # index 4
+        self.pages.addWidget(self.inscription_page)        # index 2
+        self.pages.addWidget(self.depart_page)             # index 3
+        self.pages.addWidget(self.audit_page)              # index 4
+        self.pages.addWidget(self.settings_page)           # index 5
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
         nav_items = [
             ("Création de comptes", 0),
             ("Migration (fin d'année)", 1),
-            ("Gestion des départs", 2),
-            ("Journal d'actions", 3),
-            ("Paramètres", 4),
+            ("Arrivées en cours d'année", 2),
+            ("Gestion des départs", 3),
+            ("Journal d'actions", 4),
+            ("Paramètres", 5),
         ]
         for label, index in nav_items:
             button = QPushButton(label)
@@ -133,6 +139,7 @@ class MainWindow(QMainWindow):
         save_config(config)
         self.create_accounts_page.update_config(config)
         self.migration_page.update_config(config)
+        self.inscription_page.update_config(config)
         self.depart_page.update_config(config)
         self.apply_theme()
 
