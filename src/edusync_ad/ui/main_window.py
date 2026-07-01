@@ -101,6 +101,12 @@ class MainWindow(QMainWindow):
         self.depart_page = DepartPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.password_reset_page = PasswordResetPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
+        self.ad_explorer_page = ADExplorerPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.settings_page = SettingsPage(self.config, self._on_config_saved)
 
@@ -108,8 +114,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.migration_page)          # index 1
         self.pages.addWidget(self.inscription_page)        # index 2
         self.pages.addWidget(self.depart_page)             # index 3
-        self.pages.addWidget(self.audit_page)              # index 4
-        self.pages.addWidget(self.settings_page)           # index 5
+        self.pages.addWidget(self.password_reset_page)     # index 4
+        self.pages.addWidget(self.ad_explorer_page)        # index 5
+        self.pages.addWidget(self.audit_page)              # index 6
+        self.pages.addWidget(self.settings_page)           # index 7
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -118,8 +126,10 @@ class MainWindow(QMainWindow):
             ("Migration (fin d'année)", 1),
             ("Arrivées en cours d'année", 2),
             ("Gestion des départs", 3),
-            ("Journal d'actions", 4),
-            ("Paramètres", 5),
+            ("Réinit. mots de passe", 4),
+            ("Explorateur AD", 5),
+            ("Journal d'actions", 6),
+            ("Paramètres", 7),
         ]
         for label, index in nav_items:
             button = QPushButton(label)
@@ -143,6 +153,8 @@ class MainWindow(QMainWindow):
         self.migration_page.update_config(config)
         self.inscription_page.update_config(config)
         self.depart_page.update_config(config)
+        self.password_reset_page.update_config(config)
+        self.ad_explorer_page.update_config(config)
         self.apply_theme()
 
     def apply_theme(self) -> None:

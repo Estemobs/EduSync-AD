@@ -407,7 +407,8 @@ class EditAttributeDialog(QDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
-        self.attr_combo = __import__("PyQt6.QtWidgets", fromlist=["QComboBox"]).QComboBox()
+        from PyQt6.QtWidgets import QComboBox
+        self.attr_combo = QComboBox()
         for key, label in editable_attrs:
             self.attr_combo.addItem(label, key)
         form.addRow("Attribut :", self.attr_combo)
