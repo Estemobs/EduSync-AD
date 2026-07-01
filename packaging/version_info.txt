@@ -1,0 +1,27 @@
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(1, 0, 4, 0),
+    prodvers=(1, 0, 4, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(
+        u'040C04B0',
+        [StringStruct(u'CompanyName', u'EduSync'),
+         StringStruct(u'FileDescription', u'EduSync AD — Gestion Active Directory scolaire'),
+         StringStruct(u'FileVersion', u'1.0.4'),
+         StringStruct(u'InternalName', u'EduSyncAD'),
+         StringStruct(u'LegalCopyright', u'© 2025 EduSync'),
+         StringStruct(u'OriginalFilename', u'EduSyncAD.exe'),
+         StringStruct(u'ProductName', u'EduSync AD'),
+         StringStruct(u'ProductVersion', u'1.0.4')])
+    ]),
+    VarFileInfo([VarStruct(u'Translation', [0x040C, 1200])])
+  ]
+)

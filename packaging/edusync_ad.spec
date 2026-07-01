@@ -1,17 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec — Build Windows : pyinstaller build/edusync_ad.spec
-# Génère dist/EduSyncAD/EduSyncAD.exe (mode onedir, Python embarqué)
+# PyInstaller spec — Build Windows : pyinstaller packaging/edusync_ad.spec
 
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent
 SRC  = ROOT / "src"
+ASSETS = ROOT / "assets"
+ICON = str(ASSETS / "icon.ico") if (ASSETS / "icon.ico").exists() else None
 
 a = Analysis(
     [str(SRC / "edusync_ad" / "app.py")],
     pathex=[str(SRC)],
     binaries=[],
-    datas=[],
+    datas=[
+        (str(ASSETS / "icon.png"), "assets"),
+    ] if (ASSETS / "icon.png").exists() else [],
     hiddenimports=[
         "ldap3",
         "cryptography",
@@ -39,8 +42,9 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,   # pas de fenêtre console
-    icon=None,       # remplacer par le chemin vers l'icône .ico si disponible
+    console=False,
+    icon=ICON,
+    version=str(ROOT / "packaging" / "version_info.txt"),
 )
 
 coll = COLLECT(
