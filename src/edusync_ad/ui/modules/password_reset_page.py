@@ -347,11 +347,13 @@ class PasswordResetPage(QWidget):
             return
 
         simulation = self.ad_connection.dry_run
+        force_change = self.chk_force_change.isChecked()
         suffix_sim = " (mode simulation)" if simulation else ""
+        suffix_force = " + forcer changement" if force_change else ""
         reply = QMessageBox.question(
             self,
             "Confirmer",
-            f"Réinitialiser les mots de passe de {len(self._users)} compte(s){suffix_sim} ?",
+            f"Réinitialiser les mots de passe de {len(self._users)} compte(s){suffix_force}{suffix_sim} ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -361,8 +363,12 @@ class PasswordResetPage(QWidget):
         for i, (user, pwd) in enumerate(zip(self._users, self._passwords)):
             try:
                 self.ad_connection.set_password(user["dn"], pwd)
+                if force_change:
+                    self.ad_connection.enable_account(user["dn"], force_password_change=True)
                 self.audit_log.record(
-                    "reinitialisation_mdp", user["sam"], "succes", self.session_id, simulation=simulation
+                    "reinitialisation_mdp", user["sam"], "succes", self.session_id,
+                    simulation=simulation,
+                    detail="force_change=1" if force_change else "",
                 )
                 self.preview_table.setItem(i, COL_ETAT, QTableWidgetItem("Réinitialisé" + (" (sim.)" if simulation else "")))
                 success += 1
