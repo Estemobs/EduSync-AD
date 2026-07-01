@@ -207,7 +207,8 @@ class SettingsPage(QWidget):
             regle_prenom_compose=self.prenom_compose_combo.currentData(),
             groupes_classe_auto=self.groupes_auto_check.isChecked(),
             ou_archive=self.ou_archive_edit.text().strip(),
-            delai_suppression_jours=self.delai_combo.currentData(),
+            delai_suppression_jours=self.delai_spin.value(),
             theme=self.theme_combo.currentData(),
+            langue=self.langue_combo.currentData(),
         )
         self._on_save(config)
