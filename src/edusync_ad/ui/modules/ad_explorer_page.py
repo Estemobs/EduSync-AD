@@ -1,11 +1,12 @@
 """Module 6 — Explorateur AD (§9 du cahier des charges).
 
-Arborescence des OUs (panneau gauche) → liste des utilisateurs de l'OU
-sélectionnée (panneau central) → attributs détaillés + actions sur le compte
-sélectionné (panneau droit).
+Panneau gauche : arborescence OUs + liste des groupes (onglets).
+Panneau central : liste des utilisateurs avec barre de recherche.
+Panneau droit : attributs + actions sur le compte sélectionné.
 
 Actions disponibles :
 - Modifier un attribut (displayName, description, telephoneNumber, department, title, mail)
+- Changer l'OU (déplacer le compte vers une autre OU)
 - Réinitialiser le mot de passe individuel
 - Activer / désactiver le compte
 - Gérer l'appartenance aux groupes
@@ -23,7 +24,6 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
-    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
     QTreeWidget,
@@ -75,6 +76,7 @@ class ADExplorerPage(QWidget):
         self.session_id = session_id
 
         self._current_user: dict | None = None
+        self._all_users: list[dict] = []  # liste complète avant filtre recherche
         self._build_ui()
 
     def update_config(self, config: AppConfig) -> None:
@@ -83,32 +85,61 @@ class ADExplorerPage(QWidget):
     def showEvent(self, event) -> None:
         super().showEvent(event)
         if not self.ou_tree.topLevelItemCount():
-            self._load_ou_tree()
+            self._load_left_panel()
 
     # -- Construction UI -------------------------------------------------------
 
     def _build_ui(self) -> None:
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
-        # Panneau gauche : arborescence OUs
+        # Panneau gauche : onglets OUs / Groupes
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        refresh_btn = QPushButton("Actualiser l'arborescence")
-        refresh_btn.clicked.connect(self._load_ou_tree)
+
+        refresh_btn = QPushButton("Actualiser")
+        refresh_btn.clicked.connect(self._load_left_panel)
         left_layout.addWidget(refresh_btn)
+
+        self.left_tabs = QTabWidget()
+        left_layout.addWidget(self.left_tabs)
+
+        # Onglet OUs
+        ou_widget = QWidget()
+        ou_layout = QVBoxLayout(ou_widget)
+        ou_layout.setContentsMargins(0, 0, 0, 0)
         self.ou_tree = QTreeWidget()
         self.ou_tree.setHeaderLabel("Unités Organisationnelles")
         self.ou_tree.itemClicked.connect(self._on_ou_selected)
-        left_layout.addWidget(self.ou_tree)
-        left.setMinimumWidth(240)
+        ou_layout.addWidget(self.ou_tree)
+        self.left_tabs.addTab(ou_widget, "OUs")
 
-        # Panneau central : liste utilisateurs
+        # Onglet Groupes
+        group_widget = QWidget()
+        group_layout = QVBoxLayout(group_widget)
+        group_layout.setContentsMargins(0, 0, 0, 0)
+        self.group_list = QListWidget()
+        self.group_list.itemClicked.connect(self._on_group_selected)
+        group_layout.addWidget(self.group_list)
+        self.left_tabs.addTab(group_widget, "Groupes")
+
+        left.setMinimumWidth(220)
+
+        # Panneau central : recherche + liste utilisateurs
         center = QWidget()
         center_layout = QVBoxLayout(center)
         center_layout.setContentsMargins(0, 0, 0, 0)
-        self.user_count_label = QLabel("Sélectionnez une OU.")
+
+        search_row = QHBoxLayout()
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Rechercher par nom ou identifiant…")
+        self.search_edit.textChanged.connect(self._on_search_changed)
+        search_row.addWidget(self.search_edit)
+        center_layout.addLayout(search_row)
+
+        self.user_count_label = QLabel("Sélectionnez une OU ou un groupe.")
         center_layout.addWidget(self.user_count_label)
+
         self.user_table = QTableWidget(0, len(USER_COLS))
         self.user_table.setHorizontalHeaderLabels(USER_COLS)
         self.user_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -131,18 +162,26 @@ class ADExplorerPage(QWidget):
             lbl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             self._attr_labels[attr_key] = lbl
             self.attrs_form.addRow(f"{attr_label} :", lbl)
+        # OU courante
+        self.lbl_ou = QLabel("—")
+        self.lbl_ou.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.lbl_ou.setWordWrap(True)
+        self.attrs_form.addRow("OU :", self.lbl_ou)
 
         actions_group = QGroupBox("Actions")
         actions_layout = QVBoxLayout(actions_group)
         self.btn_edit_attr = QPushButton("Modifier un attribut…")
         self.btn_edit_attr.clicked.connect(self._on_edit_attr)
+        self.btn_change_ou = QPushButton("Changer d'OU…")
+        self.btn_change_ou.clicked.connect(self._on_change_ou)
         self.btn_reset_pwd = QPushButton("Réinitialiser le mot de passe…")
         self.btn_reset_pwd.clicked.connect(self._on_reset_password)
         self.btn_toggle_account = QPushButton("Activer / Désactiver le compte")
         self.btn_toggle_account.clicked.connect(self._on_toggle_account)
         self.btn_manage_groups = QPushButton("Gérer les groupes…")
         self.btn_manage_groups.clicked.connect(self._on_manage_groups)
-        for btn in (self.btn_edit_attr, self.btn_reset_pwd, self.btn_toggle_account, self.btn_manage_groups):
+        for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
+                    self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(False)
             actions_layout.addWidget(btn)
         actions_layout.addStretch()
@@ -154,18 +193,22 @@ class ADExplorerPage(QWidget):
         splitter.addWidget(left)
         splitter.addWidget(center)
         splitter.addWidget(right)
-        splitter.setSizes([240, 360, 280])
+        splitter.setSizes([220, 360, 280])
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(splitter)
 
-    # -- Arborescence OUs ------------------------------------------------------
+    # -- Chargement panneau gauche --------------------------------------------
 
-    def _load_ou_tree(self) -> None:
+    def _load_left_panel(self) -> None:
         if self.ad_connection.domain is None:
             QMessageBox.warning(self, "Non connecté", "Connectez-vous d'abord à l'AD.")
             return
+        self._load_ou_tree()
+        self._load_group_list()
+
+    def _load_ou_tree(self) -> None:
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
         try:
             ous = self.ad_connection.list_ous(base_dn)
@@ -179,9 +222,7 @@ class ADExplorerPage(QWidget):
         self.ou_tree.addTopLevelItem(root_item)
 
         dn_to_item: dict[str, QTreeWidgetItem] = {base_dn: root_item}
-        ous_sorted = sorted(ous, key=lambda x: x[0].count(","))
-
-        for dn, name in ous_sorted:
+        for dn, name in sorted(ous, key=lambda x: x[0].count(",")):
             parent_dn = dn.split(",", 1)[1] if "," in dn else base_dn
             parent_item = dn_to_item.get(parent_dn, root_item)
             item = QTreeWidgetItem([name])
@@ -190,6 +231,22 @@ class ADExplorerPage(QWidget):
             dn_to_item[dn] = item
 
         root_item.setExpanded(True)
+
+    def _load_group_list(self) -> None:
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            groups = self.ad_connection.list_groups(base_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+
+        self.group_list.clear()
+        for dn, name in sorted(groups, key=lambda x: x[1].lower()):
+            item = QListWidgetItem(name)
+            item.setData(Qt.ItemDataRole.UserRole, dn)
+            self.group_list.addItem(item)
+
+    # -- Sélection OU / Groupe ------------------------------------------------
 
     def _on_ou_selected(self, item: QTreeWidgetItem, _column: int) -> None:
         ou_dn = item.data(0, Qt.ItemDataRole.UserRole)
@@ -200,30 +257,67 @@ class ADExplorerPage(QWidget):
         except ADError as exc:
             QMessageBox.critical(self, "Erreur", str(exc))
             return
-        self._users = users
+        self._all_users = users
         self._current_user = None
+        self.search_edit.clear()
         self._populate_user_table(users)
         self.user_count_label.setText(f"{len(users)} utilisateur(s) dans « {item.text(0)} »")
         self._clear_detail_panel()
+
+    def _on_group_selected(self, item: QListWidgetItem) -> None:
+        group_dn = item.data(Qt.ItemDataRole.UserRole)
+        if not group_dn or self.ad_connection.domain is None:
+            return
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            users = self.ad_connection.list_users_in_group(group_dn, base_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+        self._all_users = users
+        self._current_user = None
+        self.search_edit.clear()
+        self._populate_user_table(users)
+        self.user_count_label.setText(f"{len(users)} membre(s) dans « {item.text()} »")
+        self._clear_detail_panel()
+
+    # -- Recherche ------------------------------------------------------------
+
+    def _on_search_changed(self, text: str) -> None:
+        needle = text.strip().lower()
+        if not needle:
+            filtered = self._all_users
+        else:
+            filtered = [
+                u for u in self._all_users
+                if needle in u["sam"].lower() or needle in u["cn"].lower()
+            ]
+        self._populate_user_table(filtered)
+        self.user_count_label.setText(
+            f"{len(filtered)} utilisateur(s) affiché(s)"
+            + (f" (filtre : « {text.strip()} »)" if needle else "")
+        )
+
+    # -- Table utilisateurs ---------------------------------------------------
 
     def _populate_user_table(self, users: list[dict]) -> None:
         self.user_table.setRowCount(len(users))
         for i, u in enumerate(users):
             self.user_table.setItem(i, COL_SAM, QTableWidgetItem(u["sam"]))
             self.user_table.setItem(i, COL_CN, QTableWidgetItem(u["cn"]))
-            etat = "Désactivé" if u.get("disabled") else "Actif"
-            self.user_table.setItem(i, COL_ETAT, QTableWidgetItem(etat))
+            self.user_table.setItem(i, COL_ETAT, QTableWidgetItem("Désactivé" if u.get("disabled") else "Actif"))
+        self._displayed_users = users  # référence aux users affichés après filtre
 
-    # -- Sélection utilisateur -------------------------------------------------
+    # -- Sélection utilisateur ------------------------------------------------
 
     def _on_user_selected(self) -> None:
         rows = self.user_table.selectionModel().selectedRows()
-        if not rows or not hasattr(self, "_users"):
+        if not rows or not hasattr(self, "_displayed_users"):
             return
         idx = rows[0].row()
-        if idx >= len(self._users):
+        if idx >= len(self._displayed_users):
             return
-        user_info = self._users[idx]
+        user_info = self._displayed_users[idx]
         try:
             attrs = self.ad_connection.get_user_attributes(user_info["dn"])
         except ADError as exc:
@@ -231,18 +325,24 @@ class ADExplorerPage(QWidget):
             return
         self._current_user = attrs
         self._refresh_detail_panel(attrs)
-        for btn in (self.btn_edit_attr, self.btn_reset_pwd, self.btn_toggle_account, self.btn_manage_groups):
+        for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
+                    self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(True)
 
     def _refresh_detail_panel(self, attrs: dict) -> None:
         for attr_key, _ in EDITABLE_ATTRS:
-            val = attrs.get(attr_key) or "—"
-            self._attr_labels[attr_key].setText(val)
+            self._attr_labels[attr_key].setText(attrs.get(attr_key) or "—")
+        # Extraire l'OU depuis le DN : tout après le premier composant
+        dn = attrs.get("dn", "")
+        ou_part = dn.split(",", 1)[1] if "," in dn else dn
+        self.lbl_ou.setText(ou_part or "—")
 
     def _clear_detail_panel(self) -> None:
         for lbl in self._attr_labels.values():
             lbl.setText("—")
-        for btn in (self.btn_edit_attr, self.btn_reset_pwd, self.btn_toggle_account, self.btn_manage_groups):
+        self.lbl_ou.setText("—")
+        for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
+                    self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(False)
 
     # -- Actions ---------------------------------------------------------------
@@ -260,21 +360,49 @@ class ADExplorerPage(QWidget):
             self._current_user[attr_key] = new_value
             self._refresh_detail_panel(self._current_user)
             self.audit_log.record(
-                "modification_attribut",
-                self._current_user.get("sAMAccountName", ""),
-                "succes",
-                self.session_id,
-                simulation=simulation,
-                detail=f"{attr_key}={new_value}",
+                "modification_attribut", self._current_user.get("sAMAccountName", ""),
+                "succes", self.session_id, simulation=simulation, detail=f"{attr_key}={new_value}",
             )
         except ADError as exc:
             self.audit_log.record(
-                "modification_attribut",
-                self._current_user.get("sAMAccountName", ""),
-                "echec",
-                self.session_id,
-                simulation=simulation,
-                detail=str(exc),
+                "modification_attribut", self._current_user.get("sAMAccountName", ""),
+                "echec", self.session_id, simulation=simulation, detail=str(exc),
+            )
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    def _on_change_ou(self) -> None:
+        if not self._current_user or self.ad_connection.domain is None:
+            return
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            ous = self.ad_connection.list_ous(base_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+
+        dialog = ChooseOUDialog(ous, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_dn:
+            return
+
+        sam = self._current_user.get("sAMAccountName", "")
+        new_ou_dn = dialog.selected_dn
+        simulation = self.ad_connection.dry_run
+        old_ou = self._current_user["dn"].split(",", 1)[1] if "," in self._current_user["dn"] else ""
+        try:
+            self.ad_connection.move_user(self._current_user["dn"], new_ou_dn)
+            self.audit_log.record(
+                "deplacement_compte", sam, "succes", self.session_id,
+                ou_source=old_ou, ou_destination=new_ou_dn, simulation=simulation,
+            )
+            # Mettre à jour le DN en mémoire
+            rdn = self._current_user["dn"].split(",")[0]
+            self._current_user["dn"] = f"{rdn},{new_ou_dn}"
+            self._refresh_detail_panel(self._current_user)
+            QMessageBox.information(self, "Succès", f"Compte déplacé vers {new_ou_dn}{'  (simulé)' if simulation else ''}.")
+        except ADError as exc:
+            self.audit_log.record(
+                "deplacement_compte", sam, "echec", self.session_id,
+                ou_source=old_ou, ou_destination=new_ou_dn, simulation=simulation, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -286,8 +414,7 @@ class ADExplorerPage(QWidget):
         new_pwd = generate_random_password(policy)
 
         reply = QMessageBox.question(
-            self,
-            "Réinitialiser le mot de passe",
+            self, "Réinitialiser le mot de passe",
             f"Nouveau mot de passe généré pour {sam} :\n\n{new_pwd}\n\nConfirmer ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -310,8 +437,7 @@ class ADExplorerPage(QWidget):
         is_disabled = self._current_user.get("disabled", False)
         action_label = "activer" if is_disabled else "désactiver"
         reply = QMessageBox.question(
-            self,
-            "Confirmer",
+            self, "Confirmer",
             f"Voulez-vous {action_label} le compte {sam} ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
@@ -331,10 +457,8 @@ class ADExplorerPage(QWidget):
             QMessageBox.information(self, "Succès", f"Compte {action_label}{'  (simulé)' if simulation else ''}.")
             self._reload_current_row()
         except ADError as exc:
-            self.audit_log.record(
-                "activation_compte" if is_disabled else "desactivation_compte",
-                sam, "echec", self.session_id, simulation=simulation, detail=str(exc)
-            )
+            action_type = "activation_compte" if is_disabled else "desactivation_compte"
+            self.audit_log.record(action_type, sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
             QMessageBox.critical(self, "Erreur", str(exc))
 
     def _on_manage_groups(self) -> None:
@@ -349,12 +473,7 @@ class ADExplorerPage(QWidget):
             QMessageBox.critical(self, "Erreur", str(exc))
             return
 
-        dialog = ManageGroupsDialog(
-            all_groups=all_groups,
-            member_dns=member_dns,
-            user_cn=self._current_user.get("cn", ""),
-            parent=self,
-        )
+        dialog = ManageGroupsDialog(all_groups, member_dns, self._current_user.get("cn", ""), parent=self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -379,20 +498,19 @@ class ADExplorerPage(QWidget):
                 QMessageBox.warning(self, "Erreur", f"Retrait du groupe échoué : {exc}")
 
         try:
-            updated = self.ad_connection.get_user_attributes(user_dn)
-            self._current_user = updated
+            self._current_user = self.ad_connection.get_user_attributes(user_dn)
         except ADError:
             pass
 
     def _reload_current_row(self) -> None:
         rows = self.user_table.selectionModel().selectedRows()
-        if not rows or not hasattr(self, "_users") or not self._current_user:
+        if not rows or not hasattr(self, "_displayed_users") or not self._current_user:
             return
         idx = rows[0].row()
-        if idx >= len(self._users):
+        if idx >= len(self._displayed_users):
             return
-        self._users[idx]["disabled"] = self._current_user.get("disabled", False)
-        etat = "Désactivé" if self._users[idx]["disabled"] else "Actif"
+        self._displayed_users[idx]["disabled"] = self._current_user.get("disabled", False)
+        etat = "Désactivé" if self._displayed_users[idx]["disabled"] else "Actif"
         self.user_table.setItem(idx, COL_ETAT, QTableWidgetItem(etat))
 
 
@@ -404,19 +522,16 @@ class EditAttributeDialog(QDialog):
         self.setWindowTitle("Modifier un attribut")
         self.result_attr: str = ""
         self.result_value: str = ""
+        self._user_attrs = user_attrs
 
         layout = QVBoxLayout(self)
         form = QFormLayout()
-
         self.attr_combo = QComboBox()
         for key, label in editable_attrs:
             self.attr_combo.addItem(label, key)
         form.addRow("Attribut :", self.attr_combo)
-
         self.value_edit = QLineEdit()
         self.attr_combo.currentIndexChanged.connect(self._on_attr_changed)
-        self._user_attrs = user_attrs
-        self._editable_attrs = editable_attrs
         self._on_attr_changed()
         form.addRow("Valeur :", self.value_edit)
         layout.addLayout(form)
@@ -437,14 +552,52 @@ class EditAttributeDialog(QDialog):
         self.accept()
 
 
+class ChooseOUDialog(QDialog):
+    """Dialogue de sélection d'une OU cible pour déplacer un compte."""
+
+    def __init__(self, ous: list[tuple[str, str]], parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Choisir l'OU de destination")
+        self.setMinimumSize(420, 360)
+        self.selected_dn: str = ""
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Sélectionnez l'OU de destination :"))
+
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabel("Unités Organisationnelles")
+        self.tree.itemClicked.connect(self._on_item_clicked)
+        layout.addWidget(self.tree)
+
+        # Construire l'arbre
+        dn_to_item: dict[str, QTreeWidgetItem] = {}
+        for dn, name in sorted(ous, key=lambda x: x[0].count(",")):
+            item = QTreeWidgetItem([name])
+            item.setData(0, Qt.ItemDataRole.UserRole, dn)
+            parent_dn = dn.split(",", 1)[1] if "," in dn else ""
+            parent_item = dn_to_item.get(parent_dn)
+            if parent_item:
+                parent_item.addChild(item)
+            else:
+                self.tree.addTopLevelItem(item)
+            dn_to_item[dn] = item
+        self.tree.expandAll()
+
+        self.selected_label = QLabel("Aucune OU sélectionnée.")
+        layout.addWidget(self.selected_label)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_item_clicked(self, item: QTreeWidgetItem, _col: int) -> None:
+        self.selected_dn = item.data(0, Qt.ItemDataRole.UserRole) or ""
+        self.selected_label.setText(f"Sélection : {self.selected_dn}")
+
+
 class ManageGroupsDialog(QDialog):
-    def __init__(
-        self,
-        all_groups: list[tuple[str, str]],
-        member_dns: set[str],
-        user_cn: str,
-        parent=None,
-    ) -> None:
+    def __init__(self, all_groups: list[tuple[str, str]], member_dns: set[str], user_cn: str, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle(f"Groupes de {user_cn}")
         self.setMinimumSize(460, 400)
@@ -452,10 +605,9 @@ class ManageGroupsDialog(QDialog):
         self.to_remove: list[str] = []
         self._all_groups = {dn: name for dn, name in all_groups}
         self._initial_member_dns = set(member_dns)
-        self._current_member_dns: set[str] = set(member_dns)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Groupes dont l'utilisateur est membre (cochez/décochez) :"))
+        layout.addWidget(QLabel("Cochez les groupes dont l'utilisateur doit être membre :"))
 
         self.list_widget = QListWidget()
         for dn, name in sorted(all_groups, key=lambda x: x[1].lower()):
@@ -472,19 +624,13 @@ class ManageGroupsDialog(QDialog):
         layout.addWidget(buttons)
 
     def _on_accept(self) -> None:
-        new_member_dns: set[str] = set()
+        new_dns: set[str] = set()
         for i in range(self.list_widget.count()):
             item = self.list_widget.item(i)
             dn = item.data(Qt.ItemDataRole.UserRole)
             if item.checkState() == Qt.CheckState.Checked:
-                new_member_dns.add(dn.lower())
+                new_dns.add(dn.lower())
 
-        self.to_add = [
-            dn for dn, _ in self._all_groups.items()
-            if dn.lower() in new_member_dns and dn.lower() not in self._initial_member_dns
-        ]
-        self.to_remove = [
-            dn for dn, _ in self._all_groups.items()
-            if dn.lower() not in new_member_dns and dn.lower() in self._initial_member_dns
-        ]
+        self.to_add = [dn for dn in self._all_groups if dn.lower() in new_dns and dn.lower() not in self._initial_member_dns]
+        self.to_remove = [dn for dn in self._all_groups if dn.lower() not in new_dns and dn.lower() in self._initial_member_dns]
         self.accept()
