@@ -112,7 +112,13 @@ class MigrationPage(QWidget):
     # -- Construction UI -------------------------------------------------------
 
     def _build_ui(self) -> None:
-        import_group = QGroupBox("1. Import du fichier de migration CSV")
+        # Onglets : Via CSV / Via l'interface
+        self.mode_tabs = QTabWidget()
+
+        # -- Onglet CSV -------------------------------------------------------
+        csv_tab = QWidget()
+        csv_layout = QVBoxLayout(csv_tab)
+        import_group = QGroupBox("Import du fichier de migration CSV")
         import_layout = QVBoxLayout(import_group)
 
         import_row = QHBoxLayout()
@@ -128,15 +134,42 @@ class MigrationPage(QWidget):
         mapping_widget = QWidget()
         mapping_widget.setLayout(self.mapping_form)
         import_layout.addWidget(mapping_widget)
+        csv_layout.addWidget(import_group)
+
+        csv_resolve_row = QHBoxLayout()
+        self.resolve_button = QPushButton("Résoudre dans l'AD")
+        self.resolve_button.clicked.connect(self._on_resolve_clicked)
+        csv_resolve_row.addWidget(self.resolve_button)
+        csv_resolve_row.addStretch()
+        csv_layout.addLayout(csv_resolve_row)
+        self.mode_tabs.addTab(csv_tab, "Via CSV")
+
+        # -- Onglet Interface -------------------------------------------------
+        iface_tab = QWidget()
+        iface_layout = QVBoxLayout(iface_tab)
+        iface_group = QGroupBox("Sélection directe des OUs")
+        iface_form = QFormLayout(iface_group)
+        self.iface_ou_src = QLineEdit()
+        self.iface_ou_src.setPlaceholderText("OU=4emeA,OU=eleves,DC=lycee,DC=local")
+        self.iface_ou_dst = QLineEdit()
+        self.iface_ou_dst.setPlaceholderText("OU=3emeA,OU=eleves,DC=lycee,DC=local")
+        iface_form.addRow("OU source :", self.iface_ou_src)
+        iface_form.addRow("OU destination :", self.iface_ou_dst)
+        iface_layout.addWidget(iface_group)
+
+        iface_load_row = QHBoxLayout()
+        self.iface_load_button = QPushButton("Charger les utilisateurs de l'OU source")
+        self.iface_load_button.clicked.connect(self._on_iface_load_clicked)
+        iface_load_row.addWidget(self.iface_load_button)
+        iface_load_row.addStretch()
+        iface_layout.addLayout(iface_load_row)
+        iface_layout.addStretch()
+        self.mode_tabs.addTab(iface_tab, "Via l'interface")
 
         resolve_row = QHBoxLayout()
-        self.resolve_button = QPushButton("2. Résoudre dans l'AD")
-        self.resolve_button.clicked.connect(self._on_resolve_clicked)
-        resolve_row.addWidget(self.resolve_button)
-        resolve_row.addStretch()
-
         self.info_label = QLabel("")
         resolve_row.addWidget(self.info_label)
+        resolve_row.addStretch()
 
         self.preview_table = QTableWidget(0, len(PREVIEW_COLUMNS))
         self.preview_table.setHorizontalHeaderLabels(PREVIEW_COLUMNS)
