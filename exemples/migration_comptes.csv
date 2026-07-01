@@ -1,0 +1,6 @@
+identifiant;ou_source;ou_destination
+thomas.martin;OU=4emeA,OU=Eleves,DC=lycee,DC=local;OU=3emeA,OU=Eleves,DC=lycee,DC=local
+alice.durand;OU=4emeA,OU=Eleves,DC=lycee,DC=local;OU=3emeA,OU=Eleves,DC=lycee,DC=local
+hugo.bernard;OU=4emeB,OU=Eleves,DC=lycee,DC=local;OU=3emeB,OU=Eleves,DC=lycee,DC=local
+lea.petit;OU=5emeA,OU=Eleves,DC=lycee,DC=local;OU=4emeA,OU=Eleves,DC=lycee,DC=local
+nathan.moreau;OU=5emeB,OU=Eleves,DC=lycee,DC=local;OU=4emeB,OU=Eleves,DC=lycee,DC=local
