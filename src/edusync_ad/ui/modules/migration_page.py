@@ -194,6 +194,42 @@ class MigrationPage(QWidget):
         layout.addWidget(self.preview_table)
         layout.addLayout(action_row)
 
+    # -- Mode Via l'interface --------------------------------------------------
+
+    def _on_iface_load_clicked(self) -> None:
+        ou_src = self.iface_ou_src.text().strip()
+        ou_dst = self.iface_ou_dst.text().strip()
+        if not ou_src or not ou_dst:
+            QMessageBox.warning(self, "Champs vides", "Saisissez l'OU source et l'OU destination.")
+            return
+        if self.ad_connection.domain is None:
+            QMessageBox.critical(self, "Non connecté", "Aucune connexion à l'Active Directory.")
+            return
+
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            users = self.ad_connection.list_users_in_ou(ou_src)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur AD", str(exc))
+            return
+
+        if not users:
+            QMessageBox.information(self, "OU vide", "Aucun utilisateur trouvé dans cette OU.")
+            return
+
+        rows: list[MigrationRow] = []
+        for u in users:
+            row = MigrationRow(identifiant=u["sam"], ou_source=ou_src, ou_destination=ou_dst)
+            row.user_dn = u["dn"]
+            row.nom_complet = u["cn"]
+            rows.append(row)
+
+        self._rows = rows
+        self._populate_table()
+        self.validate_button.setEnabled(True)
+        self.cancel_button.setEnabled(True)
+        self.info_label.setText(f"{len(rows)} utilisateur(s) chargé(s) depuis l'OU source.")
+
     # -- Import CSV et mapping -------------------------------------------------
 
     def _on_import_clicked(self) -> None:
