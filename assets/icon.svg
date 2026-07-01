@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a6fc4"/>
+      <stop offset="100%" style="stop-color:#0d4a8a"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fond arrondi -->
+  <rect width="256" height="256" rx="48" ry="48" fill="url(#bg)"/>
+  <rect width="256" height="128" rx="48" ry="48" fill="url(#shine)"/>
+
+  <!-- Toque de diplômé -->
+  <polygon points="128,60 212,96 128,132 44,96" fill="#ffffff" opacity="0.95"/>
+  <ellipse cx="128" cy="132" rx="54" ry="14" fill="#c8dff7"/>
+  <rect x="198" y="96" width="8" height="44" rx="4" fill="#ffffff" opacity="0.8"/>
+  <circle cx="202" cy="143" r="9" fill="#f0c040"/>
+
+  <!-- Éclair / symbole AD -->
+  <path d="M108 148 L122 148 L114 172 L140 158 L126 158 L134 136 Z"
+        fill="#f0c040" opacity="0.95"/>
+
+  <!-- Texte ES -->
+  <text x="128" y="220" font-family="Arial,sans-serif" font-size="40" font-weight="800"
+        fill="#ffffff" text-anchor="middle" opacity="0.9" letter-spacing="2">AD</text>
+</svg>
