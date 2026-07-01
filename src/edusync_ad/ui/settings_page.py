@@ -155,6 +155,7 @@ class SettingsPage(QWidget):
         appearance_group = QGroupBox("Apparence")
         appearance_form = QFormLayout(appearance_group)
         appearance_form.addRow("Thème", self.theme_combo)
+        appearance_form.addRow("Langue", self.langue_combo)
 
         eleve_group = QGroupBox("Politique de mot de passe — Élèves")
         eleve_layout = QVBoxLayout(eleve_group)
