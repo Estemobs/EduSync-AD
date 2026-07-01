@@ -14,6 +14,8 @@ finish-args:
   - --filesystem=home        # Lecture/écriture des CSV de l'utilisateur
 
 build-options:
+  build-args:
+    - --share=network
   env:
     PIP_PREFIX: /app
     PIP_DISABLE_PIP_VERSION_CHECK: '1'
