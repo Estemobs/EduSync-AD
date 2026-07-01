@@ -133,6 +133,7 @@ class MainWindow(QMainWindow):
         save_config(config)
         self.create_accounts_page.update_config(config)
         self.migration_page.update_config(config)
+        self.depart_page.update_config(config)
         self.apply_theme()
 
     def apply_theme(self) -> None:
