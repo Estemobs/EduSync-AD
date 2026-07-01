@@ -110,16 +110,20 @@ class SettingsPage(QWidget):
         self.ou_archive_edit = QLineEdit(config.ou_archive)
         self.ou_archive_edit.setPlaceholderText("Ex. : OU=Archive,DC=lycee,DC=local")
 
-        self.delai_combo = QComboBox()
-        for days in (30, 60, 90):
-            self.delai_combo.addItem(f"{days} jours", days)
-        current_delay_index = {30: 0, 60: 1, 90: 2}.get(config.delai_suppression_jours, 0)
-        self.delai_combo.setCurrentIndex(current_delay_index)
+        self.delai_spin = QSpinBox()
+        self.delai_spin.setRange(1, 3650)
+        self.delai_spin.setSuffix(" jours")
+        self.delai_spin.setValue(config.delai_suppression_jours)
 
         self.theme_combo = QComboBox()
         self.theme_combo.addItem("Clair", "clair")
         self.theme_combo.addItem("Sombre", "sombre")
         self.theme_combo.setCurrentIndex(0 if config.theme == "clair" else 1)
+
+        self.langue_combo = QComboBox()
+        self.langue_combo.addItem("Français", "fr")
+        self.langue_combo.addItem("English", "en")
+        self.langue_combo.setCurrentIndex(0 if config.langue == "fr" else 1)
 
         self.eleve_policy_form = _PasswordPolicyForm(config.politique_mdp_eleve)
         self.personnel_policy_form = _PasswordPolicyForm(config.politique_mdp_personnel)
