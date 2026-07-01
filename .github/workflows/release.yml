@@ -26,7 +26,7 @@ jobs:
           pip install pyinstaller
 
       - name: Build EXE
-        run: pyinstaller build/edusync_ad.spec
+        run: pyinstaller packaging/edusync_ad.spec
 
       - name: Zipper le dossier dist
         run: Compress-Archive -Path dist\EduSyncAD\* -DestinationPath EduSyncAD-windows.zip
@@ -40,28 +40,27 @@ jobs:
   # ── Build Linux .flatpak ────────────────────────────────────────────────────
   build-flatpak:
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/flathub/flatpak-builder:latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Installer les dépendances système
+      - name: Installer flatpak et flatpak-builder
         run: |
-          apt-get update -y
-          apt-get install -y flatpak flatpak-builder python3 python3-pip
+          sudo apt-get update -y
+          sudo apt-get install -y flatpak flatpak-builder
 
       - name: Ajouter le remote Flathub
-        run: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        run: |
+          sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
       - name: Installer le runtime freedesktop
         run: |
-          flatpak install -y flathub org.freedesktop.Platform//23.08
-          flatpak install -y flathub org.freedesktop.Sdk//23.08
-          flatpak install -y flathub org.freedesktop.Sdk.Extension.python3//23.08
+          sudo flatpak install -y flathub org.freedesktop.Platform//23.08
+          sudo flatpak install -y flathub org.freedesktop.Sdk//23.08
+          sudo flatpak install -y flathub org.freedesktop.Sdk.Extension.python3//23.08
 
       - name: Build flatpak
         run: |
-          flatpak-builder --force-clean --repo=repo flatpak-build build/org.edusync.AD.yml
+          flatpak-builder --force-clean --repo=repo flatpak-build packaging/org.edusync.AD.yml
           flatpak build-bundle repo EduSyncAD-linux.flatpak org.edusync.AD
 
       - uses: actions/upload-artifact@v4
