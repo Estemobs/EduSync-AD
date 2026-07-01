@@ -3,7 +3,7 @@ runtime: org.freedesktop.Platform
 runtime-version: '23.08'
 sdk: org.freedesktop.Sdk
 sdk-extensions:
-  - org.freedesktop.Sdk.Extension.python3
+  - org.freedesktop.Sdk.Extension.python311
 
 command: edusync-ad
 
@@ -16,7 +16,7 @@ finish-args:
   - --filesystem=home        # Lecture/écriture des CSV de l'utilisateur
 
 build-options:
-  append-path: /usr/lib/sdk/python3/bin
+  append-path: /usr/lib/sdk/python311/bin
   env:
     PIP_PREFIX: /app
     PIP_DISABLE_PIP_VERSION_CHECK: '1'
@@ -25,21 +25,10 @@ modules:
   - name: python-deps
     buildsystem: simple
     build-commands:
-      - pip3 install --no-index --find-links=${FLATPAK_BUILDER_BUILDDIR}/wheels
-          PyQt6 ldap3 cryptography platformdirs
+      - pip3 install --prefix=/app PyQt6 ldap3 cryptography platformdirs
     sources:
-      - type: file
-        url: https://files.pythonhosted.org/packages/source/P/PyQt6/PyQt6-6.7.0.tar.gz
-        sha256: placeholder-sha256-pyqt6
-      - type: file
-        url: https://files.pythonhosted.org/packages/source/l/ldap3/ldap3-2.9.1.tar.gz
-        sha256: placeholder-sha256-ldap3
-      - type: file
-        url: https://files.pythonhosted.org/packages/source/c/cryptography/cryptography-42.0.8.tar.gz
-        sha256: placeholder-sha256-cryptography
-      - type: file
-        url: https://files.pythonhosted.org/packages/source/p/platformdirs/platformdirs-4.2.2.tar.gz
-        sha256: placeholder-sha256-platformdirs
+      - type: shell
+        commands: []
 
   - name: edusync-ad
     buildsystem: simple
