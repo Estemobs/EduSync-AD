@@ -2,8 +2,6 @@ app-id: org.edusync.AD
 runtime: org.freedesktop.Platform
 runtime-version: '23.08'
 sdk: org.freedesktop.Sdk
-sdk-extensions:
-  - org.freedesktop.Sdk.Extension.python311
 
 command: edusync-ad
 
@@ -16,7 +14,6 @@ finish-args:
   - --filesystem=home        # Lecture/écriture des CSV de l'utilisateur
 
 build-options:
-  append-path: /usr/lib/sdk/python311/bin
   env:
     PIP_PREFIX: /app
     PIP_DISABLE_PIP_VERSION_CHECK: '1'
