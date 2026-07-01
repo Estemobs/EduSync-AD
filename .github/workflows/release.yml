@@ -23,7 +23,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          pip install pyinstaller
+          pip install pyinstaller cairosvg pillow
+
+      - name: Générer l'icône
+        run: python tools/generate_icon.py
 
       - name: Build EXE
         run: pyinstaller packaging/edusync_ad.spec
