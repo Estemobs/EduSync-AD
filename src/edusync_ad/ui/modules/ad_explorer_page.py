@@ -16,6 +16,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
@@ -407,7 +408,6 @@ class EditAttributeDialog(QDialog):
         layout = QVBoxLayout(self)
         form = QFormLayout()
 
-        from PyQt6.QtWidgets import QComboBox
         self.attr_combo = QComboBox()
         for key, label in editable_attrs:
             self.attr_combo.addItem(label, key)
