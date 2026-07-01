@@ -177,6 +177,10 @@ class MainWindow(QMainWindow):
         self.ad_explorer_page.update_config(config)
         self.apply_theme()
 
+    def _on_check_update(self) -> None:
+        dlg = UpdateDialog(self)
+        dlg.exec()
+
     def apply_theme(self) -> None:
         app = QApplication.instance()
         if app is not None:
