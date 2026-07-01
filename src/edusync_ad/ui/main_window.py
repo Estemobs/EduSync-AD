@@ -26,6 +26,7 @@ from edusync_ad.ui.modules.migration_page import MigrationPage
 from edusync_ad.ui.modules.password_reset_page import PasswordResetPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import stylesheet_for
+from edusync_ad.ui.update_dialog import UpdateDialog
 
 
 class MainWindow(QMainWindow):
@@ -66,6 +67,10 @@ class MainWindow(QMainWindow):
         self.simulation_button.setCheckable(True)
         self.simulation_button.toggled.connect(self._on_simulation_toggled)
         layout.addWidget(self.simulation_button)
+
+        update_btn = QPushButton("⟳ Mises à jour")
+        update_btn.clicked.connect(self._on_check_update)
+        layout.addWidget(update_btn)
 
         self.setMenuWidget(top_bar)
 
