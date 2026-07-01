@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  # ── Build Windows .exe ──────────────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Installer les dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: pyinstaller build/edusync_ad.spec
+
+      - name: Zipper le dossier dist
+        run: Compress-Archive -Path dist\EduSyncAD\* -DestinationPath EduSyncAD-windows.zip
+        shell: pwsh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: EduSyncAD-windows.zip
+
+  # ── Build Linux .flatpak ────────────────────────────────────────────────────
+  build-flatpak:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub/flatpak-builder:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer les dépendances système
+        run: |
+          apt-get update -y
+          apt-get install -y flatpak flatpak-builder python3 python3-pip
+
+      - name: Ajouter le remote Flathub
+        run: flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Installer le runtime freedesktop
+        run: |
+          flatpak install -y flathub org.freedesktop.Platform//23.08
+          flatpak install -y flathub org.freedesktop.Sdk//23.08
+          flatpak install -y flathub org.freedesktop.Sdk.Extension.python3//23.08
+
+      - name: Build flatpak
+        run: |
+          flatpak-builder --force-clean --repo=repo flatpak-build build/org.edusync.AD.yml
+          flatpak build-bundle repo EduSyncAD-linux.flatpak org.edusync.AD
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-build
+          path: EduSyncAD-linux.flatpak
+
+  # ── Publier la Release GitHub ───────────────────────────────────────────────
+  release:
+    needs: [build-windows, build-flatpak]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-build
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+
+      - name: Créer la Release et uploader les artefacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "EduSync AD ${{ github.ref_name }}"
+          body: |
+            ## EduSync AD ${{ github.ref_name }}
+
+            ### Téléchargements
+
+            | Plateforme | Fichier | Description |
+            |---|---|---|
+            | Windows 10/11 | `EduSyncAD-windows.zip` | Décompressez et lancez `EduSyncAD.exe` — aucune installation requise |
+            | Linux | `EduSyncAD-linux.flatpak` | `flatpak install EduSyncAD-linux.flatpak` puis `flatpak run org.edusync.AD` |
+
+            ### Prérequis
+            - Active Directory accessible sur le réseau (LDAP port 389 ou LDAPS port 636)
+            - Compte administrateur du domaine avec droits de création/modification de comptes
+
+            Voir le [guide utilisateur](docs/guide_utilisateur.md) pour la prise en main complète.
+          files: |
+            EduSyncAD-windows.zip
+            EduSyncAD-linux.flatpak
+          draft: false
+          prerelease: false
