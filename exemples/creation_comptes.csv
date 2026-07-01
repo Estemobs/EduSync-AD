@@ -1,0 +1,6 @@
+prenom;nom;ou;email_perso;date_naissance;numero
+Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee,DC=local;thomas.martin@gmail.com;2010-03-15;20100315
+Alice;Durand;OU=3emeA,OU=Eleves,DC=lycee,DC=local;;2010-07-22;20100722
+Hugo;Bernard;OU=3emeA,OU=Eleves,DC=lycee,DC=local;h.bernard@outlook.com;2009-11-08;20091108
+Léa;Petit;OU=4emeB,OU=Eleves,DC=lycee,DC=local;;2011-01-30;20110130
+Nathan;Moreau;OU=4emeB,OU=Eleves,DC=lycee,DC=local;nathan.moreau@gmail.com;2011-05-14;20110514
