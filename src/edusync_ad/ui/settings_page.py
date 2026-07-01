@@ -150,7 +150,7 @@ class SettingsPage(QWidget):
         departs_group = QGroupBox("Gestion des départs")
         departs_form = QFormLayout(departs_group)
         departs_form.addRow("OU d'archivage", self.ou_archive_edit)
-        departs_form.addRow("Délai avant suppression", self.delai_combo)
+        departs_form.addRow("Délai avant suppression", self.delai_spin)
 
         appearance_group = QGroupBox("Apparence")
         appearance_form = QFormLayout(appearance_group)
