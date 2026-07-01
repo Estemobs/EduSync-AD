@@ -61,6 +61,7 @@ class AppConfig:
 
     # Apparence
     theme: str = "clair"  # "clair" | "sombre"
+    langue: str = "fr"    # "fr" | "en"
 
     def to_dict(self) -> dict:
         data = asdict(self)
