@@ -426,8 +426,11 @@ class DepartPage(QWidget):
     # -- Suppressions en attente ----------------------------------------------
 
     def _refresh_pending_panel(self) -> None:
-        total = len(self.audit_log.get_pending_deletions())
+        from datetime import datetime, timedelta, timezone
+        pending = self.audit_log.get_pending_deletions()
+        total = len(pending)
         due = self.audit_log.count_due_deletions(self.config.delai_suppression_jours)
+
         if total == 0:
             self.pending_label.setText("Aucun compte en attente de suppression.")
             self.process_pending_button.setEnabled(False)
@@ -436,6 +439,20 @@ class DepartPage(QWidget):
                 f"{due} compte(s) à supprimer (délai écoulé) — {total} en attente au total."
             )
             self.process_pending_button.setEnabled(due > 0)
+
+        self.pending_table.setRowCount(len(pending))
+        for i, entry in enumerate(pending):
+            self.pending_table.setItem(i, 0, QTableWidgetItem(entry["sam_account_name"]))
+            self.pending_table.setItem(i, 1, QTableWidgetItem(entry["nom_complet"] or ""))
+            moved_at = entry["moved_at"][:10]
+            self.pending_table.setItem(i, 2, QTableWidgetItem(moved_at))
+            try:
+                dt = datetime.fromisoformat(entry["moved_at"])
+                echeance = (dt + timedelta(days=self.config.delai_suppression_jours)).strftime("%Y-%m-%d")
+            except ValueError:
+                echeance = "?"
+            self.pending_table.setItem(i, 3, QTableWidgetItem(echeance))
+        self.cancel_pending_button.setEnabled(False)
 
     def _on_process_pending_clicked(self) -> None:
         due = self.audit_log.get_due_deletions(self.config.delai_suppression_jours)
