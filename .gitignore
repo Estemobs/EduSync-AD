@@ -20,6 +20,7 @@ env/
 build/
 dist/
 *.spec
+!packaging/edusync_ad.spec
 packaging/linux/.flatpak-builder/
 packaging/linux/build-dir/
 
