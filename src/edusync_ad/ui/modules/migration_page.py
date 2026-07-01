@@ -189,7 +189,7 @@ class MigrationPage(QWidget):
         action_row.addStretch()
 
         layout = QVBoxLayout(self)
-        layout.addWidget(import_group)
+        layout.addWidget(self.mode_tabs)
         layout.addLayout(resolve_row)
         layout.addWidget(self.preview_table)
         layout.addLayout(action_row)
