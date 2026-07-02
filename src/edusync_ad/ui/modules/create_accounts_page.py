@@ -268,6 +268,38 @@ class CreateAccountsPage(QWidget):
     def _current_account_type(self) -> AccountType:
         return AccountType.ELEVE if self.eleve_radio.isChecked() else AccountType.PERSONNEL
 
+    # -- OU cible ---------------------------------------------------------------
+
+    def _on_load_ous_clicked(self) -> None:
+        if self.ad_connection.domain is None:
+            QMessageBox.warning(self, "Non connecté", "Connectez-vous d'abord à l'AD.")
+            return
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            ous = self.ad_connection.list_ous(base_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur AD", str(exc))
+            return
+
+        for combo in (self.classe_parent_ou_combo, self.default_ou_combo):
+            previous = combo.currentData()
+            combo.clear()
+            combo.addItem("(aucune)", "")
+            for dn, name in sorted(ous, key=lambda x: x[0]):
+                combo.addItem(f"{name}  ({dn})", dn)
+            idx = combo.findData(previous)
+            combo.setCurrentIndex(idx if idx >= 0 else 0)
+
+    def _resolve_ou(self, row: RawUserRow) -> tuple[str, bool]:
+        """Retourne (ou_dn, générée_depuis_la_classe)."""
+        if row.ou:
+            return row.ou, False
+        if row.classe:
+            parent = self.classe_parent_ou_combo.currentData()
+            if parent:
+                return f"OU={row.classe},{parent}", True
+        return self.default_ou_combo.currentData() or "", False
+
     # -- Génération de la prévisualisation ------------------------------------
 
     def _on_generate_clicked(self) -> None:
