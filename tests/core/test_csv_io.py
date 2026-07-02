@@ -44,7 +44,7 @@ def test_load_rows_with_matching_headers():
         "prenom": "prenom",
         "nom": "nom",
         "ou": "ou",
-        "email_perso": "email_perso",
+        "email": "email",
         "date_naissance": "date_naissance",
         "numero": "numero",
     }
@@ -55,7 +55,7 @@ def test_load_rows_with_matching_headers():
         prenom="Thomas",
         nom="Martin",
         ou="OU=3emeA,OU=Eleves,DC=lycee-victor-hugo,DC=local",
-        email_perso="thomas.martin.perso@gmail.com",
+        email="thomas.martin.perso@gmail.com",
         date_naissance="12/05/2011",
         numero="20251001",
     )
