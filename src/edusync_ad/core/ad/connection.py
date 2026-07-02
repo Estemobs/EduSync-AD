@@ -9,6 +9,7 @@ l'appel à `connect()`.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
@@ -24,10 +25,16 @@ from edusync_ad.core.ad.exceptions import (
     ADUnreachableError,
 )
 
+logger = logging.getLogger("edusync_ad.ad")
+
 ConnectionFactory = Callable[[str, str, str, bool], Connection]
 
 UAC_NORMAL_ACCOUNT_ENABLED = 512
 UAC_NORMAL_ACCOUNT_DISABLED = 514  # NORMAL_ACCOUNT | ACCOUNTDISABLE
+
+# Évite un blocage indéfini de l'UI ("Connexion en cours…") quand le contrôleur
+# de domaine est injoignable (mauvaise IP, pare-feu, réseau sandboxé Flatpak…).
+CONNECT_TIMEOUT_SECONDS = 8
 
 
 class ConnectionState(str, Enum):
