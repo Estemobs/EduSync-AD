@@ -75,6 +75,8 @@ class LoginDialog(QDialog):
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.remember_checkbox = QCheckBox("Mémoriser la connexion")
+        self.debug_checkbox = QCheckBox("Mode debug (journal de connexion en direct)")
+        self._debug_console: DebugConsole | None = None
 
         self.status_dot = QLabel("●")
         self.status_label = QLabel("Déconnecté")
@@ -89,6 +91,7 @@ class LoginDialog(QDialog):
         form.addRow("Nom d'utilisateur", self.username_edit)
         form.addRow("Mot de passe", self.password_edit)
         form.addRow("", self.remember_checkbox)
+        form.addRow("", self.debug_checkbox)
 
         status_layout = QHBoxLayout()
         status_layout.addWidget(self.status_dot)
