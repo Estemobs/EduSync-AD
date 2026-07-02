@@ -96,6 +96,33 @@ def default_connection_factory(
     )
 
 
+def _raise_ad_error(conn: Connection, default_message: str) -> None:
+    """Lève une ADError à partir du dernier résultat LDAP, avec un message
+    explicite pour le cas "referral" (au lieu du mot brut, incompréhensible).
+
+    Un AD renvoie un referral sur une écriture quand le client n'est pas
+    connecté via le nom canonique du contrôleur pour cette partition — le cas
+    classique est une connexion par adresse IP plutôt que par le nom DNS du
+    contrôleur. auto_referrals=False (voir default_connection_factory) évite
+    que ldap3 tente de suivre ce referral tout seul (ce qui provoquait un
+    plantage "invalid server address" si ce nom n'est pas résolvable), mais
+    l'écriture elle-même reste refusée tant que ce n'est pas corrigé.
+    """
+    result = conn.result or {}
+    description = (result.get("description") or "").lower()
+    if description == "referral":
+        referrals = result.get("referrals") or []
+        targets = ", ".join(referrals) if referrals else "un autre contrôleur de domaine"
+        raise ADError(
+            f"Le contrôleur de domaine refuse cette écriture et demande de la refaire vers : "
+            f"{targets}. C'est un comportement AD classique quand on se connecte par adresse IP "
+            "plutôt que par le nom DNS du contrôleur : configurez le DNS de ce poste pour résoudre "
+            "le nom du domaine (ou renseignez ce nom, ex. dc01.lycee.local, comme « Contrôleur de "
+            "domaine » au lieu de l'IP), puis reconnectez-vous."
+        )
+    raise ADError(result.get("description") or default_message)
+
+
 def _format_pwd_last_set(value) -> str:
     """Formate l'attribut AD pwdLastSet en date lisible.
 
@@ -249,7 +276,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.add(dn, ["top", "person", "organizationalPerson", "user"], attributes):
-            raise ADError(conn.result.get("description", "Échec de création du compte."))
+            _raise_ad_error(conn, "Échec de création du compte.")
         if password is not None:
             self.set_password(dn, password)
             self.enable_account(dn, force_password_change=force_password_change)
@@ -272,7 +299,7 @@ class ADConnection:
                     "certificat LDAPS sur le contrôleur de domaine (ou vérifiez que le port "
                     "636 est accessible), puis reconnectez-vous."
                 )
-            raise ADError(conn.result.get("description", "Échec de définition du mot de passe."))
+            _raise_ad_error(conn, "Échec de définition du mot de passe.")
 
     @_logged_write("Activation du compte")
     def enable_account(self, dn: str, *, force_password_change: bool = False) -> None:
@@ -283,7 +310,7 @@ class ADConnection:
         if force_password_change:
             changes["pwdLastSet"] = [(MODIFY_REPLACE, [0])]
         if not conn.modify(dn, changes):
-            raise ADError(conn.result.get("description", "Échec d'activation du compte."))
+            _raise_ad_error(conn, "Échec d'activation du compte.")
 
     @_logged_write("Création de l'OU")
     def create_ou(self, dn: str, name: str) -> None:
@@ -291,7 +318,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.add(dn, ["top", "organizationalUnit"], {"ou": name}):
-            raise ADError(conn.result.get("description", "Échec de création de l'OU."))
+            _raise_ad_error(conn, "Échec de création de l'OU.")
 
     def ou_is_empty(self, ou_dn: str) -> bool:
         """Vérifie qu'une OU ne contient aucun objet direct (protection
@@ -310,7 +337,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.delete(dn):
-            raise ADError(conn.result.get("description", "Échec de suppression de l'OU."))
+            _raise_ad_error(conn, "Échec de suppression de l'OU.")
 
     @_logged_write("Renommage de l'OU")
     def rename_ou(self, dn: str, new_name: str) -> None:
@@ -318,7 +345,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.modify_dn(dn, f"OU={new_name}"):
-            raise ADError(conn.result.get("description", "Échec du renommage de l'OU."))
+            _raise_ad_error(conn, "Échec du renommage de l'OU.")
 
     @_logged_write("Création du groupe")
     def create_group(self, dn: str, sam_account_name: str) -> None:
@@ -327,7 +354,7 @@ class ADConnection:
             return
         attributes = {"sAMAccountName": sam_account_name, "groupType": -2147483646}
         if not conn.add(dn, ["top", "group"], attributes):
-            raise ADError(conn.result.get("description", "Échec de création du groupe."))
+            _raise_ad_error(conn, "Échec de création du groupe.")
 
     @_logged_write("Ajout au groupe")
     def add_user_to_group(self, user_dn: str, group_dn: str) -> None:
@@ -335,7 +362,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.modify(group_dn, {"member": [(MODIFY_ADD, [user_dn])]}):
-            raise ADError(conn.result.get("description", "Échec d'ajout au groupe."))
+            _raise_ad_error(conn, "Échec d'ajout au groupe.")
 
     @_logged_write("Retrait du groupe")
     def remove_user_from_group(self, user_dn: str, group_dn: str) -> None:
@@ -343,7 +370,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.modify(group_dn, {"member": [(MODIFY_DELETE, [user_dn])]}):
-            raise ADError(conn.result.get("description", "Échec de suppression du groupe."))
+            _raise_ad_error(conn, "Échec de suppression du groupe.")
 
     def search_user_by_cn(self, cn: str, ou_dn: str) -> str | None:
         """Retourne le DN du premier utilisateur avec ce CN dans l'OU, ou None."""
@@ -377,7 +404,7 @@ class ADConnection:
             return
         new_rdn = user_dn.split(",")[0]
         if not conn.modify_dn(user_dn, new_rdn, new_superior=new_ou_dn):
-            raise ADError(conn.result.get("description", "Échec du déplacement du compte."))
+            _raise_ad_error(conn, "Échec du déplacement du compte.")
 
     @_logged_write("Désactivation du compte")
     def disable_account(self, dn: str) -> None:
@@ -386,7 +413,7 @@ class ADConnection:
             return
         changes = {"userAccountControl": [(MODIFY_REPLACE, [UAC_NORMAL_ACCOUNT_DISABLED])]}
         if not conn.modify(dn, changes):
-            raise ADError(conn.result.get("description", "Échec de désactivation du compte."))
+            _raise_ad_error(conn, "Échec de désactivation du compte.")
 
     @_logged_write("Suppression du compte")
     def delete_user(self, dn: str) -> None:
@@ -394,7 +421,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.delete(dn):
-            raise ADError(conn.result.get("description", "Échec de suppression du compte."))
+            _raise_ad_error(conn, "Échec de suppression du compte.")
 
     def search_user_groups(self, user_dn: str, base_dn: str) -> list[str]:
         """Retourne les DN des groupes dont l'utilisateur est membre."""
@@ -508,7 +535,7 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.modify(user_dn, {attribute: [(MODIFY_REPLACE, [value])]}):
-            raise ADError(conn.result.get("description", f"Échec de modification de {attribute}."))
+            _raise_ad_error(conn, f"Échec de modification de {attribute}.")
 
     @_logged_write("Renommage du compte")
     def rename_user(self, user_dn: str, new_cn: str) -> None:
@@ -518,4 +545,4 @@ class ADConnection:
             return
         new_rdn = f"CN={new_cn}"
         if not conn.modify_dn(user_dn, new_rdn):
-            raise ADError(conn.result.get("description", "Échec du renommage."))
+            _raise_ad_error(conn, "Échec du renommage.")

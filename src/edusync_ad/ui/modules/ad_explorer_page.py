@@ -631,6 +631,14 @@ class ADExplorerPage(QWidget):
             rdn = self._current_user["dn"].split(",")[0]
             self._current_user["dn"] = f"{rdn},{new_ou_dn}"
             self._refresh_detail_panel(self._current_user)
+            # Le compte a quitté l'OU actuellement affichée dans le panneau
+            # central : sans ce rafraîchissement, il y reste visible (liste
+            # en mémoire non resynchronisée avec l'AD) jusqu'au prochain clic.
+            if self._current_ou_dn:
+                leaf = self._current_ou_dn.split(",", 1)[0]
+                label = leaf.split("=", 1)[-1] if "=" in leaf else leaf
+                self._load_users_for_ou(self._current_ou_dn, label)
+                self._clear_detail_panel()
             QMessageBox.information(self, "Succès", f"Compte déplacé vers {new_ou_dn}{'  (simulé)' if simulation else ''}.")
         except ADError as exc:
             self.audit_log.record(

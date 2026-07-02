@@ -4,7 +4,7 @@ simulé en mémoire, sans dépendance à un Active Directory réel."""
 import pytest
 from ldap3 import MOCK_SYNC, Connection, Server
 
-from edusync_ad.core.ad.connection import ADConnection, ConnectionState
+from edusync_ad.core.ad.connection import ADConnection, ConnectionState, _raise_ad_error
 from edusync_ad.core.ad.exceptions import ADAuthError, ADError, ADUnreachableError
 
 DOMAIN = "lycee.local"
@@ -200,3 +200,24 @@ def test_create_user_with_password_dry_run_does_not_call_ad(ad):
     ad.create_user(new_dn, {"sAMAccountName": "simulated.user"}, password="NewPass123!")
     identifiers = ad.search_existing_identifiers(OU_3EMEA_DN)
     assert "simulated.user" not in identifiers
+
+
+class _FakeConn:
+    def __init__(self, result):
+        self.result = result
+
+
+def test_raise_ad_error_gives_actionable_message_for_referral():
+    conn = _FakeConn({"description": "referral", "referrals": ["ldap://lycee.local:389"]})
+    with pytest.raises(ADError) as exc_info:
+        _raise_ad_error(conn, "Échec générique.")
+    message = str(exc_info.value)
+    assert "ldap://lycee.local:389" in message
+    assert "nom DNS du contrôleur" in message
+
+
+def test_raise_ad_error_falls_back_to_default_message():
+    conn = _FakeConn({"description": ""})
+    with pytest.raises(ADError) as exc_info:
+        _raise_ad_error(conn, "Échec générique.")
+    assert str(exc_info.value) == "Échec générique."
