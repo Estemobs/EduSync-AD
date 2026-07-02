@@ -294,6 +294,139 @@ class ADExplorerPage(QWidget):
         self.user_count_label.setText(f"{len(users)} membre(s) dans « {item.text()} »")
         self._clear_detail_panel()
 
+    # -- Menus contextuels (clic droit) ----------------------------------------
+
+    def _on_ou_context_menu(self, pos) -> None:
+        if self.ad_connection.domain is None:
+            return
+        item = self.ou_tree.itemAt(pos)
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        parent_dn = item.data(0, Qt.ItemDataRole.UserRole) if item else base_dn
+        parent_label = item.text(0) if item else self.ad_connection.domain
+
+        menu = QMenu(self)
+        action = menu.addAction(f"Créer une sous-OU dans « {parent_label} »…")
+        chosen = menu.exec(self.ou_tree.viewport().mapToGlobal(pos))
+        if chosen != action:
+            return
+
+        name, ok = QInputDialog.getText(self, "Créer une OU", "Nom de la nouvelle OU :")
+        name = name.strip()
+        if not ok or not name:
+            return
+
+        new_dn = f"OU={name},{parent_dn}"
+        simulation = self.ad_connection.dry_run
+        try:
+            self.ad_connection.create_ou(new_dn, name)
+            self.audit_log.record(
+                "creation_ou", name, "succes", self.session_id,
+                ou_destination=new_dn, simulation=simulation,
+            )
+            QMessageBox.information(self, "Succès", f"OU créée : {new_dn}{'  (simulé)' if simulation else ''}.")
+            self._load_ou_tree()
+        except ADError as exc:
+            self.audit_log.record(
+                "creation_ou", name, "echec", self.session_id,
+                ou_destination=new_dn, simulation=simulation, detail=str(exc),
+            )
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    def _on_group_context_menu(self, pos) -> None:
+        if self.ad_connection.domain is None:
+            return
+        item = self.group_list.itemAt(pos)
+
+        menu = QMenu(self)
+        create_action = menu.addAction("Créer un groupe…")
+        manage_action = None
+        if item is not None:
+            manage_action = menu.addAction(f"Gérer les membres de « {item.text()} »…")
+        chosen = menu.exec(self.group_list.viewport().mapToGlobal(pos))
+
+        if chosen == create_action:
+            self._create_group_dialog()
+        elif chosen is not None and chosen == manage_action:
+            self._manage_group_members_dialog(item.data(Qt.ItemDataRole.UserRole), item.text())
+
+    def _create_group_dialog(self) -> None:
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            ous = self.ad_connection.list_ous(base_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+
+        name, ok = QInputDialog.getText(self, "Créer un groupe", "Nom du groupe :")
+        name = name.strip()
+        if not ok or not name:
+            return
+
+        dialog = ChooseOUDialog(ous, parent=self)
+        dialog.setWindowTitle("Choisir l'OU où créer le groupe")
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_dn:
+            return
+
+        dn = f"CN={name},{dialog.selected_dn}"
+        simulation = self.ad_connection.dry_run
+        try:
+            self.ad_connection.create_group(dn, name)
+            self.audit_log.record(
+                "creation_groupe", name, "succes", self.session_id,
+                ou_destination=dialog.selected_dn, simulation=simulation,
+            )
+            QMessageBox.information(self, "Succès", f"Groupe créé : {dn}{'  (simulé)' if simulation else ''}.")
+            self._load_group_list()
+        except ADError as exc:
+            self.audit_log.record(
+                "creation_groupe", name, "echec", self.session_id,
+                ou_destination=dialog.selected_dn, simulation=simulation, detail=str(exc),
+            )
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    def _manage_group_members_dialog(self, group_dn: str, group_name: str) -> None:
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            all_users = self.ad_connection.list_users_in_ou(base_dn)
+            members = self.ad_connection.list_users_in_group(group_dn, base_dn)
+            member_dns = {m["dn"].lower() for m in members}
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+
+        dialog = ManageGroupMembersDialog(all_users, member_dns, group_name, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        simulation = self.ad_connection.dry_run
+        for user_dn in dialog.to_add:
+            try:
+                self.ad_connection.add_user_to_group(user_dn, group_dn)
+                self.audit_log.record(
+                    "ajout_groupe", user_dn, "succes", self.session_id,
+                    ou_destination=group_dn, simulation=simulation,
+                )
+            except ADError as exc:
+                self.audit_log.record(
+                    "ajout_groupe", user_dn, "echec", self.session_id,
+                    ou_destination=group_dn, simulation=simulation, detail=str(exc),
+                )
+                QMessageBox.warning(self, "Erreur", f"Ajout échoué pour {user_dn} : {exc}")
+
+        for user_dn in dialog.to_remove:
+            try:
+                self.ad_connection.remove_user_from_group(user_dn, group_dn)
+                self.audit_log.record(
+                    "retrait_groupe", user_dn, "succes", self.session_id,
+                    ou_destination=group_dn, simulation=simulation,
+                )
+            except ADError as exc:
+                self.audit_log.record(
+                    "retrait_groupe", user_dn, "echec", self.session_id,
+                    ou_destination=group_dn, simulation=simulation, detail=str(exc),
+                )
+                QMessageBox.warning(self, "Erreur", f"Retrait échoué pour {user_dn} : {exc}")
+
     # -- Recherche ------------------------------------------------------------
 
     def _on_search_changed(self, text: str) -> None:
