@@ -23,6 +23,7 @@ from edusync_ad.core.crypto import (
     load_remembered_connection,
     save_remembered_connection,
 )
+from edusync_ad.ui.debug_console import DebugConsole
 
 STATUS_COLORS = {"disconnected": "#d24343", "connecting": "#e0a72b", "connected": "#2fa84f"}
 
