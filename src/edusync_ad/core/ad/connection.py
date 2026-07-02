@@ -53,9 +53,16 @@ class ConnectResult:
 def default_connection_factory(
     controller: str, bind_user: str, password: str, use_ssl: bool
 ) -> Connection:
-    server = Server(controller, use_ssl=use_ssl, get_info=ALL)
+    server = Server(
+        controller, use_ssl=use_ssl, get_info=ALL, connect_timeout=CONNECT_TIMEOUT_SECONDS
+    )
     return Connection(
-        server, user=bind_user, password=password, authentication=SIMPLE, auto_bind=False
+        server,
+        user=bind_user,
+        password=password,
+        authentication=SIMPLE,
+        auto_bind=False,
+        receive_timeout=CONNECT_TIMEOUT_SECONDS,
     )
 
 
