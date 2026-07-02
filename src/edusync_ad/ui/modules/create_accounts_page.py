@@ -300,6 +300,54 @@ class CreateAccountsPage(QWidget):
                 return f"OU={row.classe},{parent}", True
         return self.default_ou_combo.currentData() or "", False
 
+    def _ensure_classe_ous_exist(self, resolved_ous: list[tuple[str, bool]]) -> set[str]:
+        """Détecte les OU de classe manquantes et propose de les créer.
+        Retourne l'ensemble des DN désormais considérés comme existants."""
+        if not self.auto_create_ou_checkbox.isChecked():
+            return set()
+
+        candidates = sorted({ou for ou, from_classe in resolved_ous if from_classe and ou})
+        if not candidates:
+            return set()
+
+        missing = []
+        for ou_dn in candidates:
+            try:
+                if not self.ad_connection.ou_exists(ou_dn):
+                    missing.append(ou_dn)
+            except ADError:
+                pass  # sera re-signalé comme erreur par ligne au moment de la génération
+        if not missing:
+            return set()
+
+        reply = QMessageBox.question(
+            self, "OU de classe manquantes",
+            "Les OU suivantes n'existent pas encore et seront créées automatiquement :\n\n"
+            + "\n".join(missing)
+            + "\n\nConfirmer la création ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return set()
+
+        simulation = self.ad_connection.dry_run
+        created: set[str] = set()
+        for ou_dn in missing:
+            name = ou_dn.split(",", 1)[0].split("=", 1)[-1]
+            try:
+                self.ad_connection.create_ou(ou_dn, name)
+                created.add(ou_dn)
+                self.audit_log.record(
+                    "creation_ou", name, "succes", self.session_id,
+                    ou_destination=ou_dn, simulation=simulation,
+                )
+            except ADError as exc:
+                self.audit_log.record(
+                    "creation_ou", name, "echec", self.session_id,
+                    ou_destination=ou_dn, simulation=simulation, detail=str(exc),
+                )
+        return created
+
     # -- Génération de la prévisualisation ------------------------------------
 
     def _on_generate_clicked(self) -> None:
@@ -357,8 +405,40 @@ class CreateAccountsPage(QWidget):
             policy, [(row.prenom, row.nom) for row in result.rows], year=year
         )
 
+        resolved_ous = [self._resolve_ou(row) for row in result.rows]
+        created_ous = self._ensure_classe_ous_exist(resolved_ous)
+
         generated: list[GeneratedUser] = []
-        for row, password in zip(result.rows, passwords):
+        for row, password, (ou_dn, from_classe) in zip(result.rows, passwords, resolved_ous):
+            if not ou_dn:
+                generated.append(
+                    GeneratedUser(
+                        source=row, identifiant="", mot_de_passe="", adresse_mail="", ou_cible="",
+                        erreur="Aucune OU déterminée — précisez une classe, une OU par défaut, "
+                               "ou une colonne OU dans le fichier.",
+                    )
+                )
+                continue
+            if from_classe and ou_dn not in created_ous:
+                try:
+                    exists = self.ad_connection.ou_exists(ou_dn)
+                except ADError as exc:
+                    generated.append(
+                        GeneratedUser(
+                            source=row, identifiant="", mot_de_passe="", adresse_mail="", ou_cible=ou_dn,
+                            erreur=str(exc),
+                        )
+                    )
+                    continue
+                if not exists:
+                    generated.append(
+                        GeneratedUser(
+                            source=row, identifiant="", mot_de_passe="", adresse_mail="", ou_cible=ou_dn,
+                            erreur=f"OU introuvable et non créée : {ou_dn}",
+                        )
+                    )
+                    continue
+
             try:
                 identifiant, doublon = engine.generate_unique(row.prenom, row.nom, existing_ids)
             except ValueError as exc:
@@ -368,7 +448,7 @@ class CreateAccountsPage(QWidget):
                         identifiant="",
                         mot_de_passe="",
                         adresse_mail="",
-                        ou_cible=row.ou,
+                        ou_cible=ou_dn,
                         erreur=str(exc),
                     )
                 )
@@ -382,7 +462,7 @@ class CreateAccountsPage(QWidget):
                         identifiant=identifiant,
                         mot_de_passe="",
                         adresse_mail="",
-                        ou_cible=row.ou,
+                        ou_cible=ou_dn,
                         doublon_ad=True,
                         erreur=ad_dup,
                     )
@@ -399,7 +479,7 @@ class CreateAccountsPage(QWidget):
             mail_domain = self.config.domaine_mail or self.ad_connection.domain or ""
             mail = f"{mail_local}@{mail_domain}"
 
-            groupe = _ou_leaf_name(row.ou) if self.config.groupes_classe_auto else None
+            groupe = _ou_leaf_name(ou_dn) if self.config.groupes_classe_auto else None
 
             generated.append(
                 GeneratedUser(
@@ -407,7 +487,7 @@ class CreateAccountsPage(QWidget):
                     identifiant=identifiant,
                     mot_de_passe=password,
                     adresse_mail=mail,
-                    ou_cible=row.ou,
+                    ou_cible=ou_dn,
                     groupe=groupe,
                     doublon_resolu=doublon,
                 )
