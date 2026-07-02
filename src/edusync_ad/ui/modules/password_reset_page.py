@@ -360,27 +360,41 @@ class PasswordResetPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        success = 0
-        for i, (user, pwd) in enumerate(zip(self._users, self._passwords)):
-            try:
-                self.ad_connection.set_password(user["dn"], pwd)
-                if force_change:
-                    self.ad_connection.enable_account(user["dn"], force_password_change=True)
+        items = list(zip(self._users, self._passwords))
+        labels = [user["sam"] for user, _ in items]
+
+        def run_one(entry: tuple[dict, str]) -> None:
+            user, pwd = entry
+            self.ad_connection.set_password(user["dn"], pwd)
+            if force_change:
+                self.ad_connection.enable_account(user["dn"], force_password_change=True)
+
+        def on_result(position: int, success: bool, message: str) -> None:
+            user, _ = items[position]
+            if success:
                 self.audit_log.record(
                     "reinitialisation_mdp", user["sam"], "succes", self.session_id,
-                    simulation=simulation,
-                    detail="force_change=1" if force_change else "",
+                    simulation=simulation, detail="force_change=1" if force_change else "",
                 )
-                self.preview_table.setItem(i, COL_ETAT, QTableWidgetItem("Réinitialisé" + (" (sim.)" if simulation else "")))
-                success += 1
-            except ADError as exc:
+                etat = "Réinitialisé" + (" (sim.)" if simulation else "")
+            else:
                 self.audit_log.record(
                     "reinitialisation_mdp", user["sam"], "echec", self.session_id,
-                    simulation=simulation, detail=str(exc)
+                    simulation=simulation, detail=message,
                 )
-                self.preview_table.setItem(i, COL_ETAT, QTableWidgetItem(f"Erreur : {exc}"))
+                etat = f"Erreur : {message}"
+            self.preview_table.setItem(position, COL_ETAT, QTableWidgetItem(etat))
 
-        QMessageBox.information(self, "Terminé", f"{success}/{len(self._users)} réinitialisation(s){suffix_sim}.")
+        dialog = BatchProgressDialog(
+            "Réinitialisation des mots de passe en cours…", items, labels, run_one,
+            on_item_result=on_result, parent=self,
+        )
+        dialog.start()
+        dialog.exec()
+
+        QMessageBox.information(
+            self, "Terminé", f"{dialog.success_count}/{len(self._users)} réinitialisation(s){suffix_sim}."
+        )
 
     # -- Export CSV ------------------------------------------------------------
 
