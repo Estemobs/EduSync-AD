@@ -35,7 +35,7 @@ from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import MigrationRow
-from edusync_ad.ui.progress_dialog import BatchProgressDialog
+from edusync_ad.ui.progress_panel import BatchProgressPanel
 
 MIGRATION_COLUMNS = ["identifiant", "ou_source", "ou_destination"]
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "OU source", "OU destination", "État"]
@@ -190,11 +190,14 @@ class MigrationPage(QWidget):
         action_row.addWidget(self.cancel_button)
         action_row.addStretch()
 
+        self.progress_panel = BatchProgressPanel()
+
         layout = QVBoxLayout(self)
         layout.addWidget(self.mode_tabs)
         layout.addLayout(resolve_row)
         layout.addWidget(self.preview_table)
         layout.addLayout(action_row)
+        layout.addWidget(self.progress_panel)
 
     # -- Mode Via l'interface --------------------------------------------------
 
@@ -390,6 +393,7 @@ class MigrationPage(QWidget):
 
         to_process = [(i, row) for i, row in enumerate(self._rows) if row.user_dn is not None]
         labels = [row.identifiant for _, row in to_process]
+        self.validate_button.setEnabled(False)
 
         def run_one(entry: tuple[int, MigrationRow]) -> None:
             _, row = entry
@@ -413,18 +417,16 @@ class MigrationPage(QWidget):
                 )
                 self._set_table_row(i, row)
 
-        dialog = BatchProgressDialog(
-            "Migration en cours…", to_process, labels, run_one,
-            on_item_result=on_result, parent=self,
-        )
-        dialog.start()
-        dialog.exec()
+        def on_finished() -> None:
+            self.validate_button.setEnabled(True)
+            QMessageBox.information(
+                self,
+                "Migration terminée",
+                f"{self.progress_panel.success_count}/{len(to_migrate)} compte(s) migré(s){suffix_sim}.",
+            )
 
-        QMessageBox.information(
-            self,
-            "Migration terminée",
-            f"{dialog.success_count}/{len(to_migrate)} compte(s) migré(s){suffix_sim}.",
-        )
+        self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
+        self.progress_panel.start("Migration en cours…", to_process, labels, run_one, on_item_result=on_result)
 
     def _migrate_one(self, row: MigrationRow) -> None:
         assert row.user_dn is not None

@@ -53,7 +53,7 @@ from edusync_ad.core.identifiers import (
 )
 from edusync_ad.core.models import AccountType, GeneratedUser, RawUserRow
 from edusync_ad.core.passwords import generate_passwords_for_batch
-from edusync_ad.ui.progress_dialog import BatchProgressDialog
+from edusync_ad.ui.progress_panel import BatchProgressPanel
 
 IDENTIFIER_PRESET_KEYS = list(PRESETS.keys()) + list(CAMEL_PRESETS)
 
@@ -170,12 +170,15 @@ class CreateAccountsPage(QWidget):
         action_row.addWidget(self.cancel_button)
         action_row.addStretch()
 
+        self.progress_panel = BatchProgressPanel()
+
         layout = QVBoxLayout(self)
         layout.addWidget(import_group)
         layout.addWidget(options_group)
         layout.addLayout(generate_row)
         layout.addWidget(self.preview_table)
         layout.addLayout(action_row)
+        layout.addWidget(self.progress_panel)
 
     # -- Import CSV et mapping de colonnes -----------------------------------
 
@@ -407,6 +410,7 @@ class CreateAccountsPage(QWidget):
 
         simulation = self.ad_connection.dry_run
         labels = [u.identifiant or u.nom_complet for _, u in to_process]
+        self.validate_button.setEnabled(False)
 
         def run_one(entry: tuple[int, GeneratedUser]) -> None:
             _, user = entry
@@ -427,22 +431,21 @@ class CreateAccountsPage(QWidget):
                 )
             self._set_preview_row(row_index, user)
 
-        dialog = BatchProgressDialog(
-            "Création des comptes en cours…", to_process, labels, run_one,
-            on_item_result=on_result, parent=self,
-        )
-        dialog.start()
-        dialog.exec()
+        def on_finished() -> None:
+            self.validate_button.setEnabled(True)
+            suffix = " (mode simulation, aucune écriture réelle)" if simulation else ""
+            QMessageBox.information(
+                self,
+                "Création terminée",
+                f"{self.progress_panel.success_count}/{len(to_process)} compte(s) créé(s) avec succès{suffix}.",
+            )
+            if self.progress_panel.success_count:
+                self._propose_export()
 
-        suffix = " (mode simulation, aucune écriture réelle)" if simulation else ""
-        QMessageBox.information(
-            self,
-            "Création terminée",
-            f"{dialog.success_count}/{len(to_process)} compte(s) créé(s) avec succès{suffix}.",
+        self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
+        self.progress_panel.start(
+            "Création des comptes en cours…", to_process, labels, run_one, on_item_result=on_result,
         )
-
-        if dialog.success_count:
-            self._propose_export()
 
     def _create_one_user(self, user: GeneratedUser) -> None:
         prenom, nom = user.source.prenom, user.source.nom

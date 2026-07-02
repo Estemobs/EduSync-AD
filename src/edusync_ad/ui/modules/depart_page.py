@@ -42,7 +42,7 @@ from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import DepartRow
-from edusync_ad.ui.progress_dialog import BatchProgressDialog
+from edusync_ad.ui.progress_panel import BatchProgressPanel
 
 DEPART_COLUMNS = ["identifiant"]
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "Groupes", "État"]
@@ -197,13 +197,18 @@ class DepartPage(QWidget):
         cancel_pending_row.addWidget(self.cancel_pending_button)
         pending_layout.addLayout(cancel_pending_row)
 
+        self.progress_panel = BatchProgressPanel()
+        self.pending_progress_panel = BatchProgressPanel()
+
         layout = QVBoxLayout(self)
         layout.addWidget(import_group)
         layout.addWidget(mode_group)
         layout.addLayout(resolve_row)
         layout.addWidget(self.preview_table)
         layout.addLayout(action_row)
+        layout.addWidget(self.progress_panel)
         layout.addWidget(self.pending_group)
+        layout.addWidget(self.pending_progress_panel)
 
         self._refresh_pending_panel()
 
@@ -364,6 +369,7 @@ class DepartPage(QWidget):
 
         indexed_rows = [(i, row) for i, row in enumerate(self._rows) if row.user_dn is not None]
         labels = [row.identifiant for _, row in indexed_rows]
+        self.validate_button.setEnabled(False)
 
         def run_one(entry: tuple[int, DepartRow]) -> None:
             _, row = entry
@@ -387,18 +393,18 @@ class DepartPage(QWidget):
                 )
                 self._set_table_row(i, row)
 
-        dialog = BatchProgressDialog(
-            "Traitement des départs en cours…", indexed_rows, labels, run_one,
-            on_item_result=on_result, parent=self,
-        )
-        dialog.start()
-        dialog.exec()
+        def on_finished() -> None:
+            self.validate_button.setEnabled(True)
+            self._refresh_pending_panel()
+            QMessageBox.information(
+                self,
+                "Traitement terminé",
+                f"{self.progress_panel.success_count}/{len(to_process)} compte(s) traité(s){suffix_sim}.",
+            )
 
-        self._refresh_pending_panel()
-        QMessageBox.information(
-            self,
-            "Traitement terminé",
-            f"{dialog.success_count}/{len(to_process)} compte(s) traité(s){suffix_sim}.",
+        self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
+        self.progress_panel.start(
+            "Traitement des départs en cours…", indexed_rows, labels, run_one, on_item_result=on_result,
         )
 
     def _desactivate_one(self, row: DepartRow, base_dn: str) -> None:
@@ -474,6 +480,7 @@ class DepartPage(QWidget):
 
         simulation = self.ad_connection.dry_run
         labels = [entry["sam_account_name"] for entry in due]
+        self.process_pending_button.setEnabled(False)
 
         def run_one(entry: dict) -> None:
             self.ad_connection.delete_user(entry["user_dn"])
@@ -492,18 +499,17 @@ class DepartPage(QWidget):
                     simulation=simulation, detail=message,
                 )
 
-        dialog = BatchProgressDialog(
-            "Suppression des comptes échus en cours…", due, labels, run_one,
-            on_item_result=on_result, parent=self,
-        )
-        dialog.start()
-        dialog.exec()
+        def on_finished() -> None:
+            self._refresh_pending_panel()
+            QMessageBox.information(
+                self,
+                "Suppressions terminées",
+                f"{self.pending_progress_panel.success_count}/{len(due)} compte(s) supprimé(s).",
+            )
 
-        self._refresh_pending_panel()
-        QMessageBox.information(
-            self,
-            "Suppressions terminées",
-            f"{dialog.success_count}/{len(due)} compte(s) supprimé(s).",
+        self.pending_progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
+        self.pending_progress_panel.start(
+            "Suppression des comptes échus en cours…", due, labels, run_one, on_item_result=on_result,
         )
 
     def _on_pending_selection_changed(self) -> None:

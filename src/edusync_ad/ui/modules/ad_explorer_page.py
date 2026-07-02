@@ -169,6 +169,12 @@ class ADExplorerPage(QWidget):
         self.lbl_ou.setWordWrap(True)
         self.attrs_form.addRow("OU :", self.lbl_ou)
 
+        # Dernier changement de mot de passe (lecture seule — AD ne stocke
+        # jamais le mot de passe en clair, impossible de l'afficher).
+        self.lbl_pwd_last_set = QLabel("—")
+        self.lbl_pwd_last_set.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.attrs_form.addRow("Dernier changement mdp :", self.lbl_pwd_last_set)
+
         actions_group = QGroupBox("Actions")
         actions_layout = QVBoxLayout(actions_group)
         self.btn_edit_attr = QPushButton("Modifier un attribut…")
@@ -337,11 +343,13 @@ class ADExplorerPage(QWidget):
         dn = attrs.get("dn", "")
         ou_part = dn.split(",", 1)[1] if "," in dn else dn
         self.lbl_ou.setText(ou_part or "—")
+        self.lbl_pwd_last_set.setText(attrs.get("dernier_changement_mdp") or "—")
 
     def _clear_detail_panel(self) -> None:
         for lbl in self._attr_labels.values():
             lbl.setText("—")
         self.lbl_ou.setText("—")
+        self.lbl_pwd_last_set.setText("—")
         for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
                     self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(False)

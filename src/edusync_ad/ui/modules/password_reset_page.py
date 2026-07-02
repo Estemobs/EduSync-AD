@@ -43,7 +43,7 @@ from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import PasswordPolicy
 from edusync_ad.core.passwords import generate_password
-from edusync_ad.ui.progress_dialog import BatchProgressDialog
+from edusync_ad.ui.progress_panel import BatchProgressPanel
 
 COL_SAM, COL_CN, COL_ETAT, COL_MDP = range(4)
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "État", "Nouveau mot de passe"]
@@ -191,6 +191,8 @@ class PasswordResetPage(QWidget):
         action_row.addWidget(self.cancel_btn)
         action_row.addStretch()
 
+        self.progress_panel = BatchProgressPanel()
+
         layout = QVBoxLayout(self)
         layout.addWidget(source_group)
         layout.addLayout(load_btn_row)
@@ -198,6 +200,7 @@ class PasswordResetPage(QWidget):
         layout.addLayout(gen_btn_row)
         layout.addWidget(self.preview_table)
         layout.addLayout(action_row)
+        layout.addWidget(self.progress_panel)
 
     # -- Politique -------------------------------------------------------------
 
@@ -363,6 +366,7 @@ class PasswordResetPage(QWidget):
 
         items = list(zip(self._users, self._passwords))
         labels = [user["sam"] for user, _ in items]
+        self.validate_btn.setEnabled(False)
 
         def run_one(entry: tuple[dict, str]) -> None:
             user, pwd = entry
@@ -386,15 +390,16 @@ class PasswordResetPage(QWidget):
                 etat = f"Erreur : {message}"
             self.preview_table.setItem(position, COL_ETAT, QTableWidgetItem(etat))
 
-        dialog = BatchProgressDialog(
-            "Réinitialisation des mots de passe en cours…", items, labels, run_one,
-            on_item_result=on_result, parent=self,
-        )
-        dialog.start()
-        dialog.exec()
+        def on_finished() -> None:
+            self.validate_btn.setEnabled(True)
+            QMessageBox.information(
+                self, "Terminé",
+                f"{self.progress_panel.success_count}/{len(self._users)} réinitialisation(s){suffix_sim}.",
+            )
 
-        QMessageBox.information(
-            self, "Terminé", f"{dialog.success_count}/{len(self._users)} réinitialisation(s){suffix_sim}."
+        self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
+        self.progress_panel.start(
+            "Réinitialisation des mots de passe en cours…", items, labels, run_one, on_item_result=on_result,
         )
 
     # -- Export CSV ------------------------------------------------------------

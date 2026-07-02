@@ -86,7 +86,38 @@ def default_connection_factory(
         authentication=SIMPLE,
         auto_bind=False,
         receive_timeout=CONNECT_TIMEOUT_SECONDS,
+        # Un AD renvoie parfois un référral vers son propre nom DNS (ex. lycee.local)
+        # même pour une écriture locale. Si le poste client ne résout pas ce nom
+        # (cas fréquent quand on se connecte par IP plutôt que via le DNS de l'AD),
+        # ldap3 tente de le suivre et échoue avec "invalid server address". On
+        # écrit toujours dans le contexte du serveur déjà joint : pas besoin de
+        # suivre les référrals ici.
+        auto_referrals=False,
     )
+
+
+def _format_pwd_last_set(value) -> str:
+    """Formate l'attribut AD pwdLastSet en date lisible.
+
+    AD ne stocke jamais le mot de passe en clair — seulement un hash non
+    réversible — donc il est impossible d'afficher le mot de passe d'un
+    compte existant. pwdLastSet indique seulement *quand* il a été changé.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    if value in (None, ""):
+        return "Inconnu"
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    try:
+        raw = int(value)
+    except (TypeError, ValueError):
+        return "Inconnu"
+    if raw == 0:
+        return "Doit être changé à la prochaine connexion"
+    # Filetime Windows : intervalles de 100 ns depuis 1601-01-01.
+    epoch = datetime(1601, 1, 1, tzinfo=timezone.utc)
+    return (epoch + timedelta(microseconds=raw / 10)).strftime("%Y-%m-%d %H:%M UTC")
 
 
 class ADConnection:
@@ -393,12 +424,18 @@ class ADConnection:
         return [(str(e.entry_dn), str(e["cn"].value)) for e in conn.entries if e["cn"].value]
 
     def get_user_attributes(self, user_dn: str) -> dict:
-        """Retourne les attributs principaux d'un utilisateur."""
+        """Retourne les attributs principaux d'un utilisateur.
+
+        Ne contient jamais le mot de passe : Active Directory ne le stocke
+        que sous forme de hash non réversible (unicodePwd est un attribut en
+        écriture seule), il est donc impossible de l'afficher pour un compte
+        existant — quel que soit l'outil utilisé.
+        """
         conn = self._require_connected()
         attrs = [
             "sAMAccountName", "cn", "givenName", "sn", "displayName",
             "mail", "userAccountControl", "memberOf", "description",
-            "telephoneNumber", "department", "title",
+            "telephoneNumber", "department", "title", "pwdLastSet",
         ]
         if not conn.search(user_dn, "(objectClass=user)", search_scope=BASE, attributes=attrs):
             return {}
@@ -407,6 +444,8 @@ class ADConnection:
         e = conn.entries[0]
         result: dict = {"dn": user_dn}
         for attr in attrs:
+            if attr == "pwdLastSet":
+                continue
             try:
                 val = e[attr].value
                 result[attr] = str(val) if val is not None else ""
@@ -415,6 +454,7 @@ class ADConnection:
         uac = int(e["userAccountControl"].value or 0)
         result["disabled"] = bool(uac & 2)
         result["memberOf"] = e["memberOf"].values or []
+        result["dernier_changement_mdp"] = _format_pwd_last_set(e["pwdLastSet"].value)
         return result
 
     @_logged_write("Modification d'attribut")
