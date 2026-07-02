@@ -78,6 +78,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: actions/download-artifact@v4
         with:
@@ -87,26 +90,35 @@ jobs:
         with:
           name: linux-build
 
+      - name: Extraire le changelog depuis le tag annoté
+        run: |
+          {
+            echo "## EduSync AD ${{ github.ref_name }}"
+            echo ""
+            git tag -l --format='%(contents)' "${{ github.ref_name }}"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Téléchargements"
+            echo ""
+            echo "| Plateforme | Fichier | Description |"
+            echo "|---|---|---|"
+            echo "| Windows 10/11 | \`EduSyncAD-Setup.exe\` | Installateur classique (raccourcis menu Démarrer/Bureau, désinstallation propre) |"
+            echo "| Linux | \`EduSyncAD-linux.flatpak\` | \`flatpak install EduSyncAD-linux.flatpak\` puis \`flatpak run org.edusync.AD\` |"
+            echo ""
+            echo "### Prérequis"
+            echo "- Active Directory accessible sur le réseau (LDAP port 389 ou LDAPS port 636)"
+            echo "- Compte administrateur du domaine avec droits de création/modification de comptes"
+            echo ""
+            echo "Voir le [guide utilisateur](docs/guide_utilisateur.md) pour la prise en main complète."
+          } > release_notes.md
+
       - name: Créer la Release et uploader les artefacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: "EduSync AD ${{ github.ref_name }}"
-          body: |
-            ## EduSync AD ${{ github.ref_name }}
-
-            ### Téléchargements
-
-            | Plateforme | Fichier | Description |
-            |---|---|---|
-            | Windows 10/11 | `EduSyncAD-Setup.exe` | Installateur classique (raccourcis menu Démarrer/Bureau, désinstallation propre) |
-            | Linux | `EduSyncAD-linux.flatpak` | `flatpak install EduSyncAD-linux.flatpak` puis `flatpak run org.edusync.AD` |
-
-            ### Prérequis
-            - Active Directory accessible sur le réseau (LDAP port 389 ou LDAPS port 636)
-            - Compte administrateur du domaine avec droits de création/modification de comptes
-
-            Voir le [guide utilisateur](docs/guide_utilisateur.md) pour la prise en main complète.
+          body_path: release_notes.md
           files: |
             EduSyncAD-Setup.exe
             EduSyncAD-linux.flatpak

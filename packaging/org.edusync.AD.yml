@@ -12,6 +12,7 @@ finish-args:
   - --share=ipc
   - --device=dri
   - --filesystem=home        # Lecture/écriture des CSV de l'utilisateur
+  - --talk-name=org.freedesktop.Flatpak  # flatpak-spawn --host pour la mise à jour auto
 
 build-options:
   build-args:

@@ -13,7 +13,7 @@ from urllib.error import URLError
 import json
 
 RELEASES_API_URL = "https://api.github.com/repos/estemobs/EduSync-AD/releases/latest"
-CURRENT_VERSION = "1.2.0"
+CURRENT_VERSION = "1.3.0"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -62,29 +62,25 @@ def check_for_update(timeout: int = 8) -> dict | None:
     }
 
 
-def download_and_install(download_url: str, progress_callback=None) -> bool:
-    """Télécharge et lance l'installateur Windows. Retourne True si succès."""
-    if platform.system() != "Windows":
-        return False
-
-    tmp_dir = Path(tempfile.mkdtemp(prefix="edusync_update_"))
-    installer_path = tmp_dir / "EduSyncAD-Setup.exe"
-
-    try:
-        def _reporthook(count, block_size, total_size):
+def _download_to(url: str, dest: Path, progress_callback=None) -> None:
+    request = Request(url, headers={"User-Agent": "EduSync-AD-Updater"})
+    with urlopen(request, timeout=30) as resp, open(dest, "wb") as out:
+        total_size = int(resp.headers.get("Content-Length", 0))
+        block_size = 65536
+        count = 0
+        while chunk := resp.read(block_size):
+            out.write(chunk)
+            count += 1
             if progress_callback and total_size > 0:
                 pct = min(100, int(count * block_size * 100 / total_size))
                 progress_callback(pct)
 
-        request = Request(download_url, headers={"User-Agent": "EduSync-AD-Updater"})
-        with urlopen(request, timeout=30) as resp, open(installer_path, "wb") as out:
-            total_size = int(resp.headers.get("Content-Length", 0))
-            block_size = 65536
-            count = 0
-            while chunk := resp.read(block_size):
-                out.write(chunk)
-                count += 1
-                _reporthook(count, block_size, total_size)
+
+def _install_windows(download_url: str, progress_callback=None) -> bool:
+    tmp_dir = Path(tempfile.mkdtemp(prefix="edusync_update_"))
+    installer_path = tmp_dir / "EduSyncAD-Setup.exe"
+    try:
+        _download_to(download_url, installer_path, progress_callback)
 
         # Laisse le process courant se terminer (l'UI appelle sys.exit juste après)
         # avant de lancer l'installateur, qui remplace EduSyncAD.exe puis le relance.
@@ -98,7 +94,50 @@ def download_and_install(download_url: str, progress_callback=None) -> bool:
         )
         subprocess.Popen(["cmd.exe", "/c", str(bat)], creationflags=0x08000000)
         return True
-
     except Exception:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         return False
+
+
+def _install_linux_flatpak(download_url: str, progress_callback=None) -> bool:
+    tmp_dir = Path(tempfile.mkdtemp(prefix="edusync_update_"))
+    bundle_path = tmp_dir / "EduSyncAD-linux.flatpak"
+    try:
+        _download_to(download_url, bundle_path, progress_callback)
+
+        # Depuis le bac à sable Flatpak, "flatpak-spawn --host" exécute la
+        # commande sur l'hôte (nécessite --talk-name=org.freedesktop.Flatpak
+        # dans le manifeste). Hors sandbox (dev), on appelle flatpak directement.
+        host_prefix = ["flatpak-spawn", "--host"] if shutil.which("flatpak-spawn") else []
+
+        # Tentative en --user d'abord : aucune élévation de privilèges requise.
+        result = subprocess.run(
+            host_prefix + ["flatpak", "install", "--user", "--noninteractive", "-y", str(bundle_path)],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode == 0:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+            return True
+
+        # Repli : l'app est peut-être installée en --system (nécessite les
+        # droits root). pkexec affiche sa propre fenêtre d'autorisation
+        # native (comme l'UAC Windows) — ce n'est pas une élévation silencieuse.
+        result = subprocess.run(
+            host_prefix + ["pkexec", "flatpak", "install", "--system", "--noninteractive", "-y", str(bundle_path)],
+            capture_output=True, text=True, timeout=180,
+        )
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return result.returncode == 0
+    except Exception:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        return False
+
+
+def download_and_install(download_url: str, progress_callback=None) -> bool:
+    """Télécharge et installe la mise à jour. Retourne True si succès."""
+    system = platform.system()
+    if system == "Windows":
+        return _install_windows(download_url, progress_callback)
+    if system == "Linux":
+        return _install_linux_flatpak(download_url, progress_callback)
+    return False

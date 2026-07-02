@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -163,6 +164,12 @@ class SettingsPage(QWidget):
         save_button = QPushButton("Enregistrer les paramètres")
         save_button.clicked.connect(self._save)
 
+        self.save_confirmation_label = QLabel("✓ Paramètres enregistrés")
+        self.save_confirmation_label.setStyleSheet(
+            "color: #1f9d55; font-weight: 600; padding: 4px 0;"
+        )
+        self.save_confirmation_label.setVisible(False)
+
         identifiers_group = QGroupBox("Nomenclature des identifiants")
         identifiers_form = QFormLayout(identifiers_group)
         identifiers_form.addRow("Format par défaut — Élèves", self.identifier_eleve_combo)
@@ -218,6 +225,7 @@ class SettingsPage(QWidget):
         ):
             content_layout.addWidget(group)
         content_layout.addWidget(save_button)
+        content_layout.addWidget(self.save_confirmation_label)
         content_layout.addStretch()
 
         scroll = QScrollArea()
@@ -268,3 +276,5 @@ class SettingsPage(QWidget):
             langue=self.langue_combo.currentData(),
         )
         self._on_save(config)
+        self.save_confirmation_label.setVisible(True)
+        QTimer.singleShot(2500, lambda: self.save_confirmation_label.setVisible(False))

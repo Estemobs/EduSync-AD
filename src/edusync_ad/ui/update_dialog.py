@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QTextBrowser,
     QVBoxLayout,
 )
 
@@ -42,7 +43,7 @@ class UpdateDialog(QDialog):
     def __init__(self, parent=None, initial_info: dict | None | object = "unset"):
         super().__init__(parent)
         self.setWindowTitle("Mises à jour")
-        self.setMinimumWidth(420)
+        self.setMinimumSize(520, 420)
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
         self._info: dict | None = None
@@ -58,10 +59,10 @@ class UpdateDialog(QDialog):
         self.progress.setVisible(False)
         layout.addWidget(self.progress)
 
-        self.notes_label = QLabel()
-        self.notes_label.setWordWrap(True)
-        self.notes_label.setVisible(False)
-        layout.addWidget(self.notes_label)
+        self.notes_browser = QTextBrowser()
+        self.notes_browser.setOpenExternalLinks(True)
+        self.notes_browser.setVisible(False)
+        layout.addWidget(self.notes_browser, stretch=1)
 
         self.buttons = QDialogButtonBox()
         self.install_btn = self.buttons.addButton("Installer la mise à jour", QDialogButtonBox.ButtonRole.AcceptRole)
@@ -98,16 +99,16 @@ class UpdateDialog(QDialog):
         )
 
         if info.get("release_notes"):
-            self.notes_label.setText(info["release_notes"][:600])
-            self.notes_label.setVisible(True)
+            self.notes_browser.setMarkdown(info["release_notes"])
+            self.notes_browser.setVisible(True)
 
-        is_windows = platform.system() == "Windows"
-        if info.get("download_url") and is_windows:
+        if info.get("download_url"):
             self.install_btn.setVisible(True)
-        elif not is_windows:
+        else:
             self.status_label.setText(
                 self.status_label.text()
-                + "<br><br>Téléchargez le .flatpak depuis les Releases."
+                + "<br><br>Aucun paquet compatible trouvé pour cette plateforme — "
+                "téléchargez-le manuellement depuis les Releases."
             )
 
     def _on_install(self):
@@ -126,14 +127,29 @@ class UpdateDialog(QDialog):
 
     def _on_download_done(self, ok: bool):
         if ok:
-            QMessageBox.information(
-                self,
-                "Mise à jour prête",
-                "La mise à jour va s'appliquer. L'application va redémarrer automatiquement.",
-            )
-            import sys
-            sys.exit(0)
+            if platform.system() == "Windows":
+                QMessageBox.information(
+                    self,
+                    "Mise à jour prête",
+                    "La mise à jour va s'appliquer. L'application va redémarrer automatiquement.",
+                )
+                import sys
+                sys.exit(0)
+            else:
+                QMessageBox.information(
+                    self,
+                    "Mise à jour installée",
+                    "La mise à jour a été installée avec succès. Fermez et relancez "
+                    "l'application pour utiliser la nouvelle version.",
+                )
+                self.accept()
         else:
-            QMessageBox.warning(self, "Erreur", "Le téléchargement a échoué. Réessayez plus tard.")
+            QMessageBox.warning(
+                self, "Erreur",
+                "L'installation a échoué. Si l'application est installée en mode système "
+                "(flatpak --system), une fenêtre d'autorisation aurait dû apparaître — "
+                "réessayez, ou mettez à jour manuellement avec :\n\n"
+                "flatpak update org.edusync.AD",
+            )
             self.install_btn.setEnabled(True)
             self.progress.setVisible(False)
