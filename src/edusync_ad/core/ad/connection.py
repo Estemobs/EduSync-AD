@@ -94,19 +94,27 @@ class ADConnection:
         self.domain, self.controller, self.username = domain, controller, username
         bind_user = self.format_bind_user(domain, username)
 
+        logger.info("Connexion : domaine=%s, contrôleur=%s, utilisateur=%s", domain, controller, username)
+
         warning: str | None = None
         try:
+            logger.debug("Tentative LDAPS (port 636, timeout %ss)…", CONNECT_TIMEOUT_SECONDS)
             self._conn = self._try_bind(controller, bind_user, password, use_ssl=True)
             self.used_ldaps = True
-        except ADUnreachableError:
+            logger.info("Connecté en LDAPS.")
+        except ADUnreachableError as exc:
+            logger.warning("LDAPS injoignable (%s) — repli sur LDAP non chiffré.", exc)
             try:
                 self._conn = self._try_bind(controller, bind_user, password, use_ssl=False)
                 self.used_ldaps = False
                 warning = "Connexion LDAPS indisponible : repli sur LDAP non chiffré."
-            except ADError:
+                logger.info("Connecté en LDAP (non chiffré).")
+            except ADError as exc2:
+                logger.error("Échec de connexion (LDAPS et LDAP) : %s", exc2)
                 self.state = ConnectionState.DISCONNECTED
                 raise
-        except (ADAuthError, ADInsufficientRightsError, ADCertificateError):
+        except (ADAuthError, ADInsufficientRightsError, ADCertificateError) as exc:
+            logger.error("Connexion refusée : %s", exc)
             self.state = ConnectionState.DISCONNECTED
             raise
 
@@ -122,14 +130,16 @@ class ADConnection:
             raise ADUnreachableError(f"Serveur injoignable : {exc}") from exc
 
         try:
+            logger.debug("Envoi de la requête bind à %s…", controller)
             bound = conn.bind()
         except LDAPException as exc:
-            raise ADUnreachableError(f"Serveur injoignable : {exc}") from exc
+            raise ADUnreachableError(f"Serveur injoignable ou délai dépassé : {exc}") from exc
 
         if not bound:
             result = conn.result or {}
             description = (result.get("description") or "").lower()
             message = result.get("message") or "Connexion refusée par le serveur."
+            logger.debug("Bind refusé : %s (%s)", description, message)
             if "invalidcredentials" in description:
                 raise ADAuthError("Identifiant ou mot de passe incorrect.")
             if "insufficientaccessrights" in description:
