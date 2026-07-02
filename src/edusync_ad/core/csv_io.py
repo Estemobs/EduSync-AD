@@ -16,8 +16,8 @@ from pathlib import Path
 
 from edusync_ad.core.models import GeneratedUser, RawUserRow
 
-EXPECTED_COLUMNS = ["prenom", "nom", "ou", "email_perso", "date_naissance", "numero"]
-REQUIRED_COLUMNS = ["prenom", "nom", "ou"]
+EXPECTED_COLUMNS = ["prenom", "nom", "classe", "ou", "email", "date_naissance", "numero"]
+REQUIRED_COLUMNS = ["prenom", "nom"]
 ENCODINGS_TO_TRY = ["utf-8-sig", "utf-8", "latin-1"]
 
 
@@ -102,16 +102,17 @@ def load_rows(
             header = mapping.get(field)
             return (raw.get(header, "") or "").strip() if header else ""
 
-        prenom, nom, ou = get("prenom"), get("nom"), get("ou")
-        if not prenom or not nom or not ou:
+        prenom, nom = get("prenom"), get("nom")
+        if not prenom or not nom:
             skipped.append(line_number)
             continue
         rows.append(
             RawUserRow(
                 prenom=prenom,
                 nom=nom,
-                ou=ou,
-                email_perso=get("email_perso") or None,
+                ou=get("ou"),
+                classe=get("classe") or None,
+                email=get("email") or None,
                 date_naissance=get("date_naissance") or None,
                 numero=get("numero") or None,
             )

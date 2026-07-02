@@ -41,7 +41,7 @@ class RawUserRow:
     prenom: str
     nom: str
     ou: str
-    email_perso: str | None = None
+    email: str | None = None
     date_naissance: str | None = None
     numero: str | None = None
 

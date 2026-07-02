@@ -82,7 +82,7 @@ pytest
 
 ### Création de comptes
 ```
-prenom;nom;ou;email_perso;date_naissance
+prenom;nom;ou;email;date_naissance
 Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee,DC=local;;2010-03-15
 ```
 
