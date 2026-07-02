@@ -806,6 +806,7 @@ class ManageGroupMembersDialog(QDialog):
         layout.addWidget(self.search_edit)
 
         self.list_widget = QListWidget()
+        self.list_widget.itemChanged.connect(self._on_item_changed)
         self._checked_dns: set[str] = set(self._initial_member_dns)
         self._populate(all_users)
         layout.addWidget(self.list_widget)
@@ -816,7 +817,6 @@ class ManageGroupMembersDialog(QDialog):
         layout.addWidget(buttons)
 
     def _populate(self, users: list[dict]) -> None:
-        self.list_widget.itemChanged.disconnect() if self._has_item_changed_connection() else None
         self.list_widget.clear()
         for user in sorted(users, key=lambda u: u["cn"].lower()):
             item = QListWidgetItem(f"{user['cn']} ({user['sam']})")
@@ -825,10 +825,6 @@ class ManageGroupMembersDialog(QDialog):
             checked = user["dn"].lower() in self._checked_dns
             item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
             self.list_widget.addItem(item)
-        self.list_widget.itemChanged.connect(self._on_item_changed)
-
-    def _has_item_changed_connection(self) -> bool:
-        return self.list_widget.receivers(self.list_widget.itemChanged) > 0
 
     def _on_item_changed(self, item: QListWidgetItem) -> None:
         dn = item.data(Qt.ItemDataRole.UserRole)
