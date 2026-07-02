@@ -39,7 +39,7 @@ class _DownloadWorker(QThread):
 
 
 class UpdateDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_info: dict | None | object = "unset"):
         super().__init__(parent)
         self.setWindowTitle("Mises à jour")
         self.setMinimumWidth(420)
@@ -71,7 +71,12 @@ class UpdateDialog(QDialog):
         self.close_btn.clicked.connect(self.reject)
         layout.addWidget(self.buttons)
 
-        self._start_check()
+        if initial_info == "unset":
+            self._start_check()
+        else:
+            # Résultat déjà connu (vérification automatique au lancement) :
+            # on évite un second appel réseau.
+            self._on_check_done(initial_info)
 
     def _start_check(self):
         self._worker = _CheckWorker()
