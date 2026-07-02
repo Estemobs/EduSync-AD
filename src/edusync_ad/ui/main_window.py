@@ -60,6 +60,20 @@ class MainWindow(QMainWindow):
         self._build_body()
         self.apply_theme()
 
+        self._update_check_worker: _StartupUpdateCheckWorker | None = None
+        QTimer.singleShot(1500, self._check_update_on_startup)
+
+    def _check_update_on_startup(self) -> None:
+        self._update_check_worker = _StartupUpdateCheckWorker()
+        self._update_check_worker.found.connect(self._on_startup_update_found)
+        self._update_check_worker.start()
+
+    def _on_startup_update_found(self, info: dict | None) -> None:
+        if info is None:
+            return
+        dlg = UpdateDialog(self, initial_info=info)
+        dlg.show()
+
     def _build_top_bar(self) -> None:
         top_bar = QWidget()
         top_bar.setObjectName("TopBar")
