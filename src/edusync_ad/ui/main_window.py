@@ -32,6 +32,13 @@ from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
 
 
+class _StartupUpdateCheckWorker(QThread):
+    found = pyqtSignal(object)
+
+    def run(self) -> None:
+        self.found.emit(check_for_update())
+
+
 class MainWindow(QMainWindow):
     def __init__(
         self,
