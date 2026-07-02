@@ -470,36 +470,38 @@ class DepartPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        success = 0
-        for entry in due:
-            user_dn = entry["user_dn"]
+        simulation = self.ad_connection.dry_run
+        labels = [entry["sam_account_name"] for entry in due]
+
+        def run_one(entry: dict) -> None:
+            self.ad_connection.delete_user(entry["user_dn"])
+
+        def on_result(position: int, success: bool, message: str) -> None:
+            entry = due[position]
             sam = entry["sam_account_name"]
-            try:
-                self.ad_connection.delete_user(user_dn)
-                self.audit_log.remove_pending_deletion(user_dn)
+            if success:
+                self.audit_log.remove_pending_deletion(entry["user_dn"])
                 self.audit_log.record(
-                    "suppression_compte",
-                    sam,
-                    "succes",
-                    self.session_id,
-                    simulation=self.ad_connection.dry_run,
+                    "suppression_compte", sam, "succes", self.session_id, simulation=simulation,
                 )
-                success += 1
-            except ADError as exc:
+            else:
                 self.audit_log.record(
-                    "suppression_compte",
-                    sam,
-                    "echec",
-                    self.session_id,
-                    simulation=self.ad_connection.dry_run,
-                    detail=str(exc),
+                    "suppression_compte", sam, "echec", self.session_id,
+                    simulation=simulation, detail=message,
                 )
+
+        dialog = BatchProgressDialog(
+            "Suppression des comptes échus en cours…", due, labels, run_one,
+            on_item_result=on_result, parent=self,
+        )
+        dialog.start()
+        dialog.exec()
 
         self._refresh_pending_panel()
         QMessageBox.information(
             self,
             "Suppressions terminées",
-            f"{success}/{len(due)} compte(s) supprimé(s).",
+            f"{dialog.success_count}/{len(due)} compte(s) supprimé(s).",
         )
 
     def _on_pending_selection_changed(self) -> None:
