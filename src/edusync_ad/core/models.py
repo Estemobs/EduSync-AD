@@ -36,11 +36,16 @@ class PasswordPolicy:
 
 @dataclass
 class RawUserRow:
-    """Une ligne brute telle qu'importée depuis le CSV (avant génération)."""
+    """Une ligne brute telle qu'importée depuis le CSV (avant génération).
+
+    `ou` peut être vide si le fichier ne précise pas l'OU cible (cas courant
+    d'un export scolaire qui ne contient que prénom/nom/classe) : l'OU est
+    alors résolue dans l'UI à partir de `classe`, ou d'une OU par défaut."""
 
     prenom: str
     nom: str
-    ou: str
+    ou: str = ""
+    classe: str | None = None
     email: str | None = None
     date_naissance: str | None = None
     numero: str | None = None
