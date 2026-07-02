@@ -81,9 +81,11 @@ pytest
 ## Format des fichiers CSV
 
 ### Création de comptes
+Seuls `prenom` et `nom` sont obligatoires. `ou` reste le moyen le plus précis de cibler une OU, mais si le fichier ne contient qu'une `classe` (cas courant d'un export scolaire), l'OU cible peut être déduite automatiquement dans l'application (OU parente configurable, création automatique de l'OU de classe si besoin) — voir l'étape « 3. OU cible » du module Création de comptes.
 ```
-prenom;nom;ou;email;date_naissance
-Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee,DC=local;;2010-03-15
+prenom;nom;ou;classe;email;date_naissance
+Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee,DC=local;;;2010-03-15
+Léa;Petit;;4emeB;;2011-01-20
 ```
 
 ### Migration
