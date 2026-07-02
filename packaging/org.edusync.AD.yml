@@ -33,6 +33,9 @@ modules:
     buildsystem: simple
     build-commands:
       - pip3 install --prefix=/app --no-deps .
+      - install -Dm644 packaging/org.edusync.AD.desktop /app/share/applications/org.edusync.AD.desktop
+      - install -Dm644 packaging/org.edusync.AD.metainfo.xml /app/share/metainfo/org.edusync.AD.metainfo.xml
+      - install -Dm644 assets/icon.svg /app/share/icons/hicolor/scalable/apps/org.edusync.AD.svg
     sources:
       - type: dir
         path: ..

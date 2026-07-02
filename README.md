@@ -12,10 +12,10 @@ Les binaires prêts à l'emploi sont disponibles dans les [**Releases**](../../r
 
 | Plateforme | Fichier | Instructions |
 |---|---|---|
-| **Windows 10/11** | `EduSyncAD-windows.zip` | Décompressez n'importe où, lancez `EduSyncAD.exe` |
+| **Windows 10/11** | `EduSyncAD-Setup.exe` | Lancez l'installateur — raccourcis menu Démarrer/Bureau et désinstallation depuis les Paramètres Windows |
 | **Linux** | `EduSyncAD-linux.flatpak` | `flatpak install EduSyncAD-linux.flatpak` |
 
-Aucune installation requise sur Windows. Aucun Python nécessaire.
+Aucun Python nécessaire.
 
 ---
 

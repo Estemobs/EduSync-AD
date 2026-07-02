@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.edusync.AD</id>
+  <name>EduSync AD</name>
+  <summary>Gestion Active Directory pour établissements scolaires</summary>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <developer_name>EduSync</developer_name>
+  <description>
+    <p>
+      EduSync AD est un outil de gestion du cycle de vie des comptes Active Directory
+      pour les établissements scolaires : création de comptes, migration d'utilisateurs,
+      gestion des départs, réinitialisation de mots de passe et exploration de l'annuaire.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.edusync.AD.desktop</launchable>
+  <content_rating type="oars-1.1"/>
+  <url type="homepage">https://github.com/estemobs/EduSync-AD</url>
+  <provides>
+    <binary>edusync-ad</binary>
+  </provides>
+</component>

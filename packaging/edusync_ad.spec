@@ -13,8 +13,10 @@ a = Analysis(
     pathex=[str(SRC)],
     binaries=[],
     datas=[
-        (str(ASSETS / "icon.png"), "assets"),
-    ] if (ASSETS / "icon.png").exists() else [],
+        (str(p), "assets")
+        for p in (ASSETS / "icon.ico", ASSETS / "icon.png")
+        if p.exists()
+    ],
     hiddenimports=[
         "ldap3",
         "cryptography",

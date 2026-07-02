@@ -1,20 +1,18 @@
-"""Vérification et téléchargement des mises à jour depuis les releases Gitea/GitHub."""
+"""Vérification et téléchargement des mises à jour depuis les releases GitHub."""
 
 from __future__ import annotations
 
-import os
 import platform
 import shutil
 import subprocess
 import sys
 import tempfile
-import zipfile
 from pathlib import Path
-from urllib.request import urlopen, urlretrieve
+from urllib.request import Request, urlopen
 from urllib.error import URLError
 import json
 
-RELEASES_API_URL = "http://192.168.1.109:3000/api/v1/repos/estemobs/EduSync-AD/releases/latest"
+RELEASES_API_URL = "https://api.github.com/repos/estemobs/EduSync-AD/releases/latest"
 CURRENT_VERSION = "1.0.4"
 
 
@@ -28,10 +26,17 @@ def _parse_version(v: str) -> tuple[int, ...]:
 
 def check_for_update(timeout: int = 8) -> dict | None:
     """Retourne les infos de la release si une version plus récente existe, sinon None."""
+    request = Request(
+        RELEASES_API_URL,
+        headers={
+            "User-Agent": "EduSync-AD-Updater",
+            "Accept": "application/vnd.github+json",
+        },
+    )
     try:
-        with urlopen(RELEASES_API_URL, timeout=timeout) as resp:
+        with urlopen(request, timeout=timeout) as resp:
             data = json.loads(resp.read().decode())
-    except (URLError, Exception):
+    except (URLError, OSError, json.JSONDecodeError):
         return None
 
     latest_tag = data.get("tag_name", "")
@@ -43,7 +48,7 @@ def check_for_update(timeout: int = 8) -> dict | None:
 
     assets = data.get("assets", [])
     is_windows = platform.system() == "Windows"
-    suffix = "-windows.zip" if is_windows else "-linux.flatpak"
+    suffix = "-Setup.exe" if is_windows else "-linux.flatpak"
     download_url = next(
         (a["browser_download_url"] for a in assets if a["name"].endswith(suffix)),
         None,
@@ -58,12 +63,12 @@ def check_for_update(timeout: int = 8) -> dict | None:
 
 
 def download_and_install(download_url: str, progress_callback=None) -> bool:
-    """Télécharge et installe la mise à jour. Retourne True si succès."""
+    """Télécharge et lance l'installateur Windows. Retourne True si succès."""
     if platform.system() != "Windows":
         return False
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="edusync_update_"))
-    zip_path = tmp_dir / "update.zip"
+    installer_path = tmp_dir / "EduSyncAD-Setup.exe"
 
     try:
         def _reporthook(count, block_size, total_size):
@@ -71,20 +76,23 @@ def download_and_install(download_url: str, progress_callback=None) -> bool:
                 pct = min(100, int(count * block_size * 100 / total_size))
                 progress_callback(pct)
 
-        urlretrieve(download_url, zip_path, reporthook=_reporthook)
+        request = Request(download_url, headers={"User-Agent": "EduSync-AD-Updater"})
+        with urlopen(request, timeout=30) as resp, open(installer_path, "wb") as out:
+            total_size = int(resp.headers.get("Content-Length", 0))
+            block_size = 65536
+            count = 0
+            while chunk := resp.read(block_size):
+                out.write(chunk)
+                count += 1
+                _reporthook(count, block_size, total_size)
 
-        extract_dir = tmp_dir / "extracted"
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(extract_dir)
-
-        app_dir = Path(sys.executable).parent
-
-        bat = tmp_dir / "apply_update.bat"
+        # Laisse le process courant se terminer (l'UI appelle sys.exit juste après)
+        # avant de lancer l'installateur, qui remplace EduSyncAD.exe puis le relance.
+        bat = tmp_dir / "run_installer.bat"
         bat.write_text(
             f"@echo off\n"
             f"timeout /t 2 /nobreak > nul\n"
-            f'xcopy /E /Y /I "{extract_dir}\\*" "{app_dir}\\"\n'
-            f'start "" "{app_dir}\\EduSyncAD.exe"\n'
+            f'"{installer_path}" /VERYSILENT /NORESTART /SUPPRESSMSGBOXES\n'
             f'rmdir /S /Q "{tmp_dir}"\n',
             encoding="utf-8",
         )

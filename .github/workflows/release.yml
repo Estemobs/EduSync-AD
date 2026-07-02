@@ -31,14 +31,16 @@ jobs:
       - name: Build EXE
         run: pyinstaller packaging/edusync_ad.spec
 
-      - name: Zipper le dossier dist
-        run: Compress-Archive -Path dist\EduSyncAD\* -DestinationPath EduSyncAD-windows.zip
+      - name: Construire l'installateur (Inno Setup)
         shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" packaging\installer.iss
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: EduSyncAD-windows.zip
+          path: EduSyncAD-Setup.exe
 
   # ── Build Linux .flatpak ────────────────────────────────────────────────────
   build-flatpak:
@@ -97,7 +99,7 @@ jobs:
 
             | Plateforme | Fichier | Description |
             |---|---|---|
-            | Windows 10/11 | `EduSyncAD-windows.zip` | Décompressez et lancez `EduSyncAD.exe` — aucune installation requise |
+            | Windows 10/11 | `EduSyncAD-Setup.exe` | Installateur classique (raccourcis menu Démarrer/Bureau, désinstallation propre) |
             | Linux | `EduSyncAD-linux.flatpak` | `flatpak install EduSyncAD-linux.flatpak` puis `flatpak run org.edusync.AD` |
 
             ### Prérequis
@@ -106,7 +108,7 @@ jobs:
 
             Voir le [guide utilisateur](docs/guide_utilisateur.md) pour la prise en main complète.
           files: |
-            EduSyncAD-windows.zip
+            EduSyncAD-Setup.exe
             EduSyncAD-linux.flatpak
           draft: false
           prerelease: false

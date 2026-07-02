@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=EduSync AD
+GenericName=Gestion Active Directory scolaire
+Comment=Outil de gestion Active Directory pour établissements scolaires
+Exec=edusync-ad
+Icon=org.edusync.AD
+Categories=Office;Utility;
+Terminal=false
+StartupNotify=true
