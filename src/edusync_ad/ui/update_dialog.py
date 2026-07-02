@@ -17,6 +17,8 @@ from PyQt6.QtWidgets import (
 
 from edusync_ad.core.updater import check_for_update, download_and_install, CURRENT_VERSION
 
+__all__ = ["UpdateDialog", "CURRENT_VERSION"]
+
 
 class _CheckWorker(QThread):
     done = pyqtSignal(object)

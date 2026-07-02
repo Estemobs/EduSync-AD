@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PyQt6.QtCore import QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -17,6 +18,7 @@ from PyQt6.QtWidgets import (
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
+from edusync_ad.core.updater import check_for_update
 from edusync_ad.ui.audit_page import AuditPage
 from edusync_ad.ui.log_view_widget import LogViewWidget
 from edusync_ad.ui.modules.ad_explorer_page import ADExplorerPage
