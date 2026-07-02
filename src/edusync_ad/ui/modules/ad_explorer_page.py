@@ -782,3 +782,79 @@ class ManageGroupsDialog(QDialog):
         self.to_add = [dn for dn in self._all_groups if dn.lower() in new_dns and dn.lower() not in self._initial_member_dns]
         self.to_remove = [dn for dn in self._all_groups if dn.lower() not in new_dns and dn.lower() in self._initial_member_dns]
         self.accept()
+
+
+class ManageGroupMembersDialog(QDialog):
+    """Gère les membres d'un groupe (perspective inverse de ManageGroupsDialog :
+    on coche ici les utilisateurs, pas les groupes)."""
+
+    def __init__(self, all_users: list[dict], member_dns: set[str], group_name: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Membres de {group_name}")
+        self.setMinimumSize(460, 480)
+        self.to_add: list[str] = []
+        self.to_remove: list[str] = []
+        self._all_users = {u["dn"]: u for u in all_users}
+        self._initial_member_dns = {dn.lower() for dn in member_dns}
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Cochez les utilisateurs membres de ce groupe :"))
+
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("Filtrer…")
+        self.search_edit.textChanged.connect(self._on_filter_changed)
+        layout.addWidget(self.search_edit)
+
+        self.list_widget = QListWidget()
+        self._checked_dns: set[str] = set(self._initial_member_dns)
+        self._populate(all_users)
+        layout.addWidget(self.list_widget)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _populate(self, users: list[dict]) -> None:
+        self.list_widget.itemChanged.disconnect() if self._has_item_changed_connection() else None
+        self.list_widget.clear()
+        for user in sorted(users, key=lambda u: u["cn"].lower()):
+            item = QListWidgetItem(f"{user['cn']} ({user['sam']})")
+            item.setData(Qt.ItemDataRole.UserRole, user["dn"])
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            checked = user["dn"].lower() in self._checked_dns
+            item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            self.list_widget.addItem(item)
+        self.list_widget.itemChanged.connect(self._on_item_changed)
+
+    def _has_item_changed_connection(self) -> bool:
+        return self.list_widget.receivers(self.list_widget.itemChanged) > 0
+
+    def _on_item_changed(self, item: QListWidgetItem) -> None:
+        dn = item.data(Qt.ItemDataRole.UserRole)
+        if item.checkState() == Qt.CheckState.Checked:
+            self._checked_dns.add(dn.lower())
+        else:
+            self._checked_dns.discard(dn.lower())
+
+    def _on_filter_changed(self, text: str) -> None:
+        needle = text.strip().lower()
+        if not needle:
+            self._populate(list(self._all_users.values()))
+            return
+        filtered = [
+            u for u in self._all_users.values()
+            if needle in u["cn"].lower() or needle in u["sam"].lower()
+        ]
+        self._populate(filtered)
+
+    def _on_accept(self) -> None:
+        self.to_add = [
+            dn for dn in self._all_users
+            if dn.lower() in self._checked_dns and dn.lower() not in self._initial_member_dns
+        ]
+        self.to_remove = [
+            dn for dn in self._all_users
+            if dn.lower() not in self._checked_dns and dn.lower() in self._initial_member_dns
+        ]
+        self.accept()
