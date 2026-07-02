@@ -144,12 +144,17 @@ class UpdateDialog(QDialog):
                 )
                 self.accept()
         else:
-            QMessageBox.warning(
-                self, "Erreur",
-                "L'installation a échoué. Si l'application est installée en mode système "
-                "(flatpak --system), une fenêtre d'autorisation aurait dû apparaître — "
-                "réessayez, ou mettez à jour manuellement avec :\n\n"
-                "flatpak update org.edusync.AD",
+            details = (
+                "L'installation a échoué. Le détail technique (commande exécutée, "
+                "code de sortie, message de flatpak) est disponible dans le menu "
+                "« Journal de l'application » — activez le mode debug pour le voir.\n\n"
+                "Vous pouvez aussi mettre à jour manuellement : téléchargez le "
+                "fichier .flatpak depuis les Releases puis lancez :\n\n"
+                "flatpak install --or-update --user /chemin/vers/EduSyncAD-linux.flatpak"
+                if platform.system() != "Windows" else
+                "L'installation a échoué. Réessayez, ou téléchargez et lancez "
+                "l'installateur manuellement depuis les Releases."
             )
+            QMessageBox.warning(self, "Erreur", details)
             self.install_btn.setEnabled(True)
             self.progress.setVisible(False)

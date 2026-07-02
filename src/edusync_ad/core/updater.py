@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import platform
 import shutil
 import subprocess
@@ -12,8 +13,10 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 import json
 
+logger = logging.getLogger("edusync_ad.updater")
+
 RELEASES_API_URL = "https://api.github.com/repos/estemobs/EduSync-AD/releases/latest"
-CURRENT_VERSION = "1.4.0"
+CURRENT_VERSION = "1.4.1"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -99,6 +102,19 @@ def _install_windows(download_url: str, progress_callback=None) -> bool:
         return False
 
 
+def _run_logged(cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
+    logger.info("Exécution : %s", " ".join(cmd))
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if result.returncode == 0:
+        logger.info("OK (code 0)%s", f" — {result.stdout.strip()}" if result.stdout.strip() else "")
+    else:
+        logger.warning(
+            "Échec (code %s) — stdout: %s — stderr: %s",
+            result.returncode, result.stdout.strip(), result.stderr.strip(),
+        )
+    return result
+
+
 def _install_linux_flatpak(download_url: str, progress_callback=None) -> bool:
     tmp_dir = Path(tempfile.mkdtemp(prefix="edusync_update_"))
     bundle_path = tmp_dir / "EduSyncAD-linux.flatpak"
@@ -110,11 +126,18 @@ def _install_linux_flatpak(download_url: str, progress_callback=None) -> bool:
         # dans le manifeste). Hors sandbox (dev), on appelle flatpak directement.
         host_prefix = ["flatpak-spawn", "--host"] if shutil.which("flatpak-spawn") else []
 
+        # --or-update : sans ce flag, "flatpak install" échoue avec "already
+        # installed" si une tentative précédente (même partielle) a déjà posé
+        # une copie à cette échelle — ce qui arrive à chaque nouvel essai.
+        user_cmd = host_prefix + [
+            "flatpak", "install", "--user", "--noninteractive", "--or-update", "-y", str(bundle_path),
+        ]
+        system_cmd = host_prefix + [
+            "pkexec", "flatpak", "install", "--system", "--noninteractive", "--or-update", "-y", str(bundle_path),
+        ]
+
         # Tentative en --user d'abord : aucune élévation de privilèges requise.
-        result = subprocess.run(
-            host_prefix + ["flatpak", "install", "--user", "--noninteractive", "-y", str(bundle_path)],
-            capture_output=True, text=True, timeout=120,
-        )
+        result = _run_logged(user_cmd, timeout=120)
         if result.returncode == 0:
             shutil.rmtree(tmp_dir, ignore_errors=True)
             return True
@@ -122,13 +145,11 @@ def _install_linux_flatpak(download_url: str, progress_callback=None) -> bool:
         # Repli : l'app est peut-être installée en --system (nécessite les
         # droits root). pkexec affiche sa propre fenêtre d'autorisation
         # native (comme l'UAC Windows) — ce n'est pas une élévation silencieuse.
-        result = subprocess.run(
-            host_prefix + ["pkexec", "flatpak", "install", "--system", "--noninteractive", "-y", str(bundle_path)],
-            capture_output=True, text=True, timeout=180,
-        )
+        result = _run_logged(system_cmd, timeout=180)
         shutil.rmtree(tmp_dir, ignore_errors=True)
         return result.returncode == 0
-    except Exception:
+    except Exception as exc:
+        logger.warning("Échec de la mise à jour Flatpak : %s", exc)
         shutil.rmtree(tmp_dir, ignore_errors=True)
         return False
 
