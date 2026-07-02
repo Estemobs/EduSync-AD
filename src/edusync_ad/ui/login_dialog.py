@@ -76,6 +76,17 @@ class LoginDialog(QDialog):
         self.password_edit = QLineEdit()
         self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.remember_checkbox = QCheckBox("Mémoriser la connexion")
+        self.remember_password_checkbox = QCheckBox("Mémoriser aussi le mot de passe")
+        self.remember_password_checkbox.setToolTip(
+            "Le mot de passe est chiffré (AES-256) sur cette machine, mais reste\n"
+            "moins sûr que de le ressaisir à chaque connexion. À réserver aux\n"
+            "postes de confiance."
+        )
+        self.remember_password_checkbox.setEnabled(False)
+        self.remember_checkbox.toggled.connect(self.remember_password_checkbox.setEnabled)
+        self.remember_checkbox.toggled.connect(
+            lambda checked: checked or self.remember_password_checkbox.setChecked(False)
+        )
         self.debug_checkbox = QCheckBox("Mode debug (journal de connexion en direct)")
         self._debug_console: DebugConsole | None = None
 
