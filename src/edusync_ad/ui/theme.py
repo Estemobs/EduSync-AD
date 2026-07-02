@@ -5,8 +5,8 @@ from __future__ import annotations
 LIGHT_STYLESHEET = """
 QWidget { background-color: #f5f6f8; color: #1c2230; font-size: 13px; }
 QMainWindow, QDialog { background-color: #f5f6f8; }
-#TopBar { background-color: #1c2c4a; color: white; }
-#TopBar QLabel { color: white; }
+#TopBar { background-color: #ffffff; color: #1c2230; border-bottom: 1px solid #dfe3ea; }
+#TopBar QLabel { color: #1c2230; }
 #Sidebar { background-color: #ffffff; border-right: 1px solid #dfe3ea; }
 QPushButton {
     background-color: #2f6fed; color: white; border: none; border-radius: 4px;
@@ -49,3 +49,14 @@ QLineEdit, QComboBox, QSpinBox {
 
 def stylesheet_for(theme: str) -> str:
     return DARK_STYLESHEET if theme == "sombre" else LIGHT_STYLESHEET
+
+
+# Couleurs de l'indicateur de connexion (bandeau du haut), adaptées à chaque
+# thème pour garder un bon contraste (le vert clair utilisé en sombre est
+# illisible sur le fond blanc du thème clair).
+STATUS_COLORS_LIGHT = {"connected": "#1f9d55", "connecting": "#b9770e", "disconnected": "#c53030"}
+STATUS_COLORS_DARK = {"connected": "#6fe08a", "connecting": "#e0a72b", "disconnected": "#e05555"}
+
+
+def status_colors_for(theme: str) -> dict[str, str]:
+    return STATUS_COLORS_DARK if theme == "sombre" else STATUS_COLORS_LIGHT

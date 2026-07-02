@@ -334,7 +334,8 @@ class CreateAccountsPage(QWidget):
             )
             nom_clean = clean_token(row.nom)
             mail_local = render_template(self.config.format_mail, prenom_clean, nom_clean, year=year)
-            mail = f"{mail_local}@{self.config.domaine_mail}"
+            mail_domain = self.config.domaine_mail or self.ad_connection.domain or ""
+            mail = f"{mail_local}@{mail_domain}"
 
             groupe = _ou_leaf_name(row.ou) if self.config.groupes_classe_auto else None
 

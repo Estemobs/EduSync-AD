@@ -25,7 +25,7 @@ from edusync_ad.ui.modules.inscription_page import InscriptionPage
 from edusync_ad.ui.modules.migration_page import MigrationPage
 from edusync_ad.ui.modules.password_reset_page import PasswordResetPage
 from edusync_ad.ui.settings_page import SettingsPage
-from edusync_ad.ui.theme import stylesheet_for
+from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
 
 
@@ -55,10 +55,11 @@ class MainWindow(QMainWindow):
         top_bar.setObjectName("TopBar")
         layout = QHBoxLayout(top_bar)
 
-        domain_text = self.ad_connection.domain or ""
-        protocol_text = "LDAPS" if self.ad_connection.used_ldaps else "LDAP (non chiffré)"
-        self.connection_label = QLabel(f"●  Connecté — {domain_text} ({protocol_text})")
-        self.connection_label.setStyleSheet("color: #6fe08a; font-weight: 600;")
+        self.connection_label = QLabel()
+        self._connection_state = "connected"
+        self._connection_domain = self.ad_connection.domain or ""
+        self._connection_protocol = "LDAPS" if self.ad_connection.used_ldaps else "LDAP (non chiffré)"
+        self._refresh_connection_label()
         # L'indicateur peut être mis à jour depuis l'extérieur via set_connection_state()
         layout.addWidget(self.connection_label)
         layout.addStretch()
@@ -76,15 +77,23 @@ class MainWindow(QMainWindow):
 
     def set_connection_state(self, state: str, domain: str = "", protocol: str = "") -> None:
         """Met à jour l'indicateur tricolore. state : 'connected' | 'connecting' | 'disconnected'."""
+        self._connection_state = state
+        self._connection_domain = domain
+        self._connection_protocol = protocol
+        self._refresh_connection_label()
+
+    def _refresh_connection_label(self) -> None:
+        colors = status_colors_for(self.config.theme)
+        state = self._connection_state
         if state == "connected":
-            text = f"●  Connecté — {domain} ({protocol})"
-            color = "#6fe08a"  # vert
+            text = f"●  Connecté — {self._connection_domain} ({self._connection_protocol})"
+            color = colors["connected"]
         elif state == "connecting":
             text = "●  Connexion en cours…"
-            color = "#e0a72b"  # orange
+            color = colors["connecting"]
         else:
             text = "●  Déconnecté"
-            color = "#e05555"  # rouge
+            color = colors["disconnected"]
         self.connection_label.setText(text)
         self.connection_label.setStyleSheet(f"color: {color}; font-weight: 600;")
 
@@ -128,7 +137,9 @@ class MainWindow(QMainWindow):
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
         self.audit_page = AuditPage(self.audit_log)
-        self.settings_page = SettingsPage(self.config, self._on_config_saved)
+        self.settings_page = SettingsPage(
+            self.config, self._on_config_saved, ad_domain=self.ad_connection.domain
+        )
 
         self.pages.addWidget(self.create_accounts_page)   # index 0
         self.pages.addWidget(self.migration_page)          # index 1
@@ -185,3 +196,4 @@ class MainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.setStyleSheet(stylesheet_for(self.config.theme))
+        self._refresh_connection_label()

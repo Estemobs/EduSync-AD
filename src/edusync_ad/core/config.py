@@ -45,8 +45,8 @@ class AppConfig:
         )
     )
 
-    # Adresses mail
-    domaine_mail: str = "exemple.fr"
+    # Adresses mail — domaine_mail vide = utiliser automatiquement le domaine AD connecté
+    domaine_mail: str = ""
     format_mail: str = "{P}.{N}"
 
     # Prénoms composés

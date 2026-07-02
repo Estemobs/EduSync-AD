@@ -20,8 +20,17 @@ from PyQt6.QtWidgets import (
 )
 
 from edusync_ad.core.config import AppConfig
-from edusync_ad.core.identifiers import CAMEL_PRESETS, PRESETS
+from edusync_ad.core.identifiers import CAMEL_PRESETS, PRESETS, render_template
 from edusync_ad.core.models import DoublonRule, PasswordPolicy, PrenomComposeRule
+
+MAIL_FORMAT_PRESET_KEYS = [
+    "{P}.{N}",
+    "{N}.{P}",
+    "{p1}.{N}",
+    "{P}{N}",
+    "{P}_{N}",
+    "{p1}{N}",
+]
 
 IDENTIFIER_PRESET_KEYS = list(PRESETS.keys()) + list(CAMEL_PRESETS)
 
@@ -80,9 +89,16 @@ class _PasswordPolicyForm(QWidget):
 
 
 class SettingsPage(QWidget):
-    def __init__(self, config: AppConfig, on_save: Callable[[AppConfig], None], parent=None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        on_save: Callable[[AppConfig], None],
+        ad_domain: str | None = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self._on_save = on_save
+        self._ad_domain = ad_domain
 
         self.identifier_eleve_combo = self._build_identifier_combo(config.identifiant_format_eleve)
         self.identifier_personnel_combo = self._build_identifier_combo(
@@ -102,7 +118,23 @@ class SettingsPage(QWidget):
         )
 
         self.mail_domain_edit = QLineEdit(config.domaine_mail)
-        self.mail_format_edit = QLineEdit(config.format_mail)
+        self.mail_domain_edit.setPlaceholderText(
+            ad_domain or "sera rempli automatiquement avec le domaine AD connecté"
+        )
+        self.mail_domain_use_ad_button = QPushButton("Utiliser le domaine AD")
+        self.mail_domain_use_ad_button.setEnabled(bool(ad_domain))
+        self.mail_domain_use_ad_button.clicked.connect(self._use_ad_domain)
+        if not config.domaine_mail and ad_domain:
+            self.mail_domain_edit.setText(ad_domain)
+
+        self.mail_format_combo = QComboBox()
+        self.mail_format_combo.setEditable(True)
+        self.mail_format_combo.addItems(MAIL_FORMAT_PRESET_KEYS)
+        self.mail_format_combo.setCurrentText(config.format_mail)
+        self.mail_format_preview_label = QLabel("")
+        self.mail_format_combo.editTextChanged.connect(self._update_mail_format_preview)
+        self.mail_domain_edit.textChanged.connect(self._update_mail_format_preview)
+        self._update_mail_format_preview()
 
         self.groupes_auto_check = QCheckBox("Création automatique des groupes de classe")
         self.groupes_auto_check.setChecked(config.groupes_classe_auto)
@@ -140,8 +172,16 @@ class SettingsPage(QWidget):
 
         mail_group = QGroupBox("Adresses mail")
         mail_form = QFormLayout(mail_group)
-        mail_form.addRow("Domaine mail", self.mail_domain_edit)
-        mail_form.addRow("Nomenclature mail", self.mail_format_edit)
+        domain_row = QHBoxLayout()
+        domain_row.addWidget(self.mail_domain_edit)
+        domain_row.addWidget(self.mail_domain_use_ad_button)
+        mail_form.addRow("Domaine mail", domain_row)
+        format_row = QHBoxLayout()
+        format_row.addWidget(self.mail_format_combo)
+        format_row.addWidget(QLabel("Aperçu :"))
+        format_row.addWidget(self.mail_format_preview_label)
+        format_row.addStretch()
+        mail_form.addRow("Nomenclature mail", format_row)
 
         groupes_group = QGroupBox("Groupes de classe")
         groupes_layout = QVBoxLayout(groupes_group)
@@ -195,6 +235,22 @@ class SettingsPage(QWidget):
         combo.setCurrentText(current_value)
         return combo
 
+    def _use_ad_domain(self) -> None:
+        if self._ad_domain:
+            self.mail_domain_edit.setText(self._ad_domain)
+
+    def _update_mail_format_preview(self) -> None:
+        template = self.mail_format_combo.currentText().strip()
+        domain = self.mail_domain_edit.text().strip() or self._ad_domain or "domaine"
+        if not template:
+            self.mail_format_preview_label.setText("")
+            return
+        try:
+            local_part = render_template(template, "Thomas", "Martin")
+            self.mail_format_preview_label.setText(f"{local_part}@{domain}")
+        except Exception:
+            self.mail_format_preview_label.setText("(format invalide)")
+
     def _save(self) -> None:
         config = AppConfig(
             identifiant_format_eleve=self.identifier_eleve_combo.currentText().strip(),
@@ -203,7 +259,7 @@ class SettingsPage(QWidget):
             politique_mdp_eleve=self.eleve_policy_form.to_policy(),
             politique_mdp_personnel=self.personnel_policy_form.to_policy(),
             domaine_mail=self.mail_domain_edit.text().strip(),
-            format_mail=self.mail_format_edit.text().strip(),
+            format_mail=self.mail_format_combo.currentText().strip(),
             regle_prenom_compose=self.prenom_compose_combo.currentData(),
             groupes_classe_auto=self.groupes_auto_check.isChecked(),
             ou_archive=self.ou_archive_edit.text().strip(),
