@@ -125,6 +125,9 @@ class LoginDialog(QDialog):
             self.controller_edit.setText(remembered.controleur)
             self.username_edit.setText(remembered.utilisateur)
             self.remember_checkbox.setChecked(True)
+            if remembered.mot_de_passe is not None:
+                self.password_edit.setText(remembered.mot_de_passe)
+                self.remember_password_checkbox.setChecked(True)
 
     def _set_status(self, state: str, text: str) -> None:
         self.status_dot.setStyleSheet(f"color: {STATUS_COLORS.get(state, '#999')}; font-size: 16px;")
@@ -169,6 +172,11 @@ class LoginDialog(QDialog):
                     domaine=self.domain_edit.text().strip(),
                     controleur=self.controller_edit.text().strip(),
                     utilisateur=self.username_edit.text().strip(),
+                    mot_de_passe=(
+                        self.password_edit.text()
+                        if self.remember_password_checkbox.isChecked()
+                        else None
+                    ),
                 )
             )
         else:

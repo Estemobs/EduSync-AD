@@ -142,7 +142,8 @@ class ADExplorerPage(QWidget):
 
         self.user_table = QTableWidget(0, len(USER_COLS))
         self.user_table.setHorizontalHeaderLabels(USER_COLS)
-        self.user_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.user_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.user_table.horizontalHeader().setStretchLastSection(True)
         self.user_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.user_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.user_table.itemSelectionChanged.connect(self._on_user_selected)

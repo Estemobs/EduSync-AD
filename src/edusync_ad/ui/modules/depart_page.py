@@ -150,7 +150,8 @@ class DepartPage(QWidget):
 
         self.preview_table = QTableWidget(0, len(PREVIEW_COLUMNS))
         self.preview_table.setHorizontalHeaderLabels(PREVIEW_COLUMNS)
-        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.preview_table.horizontalHeader().setStretchLastSection(True)
         self.preview_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.preview_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
 
@@ -180,7 +181,8 @@ class DepartPage(QWidget):
 
         self.pending_table = QTableWidget(0, 4)
         self.pending_table.setHorizontalHeaderLabels(["Identifiant", "Nom complet", "Archivé le", "Échéance"])
-        self.pending_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.pending_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.pending_table.horizontalHeader().setStretchLastSection(True)
         self.pending_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.pending_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.pending_table.setMaximumHeight(160)

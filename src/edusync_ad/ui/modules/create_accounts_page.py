@@ -153,7 +153,8 @@ class CreateAccountsPage(QWidget):
 
         self.preview_table = QTableWidget(0, len(PREVIEW_COLUMNS))
         self.preview_table.setHorizontalHeaderLabels(PREVIEW_COLUMNS)
-        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.preview_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.preview_table.horizontalHeader().setStretchLastSection(True)
         self.preview_table.setEditTriggers(
             QAbstractItemView.EditTrigger.DoubleClicked | QAbstractItemView.EditTrigger.EditKeyPressed
         )
