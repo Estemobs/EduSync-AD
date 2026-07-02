@@ -59,6 +59,9 @@ class RememberedConnection:
     domaine: str
     controleur: str
     utilisateur: str
+    # Optionnel : uniquement si l'utilisateur a explicitement coché
+    # "Mémoriser le mot de passe" (opt-in distinct, désactivé par défaut).
+    mot_de_passe: str | None = None
 
 
 def _remembered_connection_path() -> Path:
@@ -71,10 +74,18 @@ def save_remembered_connection(
     key = get_or_create_key(key_path)
     path = path or _remembered_connection_path()
     payload = {
-        field: encrypt_str(key, value) for field, value in asdict(info).items()
+        field: encrypt_str(key, value)
+        for field, value in asdict(info).items()
+        if value is not None
     }
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload), encoding="utf-8")
+    # Permissions restrictives : ce fichier peut désormais contenir un mot de
+    # passe chiffré, au même titre que secret.key.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR)
+    try:
+        os.write(fd, json.dumps(payload).encode("utf-8"))
+    finally:
+        os.close(fd)
 
 
 def load_remembered_connection(
