@@ -356,47 +356,47 @@ class DepartPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        success_count = 0
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        action_type = "desactivation_compte" if mode == MODE_DESACTIVATION else "archivage_compte"
+        etat_succes = f"{'Simulé' if simulation else ('Désactivé' if mode == MODE_DESACTIVATION else 'Archivé')}"
 
-        for i, row in enumerate(self._rows):
-            if row.user_dn is None:
-                continue
-            try:
-                if mode == MODE_DESACTIVATION:
-                    self._desactivate_one(row, base_dn)
-                    action_type = "desactivation_compte"
-                else:
-                    self._archive_one(row, base_dn)
-                    action_type = "archivage_compte"
-            except ADError as exc:
-                row.erreur = str(exc)
+        indexed_rows = [(i, row) for i, row in enumerate(self._rows) if row.user_dn is not None]
+        labels = [row.identifiant for _, row in indexed_rows]
+
+        def run_one(entry: tuple[int, DepartRow]) -> None:
+            _, row = entry
+            if mode == MODE_DESACTIVATION:
+                self._desactivate_one(row, base_dn)
+            else:
+                self._archive_one(row, base_dn)
+
+        def on_result(position: int, success: bool, message: str) -> None:
+            i, row = indexed_rows[position]
+            if success:
                 self.audit_log.record(
-                    action_type if 'action_type' in dir() else "depart_compte",
-                    row.identifiant,
-                    "echec",
-                    self.session_id,
-                    simulation=simulation,
-                    detail=str(exc),
+                    action_type, row.identifiant, "succes", self.session_id, simulation=simulation,
+                )
+                self._set_table_row(i, row, etat=etat_succes)
+            else:
+                row.erreur = message
+                self.audit_log.record(
+                    action_type, row.identifiant, "echec", self.session_id,
+                    simulation=simulation, detail=message,
                 )
                 self._set_table_row(i, row)
-            else:
-                success_count += 1
-                self.audit_log.record(
-                    action_type,
-                    row.identifiant,
-                    "succes",
-                    self.session_id,
-                    simulation=simulation,
-                )
-                etat = f"{'Simulé' if simulation else ('Désactivé' if mode == MODE_DESACTIVATION else 'Archivé')}"
-                self._set_table_row(i, row, etat=etat)
+
+        dialog = BatchProgressDialog(
+            "Traitement des départs en cours…", indexed_rows, labels, run_one,
+            on_item_result=on_result, parent=self,
+        )
+        dialog.start()
+        dialog.exec()
 
         self._refresh_pending_panel()
         QMessageBox.information(
             self,
             "Traitement terminé",
-            f"{success_count}/{len(to_process)} compte(s) traité(s){suffix_sim}.",
+            f"{dialog.success_count}/{len(to_process)} compte(s) traité(s){suffix_sim}.",
         )
 
     def _desactivate_one(self, row: DepartRow, base_dn: str) -> None:
