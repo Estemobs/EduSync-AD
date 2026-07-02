@@ -15,7 +15,7 @@ def test_load_preview_detects_headers_and_semicolon_delimiter():
         "prenom",
         "nom",
         "ou",
-        "email_perso",
+        "email",
         "date_naissance",
         "numero",
     ]
