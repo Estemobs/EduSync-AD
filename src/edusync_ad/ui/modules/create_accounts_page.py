@@ -146,8 +146,31 @@ class CreateAccountsPage(QWidget):
 
         self._on_account_type_changed(True)
 
+        ou_group = QGroupBox("3. OU cible (si non précisée dans le fichier)")
+        ou_layout = QVBoxLayout(ou_group)
+
+        load_ou_row = QHBoxLayout()
+        self.load_ous_button = QPushButton("Charger les OUs depuis l'AD")
+        self.load_ous_button.clicked.connect(self._on_load_ous_clicked)
+        load_ou_row.addWidget(self.load_ous_button)
+        load_ou_row.addStretch()
+        ou_layout.addLayout(load_ou_row)
+
+        ou_form = QFormLayout()
+        self.classe_parent_ou_combo = QComboBox()
+        self.classe_parent_ou_combo.addItem("(aucune)", "")
+        ou_form.addRow("OU parente pour les classes (colonne « classe ») :", self.classe_parent_ou_combo)
+        self.default_ou_combo = QComboBox()
+        self.default_ou_combo.addItem("(aucune)", "")
+        ou_form.addRow("OU par défaut (si ni OU ni classe renseignée) :", self.default_ou_combo)
+        ou_layout.addLayout(ou_form)
+
+        self.auto_create_ou_checkbox = QCheckBox("Créer automatiquement les OU de classe manquantes (avec confirmation)")
+        self.auto_create_ou_checkbox.setChecked(True)
+        ou_layout.addWidget(self.auto_create_ou_checkbox)
+
         generate_row = QHBoxLayout()
-        self.generate_button = QPushButton("3. Générer la prévisualisation")
+        self.generate_button = QPushButton("4. Générer la prévisualisation")
         self.generate_button.clicked.connect(self._on_generate_clicked)
         generate_row.addWidget(self.generate_button)
         generate_row.addStretch()
@@ -176,6 +199,7 @@ class CreateAccountsPage(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(import_group)
         layout.addWidget(options_group)
+        layout.addWidget(ou_group)
         layout.addLayout(generate_row)
         layout.addWidget(self.preview_table)
         layout.addLayout(action_row)
