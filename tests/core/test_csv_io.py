@@ -73,6 +73,19 @@ def test_load_rows_with_manual_mapping_for_mismatched_headers(tmp_path):
     assert result.rows[0].ou == "OU=3emeA"
 
 
+def test_load_rows_keeps_rows_without_ou_but_with_classe(tmp_path):
+    path = tmp_path / "no_ou.csv"
+    path.write_text(
+        "prenom;nom;classe\nThomas;Martin;4emeB\n", encoding="utf-8"
+    )
+    mapping = {"prenom": "prenom", "nom": "nom", "classe": "classe"}
+    result = load_rows(path, mapping)
+    assert len(result.rows) == 1
+    assert result.skipped_row_numbers == []
+    assert result.rows[0].ou == ""
+    assert result.rows[0].classe == "4emeB"
+
+
 def test_load_rows_skips_incomplete_rows(tmp_path):
     path = tmp_path / "incomplete.csv"
     path.write_text(
