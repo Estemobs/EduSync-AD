@@ -42,6 +42,7 @@ from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import DepartRow
+from edusync_ad.ui.progress_dialog import BatchProgressDialog
 
 DEPART_COLUMNS = ["identifiant"]
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "Groupes", "État"]
