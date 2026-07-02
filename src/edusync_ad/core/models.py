@@ -107,3 +107,4 @@ class ActionLogEntry:
     session_id: str
     simulation: bool
     detail: str = ""
+    utilisateur: str = ""

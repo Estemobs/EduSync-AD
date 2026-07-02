@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QFileDialog,
     QHBoxLayout,
@@ -30,6 +31,8 @@ class LogViewWidget(QWidget):
         self.debug_checkbox.setChecked(self._manager.is_debug_enabled())
         self.debug_checkbox.toggled.connect(self._manager.set_debug)
 
+        self.copy_button = QPushButton("Copier")
+        self.copy_button.clicked.connect(self._on_copy)
         self.clear_button = QPushButton("Vider le journal")
         self.clear_button.clicked.connect(self._on_clear)
         self.export_button = QPushButton("Exporter…")
@@ -38,6 +41,7 @@ class LogViewWidget(QWidget):
         toolbar = QHBoxLayout()
         toolbar.addWidget(self.debug_checkbox)
         toolbar.addStretch()
+        toolbar.addWidget(self.copy_button)
         toolbar.addWidget(self.clear_button)
         toolbar.addWidget(self.export_button)
 
@@ -60,6 +64,9 @@ class LogViewWidget(QWidget):
     def _scroll_to_bottom(self) -> None:
         bar = self.text.verticalScrollBar()
         bar.setValue(bar.maximum())
+
+    def _on_copy(self) -> None:
+        QApplication.clipboard().setText(self.text.toPlainText())
 
     def _on_clear(self) -> None:
         self._manager.clear()

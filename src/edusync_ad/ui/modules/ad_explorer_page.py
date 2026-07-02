@@ -24,10 +24,12 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSplitter,
@@ -111,6 +113,8 @@ class ADExplorerPage(QWidget):
         self.ou_tree = QTreeWidget()
         self.ou_tree.setHeaderLabel("Unités Organisationnelles")
         self.ou_tree.itemClicked.connect(self._on_ou_selected)
+        self.ou_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.ou_tree.customContextMenuRequested.connect(self._on_ou_context_menu)
         ou_layout.addWidget(self.ou_tree)
         self.left_tabs.addTab(ou_widget, "OUs")
 
@@ -120,6 +124,8 @@ class ADExplorerPage(QWidget):
         group_layout.setContentsMargins(0, 0, 0, 0)
         self.group_list = QListWidget()
         self.group_list.itemClicked.connect(self._on_group_selected)
+        self.group_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.group_list.customContextMenuRequested.connect(self._on_group_context_menu)
         group_layout.addWidget(self.group_list)
         self.left_tabs.addTab(group_widget, "Groupes")
 

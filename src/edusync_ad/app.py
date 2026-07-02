@@ -47,6 +47,7 @@ def main() -> int:
         return 0
 
     audit_log = AuditLog()
+    audit_log.current_user = login.ad_connection.username or ""
     window = MainWindow(login.ad_connection, config, audit_log)
     window.show()
 

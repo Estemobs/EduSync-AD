@@ -43,6 +43,10 @@ class AuditLog:
         self._conn = sqlite3.connect(self.path)
         self._conn.row_factory = sqlite3.Row
         self._init_schema()
+        # Compte admin de la session courante — renseigné après connexion AD
+        # (voir MainWindow), inclus automatiquement dans chaque entrée sans
+        # devoir modifier tous les appels à record().
+        self.current_user: str = ""
 
     def _init_schema(self) -> None:
         self._conn.execute(
@@ -61,6 +65,9 @@ class AuditLog:
             )
             """
         )
+        existing_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(actions)")}
+        if "utilisateur" not in existing_cols:
+            self._conn.execute("ALTER TABLE actions ADD COLUMN utilisateur TEXT")
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS pending_deletions (
@@ -80,8 +87,8 @@ class AuditLog:
             """
             INSERT INTO actions
                 (timestamp, action_type, compte, ou_source, ou_destination,
-                 resultat, session_id, simulation, detail)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 resultat, session_id, simulation, detail, utilisateur)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 entry.timestamp,
@@ -93,6 +100,7 @@ class AuditLog:
                 entry.session_id,
                 int(entry.simulation),
                 entry.detail,
+                entry.utilisateur,
             ),
         )
         self._conn.commit()
@@ -119,6 +127,7 @@ class AuditLog:
             session_id=session_id,
             simulation=simulation,
             detail=detail,
+            utilisateur=self.current_user,
         )
         self.log(entry)
         return entry
@@ -166,6 +175,7 @@ class AuditLog:
             session_id=row["session_id"],
             simulation=bool(row["simulation"]),
             detail=row["detail"] or "",
+            utilisateur=row["utilisateur"] or "",
         )
 
     def export_csv(self, path: Path) -> None:
@@ -183,6 +193,7 @@ class AuditLog:
                     "session_id",
                     "simulation",
                     "detail",
+                    "utilisateur",
                 ]
             )
             for entry in entries:
@@ -197,6 +208,7 @@ class AuditLog:
                         entry.session_id,
                         "oui" if entry.simulation else "non",
                         entry.detail,
+                        entry.utilisateur,
                     ]
                 )
 

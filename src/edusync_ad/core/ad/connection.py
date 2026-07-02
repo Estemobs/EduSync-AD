@@ -262,6 +262,16 @@ class ADConnection:
         if self.dry_run:
             return
         if not conn.extend.microsoft.modify_password(dn, password):
+            if not self.used_ldaps:
+                # AD refuse quasi systématiquement de modifier un mot de passe
+                # sur une connexion LDAP non chiffrée (port 389) — un message
+                # d'erreur brut LDAP serait cryptique ici.
+                raise ADError(
+                    "Le changement de mot de passe nécessite une connexion chiffrée (LDAPS, "
+                    "port 636). Vous êtes connecté en LDAP non chiffré — configurez un "
+                    "certificat LDAPS sur le contrôleur de domaine (ou vérifiez que le port "
+                    "636 est accessible), puis reconnectez-vous."
+                )
             raise ADError(conn.result.get("description", "Échec de définition du mot de passe."))
 
     @_logged_write("Activation du compte")
@@ -274,6 +284,14 @@ class ADConnection:
             changes["pwdLastSet"] = [(MODIFY_REPLACE, [0])]
         if not conn.modify(dn, changes):
             raise ADError(conn.result.get("description", "Échec d'activation du compte."))
+
+    @_logged_write("Création de l'OU")
+    def create_ou(self, dn: str, name: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.add(dn, ["top", "organizationalUnit"], {"ou": name}):
+            raise ADError(conn.result.get("description", "Échec de création de l'OU."))
 
     @_logged_write("Création du groupe")
     def create_group(self, dn: str, sam_account_name: str) -> None:
