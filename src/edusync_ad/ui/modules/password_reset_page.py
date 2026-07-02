@@ -43,6 +43,7 @@ from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import PasswordPolicy
 from edusync_ad.core.passwords import generate_password
+from edusync_ad.ui.progress_dialog import BatchProgressDialog
 
 COL_SAM, COL_CN, COL_ETAT, COL_MDP = range(4)
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "État", "Nouveau mot de passe"]
