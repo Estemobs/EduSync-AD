@@ -141,6 +141,17 @@ class PasswordResetPage(QWidget):
         policy_type_row.addStretch()
         policy_layout.addRow("Profil :", policy_type_row)
 
+        self.policy_summary_label = QLabel("")
+        self.policy_summary_label.setStyleSheet("color: #666;")
+        policy_layout.addRow("Politique actuelle :", self.policy_summary_label)
+
+        self.chk_customize = QCheckBox("Personnaliser la politique pour cette réinitialisation")
+        self.chk_customize.toggled.connect(self._on_customize_toggled)
+        policy_layout.addRow("", self.chk_customize)
+
+        self.custom_policy_widget = QWidget()
+        custom_form = QFormLayout(self.custom_policy_widget)
+        custom_form.setContentsMargins(0, 0, 0, 0)
         self.spin_length = QSpinBox()
         self.spin_length.setRange(6, 32)
         self.spin_length.setValue(10)
@@ -148,15 +159,18 @@ class PasswordResetPage(QWidget):
         self.chk_chiffres = QCheckBox("Chiffres")
         self.chk_speciaux = QCheckBox("Caractères spéciaux")
         self.chk_identique = QCheckBox("Mot de passe identique pour tout le lot")
-        self.chk_force_change = QCheckBox("Forcer le changement à la prochaine connexion")
         self.chk_maj.setChecked(True)
         self.chk_chiffres.setChecked(True)
-        policy_layout.addRow("Longueur :", self.spin_length)
+        custom_form.addRow("Longueur :", self.spin_length)
         chars_row = QHBoxLayout()
         for chk in (self.chk_maj, self.chk_chiffres, self.chk_speciaux, self.chk_identique):
             chars_row.addWidget(chk)
         chars_row.addStretch()
-        policy_layout.addRow("Options :", chars_row)
+        custom_form.addRow("Options :", chars_row)
+        self.custom_policy_widget.setVisible(False)
+        policy_layout.addRow("", self.custom_policy_widget)
+
+        self.chk_force_change = QCheckBox("Forcer le changement à la prochaine connexion")
         policy_layout.addRow("", self.chk_force_change)
 
         self.radio_policy_eleve.toggled.connect(self._sync_policy_fields)
@@ -205,15 +219,31 @@ class PasswordResetPage(QWidget):
     # -- Politique -------------------------------------------------------------
 
     def _sync_policy_fields(self) -> None:
-        if self.radio_policy_eleve.isChecked():
-            p = self.config.politique_mdp_eleve
-        else:
-            p = self.config.politique_mdp_personnel
+        p = self.config.politique_mdp_eleve if self.radio_policy_eleve.isChecked() else self.config.politique_mdp_personnel
         self.spin_length.setValue(p.longueur)
         self.chk_maj.setChecked(p.majuscules)
         self.chk_chiffres.setChecked(p.chiffres)
         self.chk_speciaux.setChecked(p.caracteres_speciaux)
         self.chk_identique.setChecked(p.mot_de_passe_identique)
+        self.policy_summary_label.setText(self._policy_summary_text(p))
+
+    @staticmethod
+    def _policy_summary_text(p: PasswordPolicy) -> str:
+        options = []
+        if p.majuscules:
+            options.append("majuscules")
+        if p.chiffres:
+            options.append("chiffres")
+        if p.caracteres_speciaux:
+            options.append("caractères spéciaux")
+        options_text = ", ".join(options) if options else "minuscules uniquement"
+        identique = " — identique pour tout le lot" if p.mot_de_passe_identique else ""
+        return f"{p.longueur} caractères ({options_text}){identique}"
+
+    def _on_customize_toggled(self, checked: bool) -> None:
+        self.custom_policy_widget.setVisible(checked)
+        if not checked:
+            self._sync_policy_fields()
 
     def _current_policy(self) -> PasswordPolicy:
         return PasswordPolicy(
