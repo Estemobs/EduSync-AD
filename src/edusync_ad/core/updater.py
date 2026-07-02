@@ -13,7 +13,7 @@ from urllib.error import URLError
 import json
 
 RELEASES_API_URL = "https://api.github.com/repos/estemobs/EduSync-AD/releases/latest"
-CURRENT_VERSION = "1.0.7"
+CURRENT_VERSION = "1.0.8"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:

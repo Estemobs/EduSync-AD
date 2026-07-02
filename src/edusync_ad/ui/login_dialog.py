@@ -127,6 +127,16 @@ class LoginDialog(QDialog):
             QMessageBox.warning(self, "Champs requis", "Tous les champs sont obligatoires.")
             return
 
+        if self.debug_checkbox.isChecked():
+            if self._debug_console is None:
+                self._debug_console = DebugConsole(self)
+            self._debug_console.start()
+            self._debug_console.show()
+            self._debug_console.raise_()
+            self._debug_console.activateWindow()
+        elif self._debug_console is not None:
+            self._debug_console.stop()
+
         self.connect_button.setEnabled(False)
         self._set_status("connecting", "Connexion en cours…")
 
