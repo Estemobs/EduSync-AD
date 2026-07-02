@@ -103,6 +103,7 @@ class LoginDialog(QDialog):
         form.addRow("Nom d'utilisateur", self.username_edit)
         form.addRow("Mot de passe", self.password_edit)
         form.addRow("", self.remember_checkbox)
+        form.addRow("", self.remember_password_checkbox)
         form.addRow("", self.debug_checkbox)
 
         status_layout = QHBoxLayout()
