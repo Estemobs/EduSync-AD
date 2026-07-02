@@ -94,6 +94,13 @@ class CreateAccountsPage(QWidget):
     def update_config(self, config: AppConfig) -> None:
         self.config = config
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # Une OU créée ailleurs (ex. Explorateur AD) doit apparaître ici sans
+        # avoir à cliquer manuellement sur "Charger les OUs depuis l'AD".
+        if self.ad_connection.domain is not None:
+            self._on_load_ous_clicked(silent=True)
+
     # -- Construction de l'interface -----------------------------------------
 
     def _build_ui(self) -> None:
@@ -270,15 +277,17 @@ class CreateAccountsPage(QWidget):
 
     # -- OU cible ---------------------------------------------------------------
 
-    def _on_load_ous_clicked(self) -> None:
+    def _on_load_ous_clicked(self, *, silent: bool = False) -> None:
         if self.ad_connection.domain is None:
-            QMessageBox.warning(self, "Non connecté", "Connectez-vous d'abord à l'AD.")
+            if not silent:
+                QMessageBox.warning(self, "Non connecté", "Connectez-vous d'abord à l'AD.")
             return
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
         try:
             ous = self.ad_connection.list_ous(base_dn)
         except ADError as exc:
-            QMessageBox.critical(self, "Erreur AD", str(exc))
+            if not silent:
+                QMessageBox.critical(self, "Erreur AD", str(exc))
             return
 
         for combo in (self.classe_parent_ou_combo, self.default_ou_combo):

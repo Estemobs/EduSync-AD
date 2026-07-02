@@ -161,12 +161,16 @@ class SettingsPage(QWidget):
         self.eleve_policy_form = _PasswordPolicyForm(config.politique_mdp_eleve)
         self.personnel_policy_form = _PasswordPolicyForm(config.politique_mdp_personnel)
 
-        save_button = QPushButton("Enregistrer les paramètres")
-        save_button.clicked.connect(self._save)
+        self.save_button = QPushButton("💾 Enregistrer les paramètres")
+        self.save_button.setStyleSheet(
+            "QPushButton { font-weight: 600; padding: 8px 18px; font-size: 14px; }"
+        )
+        self.save_button.clicked.connect(self._save)
+        save_button = self.save_button  # utilisé plus bas pour l'ajout au layout
 
-        self.save_confirmation_label = QLabel("✓ Paramètres enregistrés")
+        self.save_confirmation_label = QLabel("✓ Paramètres enregistrés avec succès")
         self.save_confirmation_label.setStyleSheet(
-            "color: #1f9d55; font-weight: 600; padding: 4px 0;"
+            "color: #1f9d55; font-weight: 600; padding: 4px 0; font-size: 13px;"
         )
         self.save_confirmation_label.setVisible(False)
 
@@ -276,5 +280,19 @@ class SettingsPage(QWidget):
             langue=self.langue_combo.currentData(),
         )
         self._on_save(config)
+
         self.save_confirmation_label.setVisible(True)
         QTimer.singleShot(2500, lambda: self.save_confirmation_label.setVisible(False))
+
+        self.save_button.setText("✓ Enregistré !")
+        self.save_button.setStyleSheet(
+            "QPushButton { font-weight: 600; padding: 8px 18px; font-size: 14px; "
+            "background-color: #1f9d55; color: white; }"
+        )
+        QTimer.singleShot(2000, self._reset_save_button)
+
+    def _reset_save_button(self) -> None:
+        self.save_button.setText("💾 Enregistrer les paramètres")
+        self.save_button.setStyleSheet(
+            "QPushButton { font-weight: 600; padding: 8px 18px; font-size: 14px; }"
+        )

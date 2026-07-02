@@ -117,6 +117,37 @@ def test_create_ou(ad):
     assert ad.ou_exists(new_ou_dn) is True
 
 
+def test_ou_is_empty_true_for_empty_ou(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    new_ou_dn = f"ou=4emeC,ou=eleves,{BASE_DN}"
+    ad.create_ou(new_ou_dn, "4emeC")
+    assert ad.ou_is_empty(new_ou_dn) is True
+
+
+def test_ou_is_empty_false_when_containing_a_user(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    assert ad.ou_is_empty(OU_3EMEA_DN) is False  # contient déjà "Existing User"
+
+
+def test_delete_ou(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    new_ou_dn = f"ou=4emeD,ou=eleves,{BASE_DN}"
+    ad.create_ou(new_ou_dn, "4emeD")
+    assert ad.ou_exists(new_ou_dn) is True
+    ad.delete_ou(new_ou_dn)
+    assert ad.ou_exists(new_ou_dn) is False
+
+
+def test_rename_ou(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    old_dn = f"ou=4emeE,ou=eleves,{BASE_DN}"
+    ad.create_ou(old_dn, "4emeE")
+    ad.rename_ou(old_dn, "4emeF")
+    new_dn = f"ou=4emeF,ou=eleves,{BASE_DN}"
+    assert ad.ou_exists(new_dn) is True
+    assert ad.ou_exists(old_dn) is False
+
+
 def test_create_group_and_add_user(ad):
     ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
     ad.create_group(GROUP_3EMEA_DN, "3emeA")

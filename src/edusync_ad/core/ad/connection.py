@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-from ldap3 import ALL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server
+from ldap3 import ALL, LEVEL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server
 from ldap3.core.exceptions import LDAPException
 
 from edusync_ad.core.ad.exceptions import (
@@ -292,6 +292,33 @@ class ADConnection:
             return
         if not conn.add(dn, ["top", "organizationalUnit"], {"ou": name}):
             raise ADError(conn.result.get("description", "Échec de création de l'OU."))
+
+    def ou_is_empty(self, ou_dn: str) -> bool:
+        """Vérifie qu'une OU ne contient aucun objet direct (protection
+        contre une suppression accidentelle d'une OU encore utilisée)."""
+        conn = self._require_connected()
+        if not conn.search(ou_dn, "(objectClass=*)", search_scope=LEVEL):
+            return True
+        # Filtre défensif : certaines implémentations (dont MOCK_SYNC) incluent
+        # parfois la base elle-même en scope LEVEL, ce qui ne devrait pas arriver.
+        children = [e for e in conn.entries if str(e.entry_dn).lower() != ou_dn.lower()]
+        return not children
+
+    @_logged_write("Suppression de l'OU")
+    def delete_ou(self, dn: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.delete(dn):
+            raise ADError(conn.result.get("description", "Échec de suppression de l'OU."))
+
+    @_logged_write("Renommage de l'OU")
+    def rename_ou(self, dn: str, new_name: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.modify_dn(dn, f"OU={new_name}"):
+            raise ADError(conn.result.get("description", "Échec du renommage de l'OU."))
 
     @_logged_write("Création du groupe")
     def create_group(self, dn: str, sam_account_name: str) -> None:

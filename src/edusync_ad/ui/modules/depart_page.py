@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QRadioButton,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -103,6 +104,7 @@ class DepartPage(QWidget):
 
     def update_config(self, config: AppConfig) -> None:
         self.config = config
+        self.delai_spin.setValue(config.delai_suppression_jours)
         self._refresh_pending_panel()
 
     def showEvent(self, event) -> None:
@@ -139,6 +141,21 @@ class DepartPage(QWidget):
         self._mode_group.addButton(self.radio_archivage)
         mode_layout.addWidget(self.radio_desactivation)
         mode_layout.addWidget(self.radio_archivage)
+
+        self.delai_widget = QWidget()
+        delai_row = QHBoxLayout(self.delai_widget)
+        delai_row.setContentsMargins(24, 0, 0, 0)
+        delai_row.addWidget(QLabel("Supprimer définitivement après :"))
+        self.delai_spin = QSpinBox()
+        self.delai_spin.setRange(1, 3650)
+        self.delai_spin.setSuffix(" jour(s)")
+        self.delai_spin.setValue(self.config.delai_suppression_jours)
+        delai_row.addWidget(self.delai_spin)
+        delai_row.addStretch()
+        self.delai_widget.setVisible(False)
+        mode_layout.addWidget(self.delai_widget)
+
+        self.radio_archivage.toggled.connect(self.delai_widget.setVisible)
 
         resolve_row = QHBoxLayout()
         self.resolve_button = QPushButton("3. Résoudre dans l'AD")
@@ -430,6 +447,7 @@ class DepartPage(QWidget):
                 sam_account_name=row.identifiant,
                 nom_complet=row.nom_complet or row.identifiant,
                 session_id=self.session_id,
+                delai_jours=self.delai_spin.value(),
             )
 
     # -- Suppressions en attente ----------------------------------------------
@@ -455,12 +473,15 @@ class DepartPage(QWidget):
             self.pending_table.setItem(i, 1, QTableWidgetItem(entry["nom_complet"] or ""))
             moved_at = entry["moved_at"][:10]
             self.pending_table.setItem(i, 2, QTableWidgetItem(moved_at))
+            delai = entry.get("delai_jours")
+            if delai is None:
+                delai = self.config.delai_suppression_jours
             try:
                 dt = datetime.fromisoformat(entry["moved_at"])
-                echeance = (dt + timedelta(days=self.config.delai_suppression_jours)).strftime("%Y-%m-%d")
+                echeance = (dt + timedelta(days=delai)).strftime("%Y-%m-%d")
             except ValueError:
                 echeance = "?"
-            self.pending_table.setItem(i, 3, QTableWidgetItem(echeance))
+            self.pending_table.setItem(i, 3, QTableWidgetItem(f"{echeance}  ({delai} j.)"))
         self.cancel_pending_button.setEnabled(False)
 
     def _on_process_pending_clicked(self) -> None:

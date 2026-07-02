@@ -50,6 +50,11 @@ ACTION_TYPES = [
     "ajout_groupe",
     "retrait_groupe",
     "activation_compte",
+    "creation_ou",
+    "renommage_ou",
+    "suppression_ou",
+    "creation_groupe",
+    "creation_utilisateur_manuel",
 ]
 
 ACTION_LABELS = {
@@ -66,6 +71,11 @@ ACTION_LABELS = {
     "ajout_groupe": "Ajout à un groupe",
     "retrait_groupe": "Retrait d'un groupe",
     "activation_compte": "Activation de compte",
+    "creation_ou": "Création d'OU",
+    "renommage_ou": "Renommage d'OU",
+    "suppression_ou": "Suppression d'OU",
+    "creation_groupe": "Création de groupe",
+    "creation_utilisateur_manuel": "Création manuelle d'utilisateur",
 }
 
 

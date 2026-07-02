@@ -80,6 +80,9 @@ class AuditLog:
             )
             """
         )
+        pending_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(pending_deletions)")}
+        if "delai_jours" not in pending_cols:
+            self._conn.execute("ALTER TABLE pending_deletions ADD COLUMN delai_jours INTEGER")
         self._conn.commit()
 
     def log(self, entry: ActionLogEntry) -> None:
@@ -215,16 +218,20 @@ class AuditLog:
     # -- File d'attente de suppressions différées ----------------------------
 
     def add_pending_deletion(
-        self, user_dn: str, sam_account_name: str, nom_complet: str, session_id: str
+        self, user_dn: str, sam_account_name: str, nom_complet: str, session_id: str,
+        delai_jours: int,
     ) -> None:
+        """`delai_jours` est figé au moment de l'archivage — modifier le délai
+        par défaut dans les Paramètres n'affecte pas les suppressions déjà
+        programmées, seulement les nouvelles."""
         moved_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         self._conn.execute(
             """
             INSERT OR REPLACE INTO pending_deletions
-                (user_dn, sam_account_name, nom_complet, moved_at, session_id)
-            VALUES (?, ?, ?, ?, ?)
+                (user_dn, sam_account_name, nom_complet, moved_at, session_id, delai_jours)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (user_dn, sam_account_name, nom_complet, moved_at, session_id),
+            (user_dn, sam_account_name, nom_complet, moved_at, session_id, delai_jours),
         )
         self._conn.commit()
 
@@ -234,30 +241,28 @@ class AuditLog:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def count_due_deletions(self, delay_days: int) -> int:
-        threshold = self._threshold_iso(delay_days)
-        row = self._conn.execute(
-            "SELECT COUNT(*) FROM pending_deletions WHERE moved_at <= ?", (threshold,)
-        ).fetchone()
-        return row[0]
+    def count_due_deletions(self, default_delai_jours: int) -> int:
+        return len(self.get_due_deletions(default_delai_jours))
 
-    def get_due_deletions(self, delay_days: int) -> list[dict]:
-        threshold = self._threshold_iso(delay_days)
-        rows = self._conn.execute(
-            "SELECT * FROM pending_deletions WHERE moved_at <= ? ORDER BY moved_at ASC",
-            (threshold,),
-        ).fetchall()
-        return [dict(row) for row in rows]
+    def get_due_deletions(self, default_delai_jours: int) -> list[dict]:
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        due = []
+        for row in self.get_pending_deletions():
+            delai = row.get("delai_jours")
+            if delai is None:
+                delai = default_delai_jours
+            try:
+                moved_at = datetime.fromisoformat(row["moved_at"])
+            except ValueError:
+                continue
+            if moved_at + timedelta(days=delai) <= now:
+                due.append(row)
+        return due
 
     def remove_pending_deletion(self, user_dn: str) -> None:
         self._conn.execute("DELETE FROM pending_deletions WHERE user_dn = ?", (user_dn,))
         self._conn.commit()
-
-    @staticmethod
-    def _threshold_iso(delay_days: int) -> str:
-        from datetime import timedelta
-        threshold = datetime.now(timezone.utc) - timedelta(days=delay_days)
-        return threshold.isoformat(timespec="seconds")
 
     def close(self) -> None:
         self._conn.close()

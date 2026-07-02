@@ -108,7 +108,7 @@ def _make_audit():
 
 def test_add_and_get_pending_deletions():
     log = _make_audit()
-    log.add_pending_deletion("CN=test,DC=x", "test.user", "Test User", "sess1")
+    log.add_pending_deletion("CN=test,DC=x", "test.user", "Test User", "sess1", delai_jours=30)
     pending = log.get_pending_deletions()
     assert len(pending) == 1
     assert pending[0]["sam_account_name"] == "test.user"
@@ -116,7 +116,7 @@ def test_add_and_get_pending_deletions():
 
 def test_count_due_deletions_zero_when_recent():
     log = _make_audit()
-    log.add_pending_deletion("CN=test,DC=x", "test.user", "Test User", "sess1")
+    log.add_pending_deletion("CN=test,DC=x", "test.user", "Test User", "sess1", delai_jours=30)
     # Délai 30 jours — l'entrée vient d'être ajoutée → pas encore échue
     assert log.count_due_deletions(30) == 0
 
@@ -133,8 +133,24 @@ def test_count_due_deletions_nonzero_when_past_delay():
     assert log.count_due_deletions(30) == 1
 
 
+def test_due_deletion_uses_per_entry_delai_not_global_default():
+    log = _make_audit()
+    # Archivé il y a 10 jours avec un délai court (5 jours) choisi pour ce lot
+    # → doit être échu même si le délai par défaut global est plus long (30).
+    past_ts = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat(timespec="seconds")
+    log._conn.execute(
+        "INSERT INTO pending_deletions "
+        "(user_dn, sam_account_name, nom_complet, moved_at, session_id, delai_jours) "
+        "VALUES (?,?,?,?,?,?)",
+        ("CN=short,DC=x", "short.user", "Short User", past_ts, "sess3", 5),
+    )
+    log._conn.commit()
+    due = log.get_due_deletions(default_delai_jours=30)
+    assert {d["sam_account_name"] for d in due} == {"short.user"}
+
+
 def test_remove_pending_deletion():
     log = _make_audit()
-    log.add_pending_deletion("CN=test,DC=x", "test.user", "Test User", "sess1")
+    log.add_pending_deletion("CN=test,DC=x", "test.user", "Test User", "sess1", delai_jours=30)
     log.remove_pending_deletion("CN=test,DC=x")
     assert log.get_pending_deletions() == []

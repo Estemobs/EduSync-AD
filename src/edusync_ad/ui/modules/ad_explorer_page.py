@@ -17,6 +17,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -46,6 +47,7 @@ from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
+from edusync_ad.core.identifiers import clean_token
 from edusync_ad.core.models import PasswordPolicy
 from edusync_ad.core.passwords import generate_random_password
 
@@ -78,6 +80,7 @@ class ADExplorerPage(QWidget):
         self.session_id = session_id
 
         self._current_user: dict | None = None
+        self._current_ou_dn: str | None = None
         self._all_users: list[dict] = []  # liste complète avant filtre recherche
         self._build_ui()
 
@@ -141,6 +144,9 @@ class ADExplorerPage(QWidget):
         self.search_edit.setPlaceholderText("Rechercher par nom ou identifiant…")
         self.search_edit.textChanged.connect(self._on_search_changed)
         search_row.addWidget(self.search_edit)
+        self.create_user_btn = QPushButton("Créer un utilisateur…")
+        self.create_user_btn.clicked.connect(self._on_create_user_clicked)
+        search_row.addWidget(self.create_user_btn)
         center_layout.addLayout(search_row)
 
         self.user_count_label = QLabel("Sélectionnez une OU ou un groupe.")
@@ -265,16 +271,20 @@ class ADExplorerPage(QWidget):
         ou_dn = item.data(0, Qt.ItemDataRole.UserRole)
         if not ou_dn:
             return
+        self._load_users_for_ou(ou_dn, item.text(0))
+
+    def _load_users_for_ou(self, ou_dn: str, label: str) -> None:
         try:
             users = self.ad_connection.list_users_in_ou(ou_dn)
         except ADError as exc:
             QMessageBox.critical(self, "Erreur", str(exc))
             return
+        self._current_ou_dn = ou_dn
         self._all_users = users
         self._current_user = None
         self.search_edit.clear()
         self._populate_user_table(users)
-        self.user_count_label.setText(f"{len(users)} utilisateur(s) dans « {item.text(0)} »")
+        self.user_count_label.setText(f"{len(users)} utilisateur(s) dans « {label} »")
         self._clear_detail_panel()
 
     def _on_group_selected(self, item: QListWidgetItem) -> None:
@@ -303,13 +313,22 @@ class ADExplorerPage(QWidget):
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
         parent_dn = item.data(0, Qt.ItemDataRole.UserRole) if item else base_dn
         parent_label = item.text(0) if item else self.ad_connection.domain
+        is_real_ou = item is not None and item.parent() is not None  # exclut la racine du domaine
 
         menu = QMenu(self)
-        action = menu.addAction(f"Créer une sous-OU dans « {parent_label} »…")
+        create_action = menu.addAction(f"Créer une sous-OU dans « {parent_label} »…")
+        rename_action = menu.addAction(f"Renommer « {parent_label} »…") if is_real_ou else None
+        delete_action = menu.addAction(f"Supprimer « {parent_label} »…") if is_real_ou else None
         chosen = menu.exec(self.ou_tree.viewport().mapToGlobal(pos))
-        if chosen != action:
-            return
 
+        if chosen == create_action:
+            self._create_ou(parent_dn)
+        elif chosen is not None and chosen == rename_action:
+            self._rename_ou(item, parent_dn)
+        elif chosen is not None and chosen == delete_action:
+            self._delete_ou(item, parent_dn)
+
+    def _create_ou(self, parent_dn: str) -> None:
         name, ok = QInputDialog.getText(self, "Créer une OU", "Nom de la nouvelle OU :")
         name = name.strip()
         if not ok or not name:
@@ -329,6 +348,72 @@ class ADExplorerPage(QWidget):
             self.audit_log.record(
                 "creation_ou", name, "echec", self.session_id,
                 ou_destination=new_dn, simulation=simulation, detail=str(exc),
+            )
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    def _rename_ou(self, item: QTreeWidgetItem, ou_dn: str) -> None:
+        current_name = item.text(0)
+        new_name, ok = QInputDialog.getText(self, "Renommer l'OU", "Nouveau nom :", text=current_name)
+        new_name = new_name.strip()
+        if not ok or not new_name or new_name == current_name:
+            return
+
+        simulation = self.ad_connection.dry_run
+        parent_dn = ou_dn.split(",", 1)[1] if "," in ou_dn else ""
+        new_dn = f"OU={new_name},{parent_dn}"
+        try:
+            self.ad_connection.rename_ou(ou_dn, new_name)
+            self.audit_log.record(
+                "renommage_ou", current_name, "succes", self.session_id,
+                ou_source=ou_dn, ou_destination=new_dn, simulation=simulation,
+            )
+            QMessageBox.information(self, "Succès", f"OU renommée : {new_dn}{'  (simulé)' if simulation else ''}.")
+            self._load_ou_tree()
+        except ADError as exc:
+            self.audit_log.record(
+                "renommage_ou", current_name, "echec", self.session_id,
+                ou_source=ou_dn, simulation=simulation, detail=str(exc),
+            )
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    def _delete_ou(self, item: QTreeWidgetItem, ou_dn: str) -> None:
+        name = item.text(0)
+        try:
+            empty = self.ad_connection.ou_is_empty(ou_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+        if not empty:
+            QMessageBox.warning(
+                self, "OU non vide",
+                f"« {name} » contient encore des objets (comptes, groupes, sous-OU…) — "
+                "elle ne peut pas être supprimée tant qu'elle n'est pas vide, pour éviter "
+                "une suppression accidentelle en masse.",
+            )
+            return
+
+        # Protection contre la suppression accidentelle : on exige de retaper
+        # le nom exact de l'OU plutôt qu'une simple case Oui/Non.
+        typed, ok = QInputDialog.getText(
+            self, "Confirmer la suppression",
+            f"Cette action est irréversible. Retapez « {name} » pour confirmer la suppression :",
+        )
+        if not ok or typed.strip() != name:
+            return
+
+        simulation = self.ad_connection.dry_run
+        try:
+            self.ad_connection.delete_ou(ou_dn)
+            self.audit_log.record(
+                "suppression_ou", name, "succes", self.session_id,
+                ou_source=ou_dn, simulation=simulation,
+            )
+            QMessageBox.information(self, "Succès", f"OU supprimée{'  (simulé)' if simulation else ''}.")
+            self._load_ou_tree()
+        except ADError as exc:
+            self.audit_log.record(
+                "suppression_ou", name, "echec", self.session_id,
+                ou_source=ou_dn, simulation=simulation, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -558,21 +643,22 @@ class ADExplorerPage(QWidget):
         if not self._current_user:
             return
         sam = self._current_user.get("sAMAccountName", "")
-        policy = PasswordPolicy(longueur=12, majuscules=True, chiffres=True, caracteres_speciaux=True)
-        new_pwd = generate_random_password(policy)
 
-        reply = QMessageBox.question(
-            self, "Réinitialiser le mot de passe",
-            f"Nouveau mot de passe généré pour {sam} :\n\n{new_pwd}\n\nConfirmer ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
+        dialog = ResetPasswordDialog(sam, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
+        new_pwd = dialog.result_password
+        force_change = dialog.result_force_change
 
         simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.set_password(self._current_user["dn"], new_pwd)
-            self.audit_log.record("reinitialisation_mdp", sam, "succes", self.session_id, simulation=simulation)
+            if force_change:
+                self.ad_connection.enable_account(self._current_user["dn"], force_password_change=True)
+            self.audit_log.record(
+                "reinitialisation_mdp", sam, "succes", self.session_id, simulation=simulation,
+                detail="force_change=1" if force_change else "",
+            )
             QMessageBox.information(self, "Succès", f"Mot de passe réinitialisé{'  (simulé)' if simulation else ''}.")
         except ADError as exc:
             self.audit_log.record("reinitialisation_mdp", sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
@@ -607,6 +693,64 @@ class ADExplorerPage(QWidget):
         except ADError as exc:
             action_type = "activation_compte" if is_disabled else "desactivation_compte"
             self.audit_log.record(action_type, sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    def _on_create_user_clicked(self) -> None:
+        if self.ad_connection.domain is None:
+            QMessageBox.warning(self, "Non connecté", "Connectez-vous d'abord à l'AD.")
+            return
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            ous = self.ad_connection.list_ous(base_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur AD", str(exc))
+            return
+        if not ous:
+            QMessageBox.warning(self, "Aucune OU", "Créez d'abord une OU pour pouvoir y placer l'utilisateur.")
+            return
+
+        dialog = CreateUserDialog(ous, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        prenom, nom = dialog.result_prenom, dialog.result_nom
+        sam = dialog.result_sam
+        ou_dn = dialog.result_ou_dn
+        dn = f"CN={prenom} {nom},{ou_dn}"
+        attributes = {
+            "sAMAccountName": sam,
+            "givenName": prenom,
+            "sn": nom,
+            "displayName": f"{prenom} {nom}",
+            "userPrincipalName": f"{sam}@{self.ad_connection.domain}",
+        }
+        if dialog.result_email:
+            attributes["mail"] = dialog.result_email
+
+        simulation = self.ad_connection.dry_run
+        try:
+            self.ad_connection.create_user(
+                dn, attributes, password=dialog.result_password,
+                force_password_change=dialog.result_force_change,
+            )
+            self.audit_log.record(
+                "creation_utilisateur_manuel", sam, "succes", self.session_id,
+                ou_destination=ou_dn, simulation=simulation,
+            )
+            QMessageBox.information(
+                self, "Succès",
+                f"Utilisateur créé : {sam}{'  (simulé)' if simulation else ''}.\n\n"
+                f"Mot de passe : {dialog.result_password}",
+            )
+            if self._current_ou_dn == ou_dn:
+                leaf = ou_dn.split(",", 1)[0]
+                label = leaf.split("=", 1)[-1] if "=" in leaf else leaf
+                self._load_users_for_ou(ou_dn, label)
+        except ADError as exc:
+            self.audit_log.record(
+                "creation_utilisateur_manuel", sam, "echec", self.session_id,
+                ou_destination=ou_dn, simulation=simulation, detail=str(exc),
+            )
             QMessageBox.critical(self, "Erreur", str(exc))
 
     def _on_manage_groups(self) -> None:
@@ -663,6 +807,146 @@ class ADExplorerPage(QWidget):
 
 
 # -- Dialogues -----------------------------------------------------------------
+
+class ResetPasswordDialog(QDialog):
+    """Réinitialisation d'un mot de passe individuel : aléatoire ou personnalisé,
+    avec option de forcer le changement à la prochaine connexion."""
+
+    def __init__(self, sam: str, parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Réinitialiser le mot de passe de {sam}")
+        self.setMinimumWidth(420)
+        self.result_password = ""
+        self.result_force_change = False
+
+        self.password_edit = QLineEdit()
+        gen_btn = QPushButton("Générer aléatoirement")
+        gen_btn.clicked.connect(self._on_generate)
+        password_row = QHBoxLayout()
+        password_row.addWidget(self.password_edit)
+        password_row.addWidget(gen_btn)
+
+        self.chk_force_change = QCheckBox("Forcer le changement à la prochaine connexion")
+
+        form = QFormLayout()
+        form.addRow("Mot de passe :", password_row)
+        form.addRow("", self.chk_force_change)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+        self._on_generate()
+
+    def _on_generate(self) -> None:
+        policy = PasswordPolicy(longueur=12, majuscules=True, chiffres=True, caracteres_speciaux=True)
+        self.password_edit.setText(generate_random_password(policy))
+
+    def _on_accept(self) -> None:
+        password = self.password_edit.text()
+        if not password:
+            QMessageBox.warning(self, "Mot de passe vide", "Saisissez un mot de passe.")
+            return
+        self.result_password = password
+        self.result_force_change = self.chk_force_change.isChecked()
+        self.accept()
+
+
+class CreateUserDialog(QDialog):
+    """Création manuelle d'un utilisateur avec tous les champs disponibles."""
+
+    def __init__(self, ous: list[tuple[str, str]], parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Créer un utilisateur")
+        self.setMinimumWidth(440)
+
+        self.result_prenom = ""
+        self.result_nom = ""
+        self.result_sam = ""
+        self.result_ou_dn = ""
+        self.result_email = ""
+        self.result_password = ""
+        self.result_force_change = False
+
+        self.prenom_edit = QLineEdit()
+        self.nom_edit = QLineEdit()
+        self.sam_edit = QLineEdit()
+        self.sam_edit.setPlaceholderText("généré automatiquement, modifiable")
+        self._sam_manually_edited = False
+        self.sam_edit.textEdited.connect(lambda: setattr(self, "_sam_manually_edited", True))
+        self.prenom_edit.textChanged.connect(self._suggest_sam)
+        self.nom_edit.textChanged.connect(self._suggest_sam)
+
+        self.ou_combo = QComboBox()
+        for dn, name in sorted(ous, key=lambda x: x[0]):
+            self.ou_combo.addItem(f"{name}  ({dn})", dn)
+
+        self.email_edit = QLineEdit()
+        self.email_edit.setPlaceholderText("(optionnel)")
+
+        self.password_edit = QLineEdit()
+        self.password_edit.setEchoMode(QLineEdit.EchoMode.Normal)
+        gen_btn = QPushButton("Générer aléatoirement")
+        gen_btn.clicked.connect(self._on_generate_password)
+        password_row = QHBoxLayout()
+        password_row.addWidget(self.password_edit)
+        password_row.addWidget(gen_btn)
+
+        self.chk_force_change = QCheckBox("Forcer le changement de mot de passe à la prochaine connexion")
+
+        form = QFormLayout()
+        form.addRow("Prénom *", self.prenom_edit)
+        form.addRow("Nom *", self.nom_edit)
+        form.addRow("Identifiant (sAMAccountName) *", self.sam_edit)
+        form.addRow("OU *", self.ou_combo)
+        form.addRow("Email", self.email_edit)
+        form.addRow("Mot de passe *", password_row)
+        form.addRow("", self.chk_force_change)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+        self._on_generate_password()
+
+    def _suggest_sam(self) -> None:
+        if self._sam_manually_edited:
+            return
+        prenom = clean_token(self.prenom_edit.text())
+        nom = clean_token(self.nom_edit.text())
+        if prenom and nom:
+            self.sam_edit.setText(f"{prenom}.{nom}")
+
+    def _on_generate_password(self) -> None:
+        policy = PasswordPolicy(longueur=12, majuscules=True, chiffres=True, caracteres_speciaux=True)
+        self.password_edit.setText(generate_random_password(policy))
+
+    def _on_accept(self) -> None:
+        prenom = self.prenom_edit.text().strip()
+        nom = self.nom_edit.text().strip()
+        sam = self.sam_edit.text().strip()
+        password = self.password_edit.text()
+        if not prenom or not nom or not sam or not password:
+            QMessageBox.warning(self, "Champs requis", "Prénom, nom, identifiant et mot de passe sont obligatoires.")
+            return
+
+        self.result_prenom = prenom
+        self.result_nom = nom
+        self.result_sam = sam
+        self.result_ou_dn = self.ou_combo.currentData()
+        self.result_email = self.email_edit.text().strip()
+        self.result_password = password
+        self.result_force_change = self.chk_force_change.isChecked()
+        self.accept()
+
 
 class EditAttributeDialog(QDialog):
     def __init__(self, user_attrs: dict, editable_attrs: list[tuple[str, str]], parent=None) -> None:
