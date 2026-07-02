@@ -35,6 +35,7 @@ from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import MigrationRow
+from edusync_ad.ui.progress_dialog import BatchProgressDialog
 
 MIGRATION_COLUMNS = ["identifiant", "ou_source", "ou_destination"]
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "OU source", "OU destination", "État"]
@@ -386,43 +387,42 @@ class MigrationPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        success_count = 0
-        for i, row in enumerate(self._rows):
-            if row.user_dn is None:
-                continue
-            try:
-                self._migrate_one(row)
-            except ADError as exc:
-                row.erreur = str(exc)
+        to_process = [(i, row) for i, row in enumerate(self._rows) if row.user_dn is not None]
+        labels = [row.identifiant for _, row in to_process]
+
+        def run_one(entry: tuple[int, MigrationRow]) -> None:
+            _, row = entry
+            self._migrate_one(row)
+
+        def on_result(position: int, success: bool, message: str) -> None:
+            i, row = to_process[position]
+            if success:
                 self.audit_log.record(
-                    "migration_compte",
-                    row.identifiant,
-                    "echec",
-                    self.session_id,
-                    ou_source=row.ou_source,
-                    ou_destination=row.ou_destination,
-                    simulation=simulation,
-                    detail=str(exc),
-                )
-                self._set_table_row(i, row)
-            else:
-                success_count += 1
-                self.audit_log.record(
-                    "migration_compte",
-                    row.identifiant,
-                    "succes",
-                    self.session_id,
-                    ou_source=row.ou_source,
-                    ou_destination=row.ou_destination,
-                    simulation=simulation,
+                    "migration_compte", row.identifiant, "succes", self.session_id,
+                    ou_source=row.ou_source, ou_destination=row.ou_destination, simulation=simulation,
                 )
                 etat = _ETAT_SIMULE if simulation else _ETAT_MIGRE
                 self._set_table_row(i, row, etat=etat)
+            else:
+                row.erreur = message
+                self.audit_log.record(
+                    "migration_compte", row.identifiant, "echec", self.session_id,
+                    ou_source=row.ou_source, ou_destination=row.ou_destination,
+                    simulation=simulation, detail=message,
+                )
+                self._set_table_row(i, row)
+
+        dialog = BatchProgressDialog(
+            "Migration en cours…", to_process, labels, run_one,
+            on_item_result=on_result, parent=self,
+        )
+        dialog.start()
+        dialog.exec()
 
         QMessageBox.information(
             self,
             "Migration terminée",
-            f"{success_count}/{len(to_migrate)} compte(s) migré(s){suffix_sim}.",
+            f"{dialog.success_count}/{len(to_migrate)} compte(s) migré(s){suffix_sim}.",
         )
 
     def _migrate_one(self, row: MigrationRow) -> None:

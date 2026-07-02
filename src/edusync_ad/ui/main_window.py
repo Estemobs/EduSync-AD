@@ -18,6 +18,7 @@ from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
 from edusync_ad.ui.audit_page import AuditPage
+from edusync_ad.ui.log_view_widget import LogViewWidget
 from edusync_ad.ui.modules.ad_explorer_page import ADExplorerPage
 from edusync_ad.ui.modules.create_accounts_page import CreateAccountsPage
 from edusync_ad.ui.modules.depart_page import DepartPage
@@ -137,6 +138,7 @@ class MainWindow(QMainWindow):
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
         self.audit_page = AuditPage(self.audit_log)
+        self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
             self.config, self._on_config_saved, ad_domain=self.ad_connection.domain
         )
@@ -148,7 +150,8 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.password_reset_page)     # index 4
         self.pages.addWidget(self.ad_explorer_page)        # index 5
         self.pages.addWidget(self.audit_page)              # index 6
-        self.pages.addWidget(self.settings_page)           # index 7
+        self.pages.addWidget(self.logs_page)                # index 7
+        self.pages.addWidget(self.settings_page)           # index 8
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -160,7 +163,8 @@ class MainWindow(QMainWindow):
             ("Réinit. mots de passe", 4),
             ("Explorateur AD", 5),
             ("Journal d'actions", 6),
-            ("Paramètres", 7),
+            ("Journal de l'application", 7),
+            ("Paramètres", 8),
         ]
         for label, index in nav_items:
             button = QPushButton(label)

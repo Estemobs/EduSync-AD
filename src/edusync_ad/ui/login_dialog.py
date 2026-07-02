@@ -24,6 +24,7 @@ from edusync_ad.core.crypto import (
     save_remembered_connection,
 )
 from edusync_ad.ui.debug_console import DebugConsole
+from edusync_ad.ui.log_manager import AppLogManager
 
 STATUS_COLORS = {"disconnected": "#d24343", "connecting": "#e0a72b", "connected": "#2fa84f"}
 
@@ -134,8 +135,8 @@ class LoginDialog(QDialog):
             self._debug_console.show()
             self._debug_console.raise_()
             self._debug_console.activateWindow()
-        elif self._debug_console is not None:
-            self._debug_console.stop()
+        else:
+            AppLogManager.instance().set_debug(False)
 
         self.connect_button.setEnabled(False)
         self._set_status("connecting", "Connexion en cours…")

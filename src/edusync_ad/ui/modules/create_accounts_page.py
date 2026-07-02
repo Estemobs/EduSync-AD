@@ -53,6 +53,7 @@ from edusync_ad.core.identifiers import (
 )
 from edusync_ad.core.models import AccountType, GeneratedUser, RawUserRow
 from edusync_ad.core.passwords import generate_passwords_for_batch
+from edusync_ad.ui.progress_dialog import BatchProgressDialog
 
 IDENTIFIER_PRESET_KEYS = list(PRESETS.keys()) + list(CAMEL_PRESETS)
 
@@ -398,49 +399,48 @@ class CreateAccountsPage(QWidget):
 
     def _on_validate_clicked(self) -> None:
         self._sync_generated_from_table()
-        to_create = [u for u in self._generated if not u.erreur and not u.doublon_ad]
-        if not to_create:
+        to_process = [(i, u) for i, u in enumerate(self._generated) if not u.erreur]
+        if not to_process:
             QMessageBox.warning(self, "Rien à créer", "Aucune ligne valide à créer.")
             return
 
         simulation = self.ad_connection.dry_run
-        success_count = 0
-        for row_index, user in enumerate(self._generated):
-            if user.erreur:
-                continue
-            try:
-                self._create_one_user(user)
-            except ADError as exc:
-                user.erreur = str(exc)
+        labels = [u.identifiant or u.nom_complet for _, u in to_process]
+
+        def run_one(entry: tuple[int, GeneratedUser]) -> None:
+            _, user = entry
+            self._create_one_user(user)
+
+        def on_result(position: int, success: bool, message: str) -> None:
+            row_index, user = to_process[position]
+            if success:
                 self.audit_log.record(
-                    "creation_compte",
-                    user.identifiant,
-                    "echec",
-                    self.session_id,
-                    ou_destination=user.ou_cible,
-                    simulation=simulation,
-                    detail=str(exc),
+                    "creation_compte", user.identifiant, "succes", self.session_id,
+                    ou_destination=user.ou_cible, simulation=simulation,
                 )
             else:
-                success_count += 1
+                user.erreur = message
                 self.audit_log.record(
-                    "creation_compte",
-                    user.identifiant,
-                    "succes",
-                    self.session_id,
-                    ou_destination=user.ou_cible,
-                    simulation=simulation,
+                    "creation_compte", user.identifiant, "echec", self.session_id,
+                    ou_destination=user.ou_cible, simulation=simulation, detail=message,
                 )
             self._set_preview_row(row_index, user)
+
+        dialog = BatchProgressDialog(
+            "Création des comptes en cours…", to_process, labels, run_one,
+            on_item_result=on_result, parent=self,
+        )
+        dialog.start()
+        dialog.exec()
 
         suffix = " (mode simulation, aucune écriture réelle)" if simulation else ""
         QMessageBox.information(
             self,
             "Création terminée",
-            f"{success_count}/{len(to_create)} compte(s) créé(s) avec succès{suffix}.",
+            f"{dialog.success_count}/{len(to_process)} compte(s) créé(s) avec succès{suffix}.",
         )
 
-        if success_count:
+        if dialog.success_count:
             self._propose_export()
 
     def _create_one_user(self, user: GeneratedUser) -> None:
