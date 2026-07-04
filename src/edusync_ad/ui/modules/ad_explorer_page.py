@@ -43,6 +43,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ldap3.utils.dn import escape_rdn
+
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
@@ -334,7 +336,7 @@ class ADExplorerPage(QWidget):
         if not ok or not name:
             return
 
-        new_dn = f"OU={name},{parent_dn}"
+        new_dn = f"OU={escape_rdn(name)},{parent_dn}"
         simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.create_ou(new_dn, name)
@@ -360,7 +362,7 @@ class ADExplorerPage(QWidget):
 
         simulation = self.ad_connection.dry_run
         parent_dn = ou_dn.split(",", 1)[1] if "," in ou_dn else ""
-        new_dn = f"OU={new_name},{parent_dn}"
+        new_dn = f"OU={escape_rdn(new_name)},{parent_dn}"
         try:
             self.ad_connection.rename_ou(ou_dn, new_name)
             self.audit_log.record(
@@ -452,7 +454,7 @@ class ADExplorerPage(QWidget):
         if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.selected_dn:
             return
 
-        dn = f"CN={name},{dialog.selected_dn}"
+        dn = f"CN={escape_rdn(name)},{dialog.selected_dn}"
         simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.create_group(dn, name)
@@ -724,7 +726,7 @@ class ADExplorerPage(QWidget):
         prenom, nom = dialog.result_prenom, dialog.result_nom
         sam = dialog.result_sam
         ou_dn = dialog.result_ou_dn
-        dn = f"CN={prenom} {nom},{ou_dn}"
+        dn = f"CN={escape_rdn(f'{prenom} {nom}')},{ou_dn}"
         attributes = {
             "sAMAccountName": sam,
             "givenName": prenom,

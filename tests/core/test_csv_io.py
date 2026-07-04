@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from edusync_ad.core.csv_io import export_created_accounts, load_preview, load_rows
+from edusync_ad.core.csv_io import export_created_accounts, export_failed_rows, load_preview, load_rows
 from edusync_ad.core.models import GeneratedUser, RawUserRow
 
 EXAMPLE_CSV = (
@@ -121,3 +121,19 @@ def test_export_created_accounts(tmp_path):
     content = out_path.read_text(encoding="utf-8-sig")
     assert "prenom;nom;identifiant;mot_de_passe;adresse_mail" in content
     assert "Thomas;Martin;thomas.martin;Ab12$xyz;thomas.martin@lycee-victor-hugo.fr" in content
+
+
+def test_export_failed_rows_is_reimportable(tmp_path):
+    out_path = tmp_path / "echecs.csv"
+    failed = [
+        GeneratedUser(
+            source=RawUserRow(prenom="Léa", nom="Petit", classe="4emeB"),
+            identifiant="", mot_de_passe="", adresse_mail="", ou_cible="",
+            erreur="OU introuvable et non créée : OU=4emeB,...",
+        )
+    ]
+    export_failed_rows(out_path, failed)
+    content = out_path.read_text(encoding="utf-8-sig")
+    assert "prenom;nom;classe;ou;email;date_naissance;numero;erreur" in content
+    assert "Léa;Petit;4emeB" in content
+    assert "OU introuvable" in content

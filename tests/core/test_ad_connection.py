@@ -221,3 +221,26 @@ def test_raise_ad_error_falls_back_to_default_message():
     with pytest.raises(ADError) as exc_info:
         _raise_ad_error(conn, "Échec générique.")
     assert str(exc_info.value) == "Échec générique."
+
+
+def test_create_user_and_search_by_cn_with_special_characters(ad):
+    """Un nom contenant une apostrophe/parenthèse ne doit pas casser le filtre
+    LDAP ni le DN construit (regression pour l'échappement escape_filter_chars
+    / escape_rdn)."""
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    from ldap3.utils.dn import escape_rdn
+    cn = "O'Brien (Jean-Pierre)"
+    new_dn = f"cn={escape_rdn(cn)},{OU_3EMEA_DN}"
+    ad.create_user(new_dn, {"sAMAccountName": "jean-pierre.obrien", "cn": cn})
+    found_dn = ad.search_user_by_cn(cn, OU_3EMEA_DN)
+    assert found_dn is not None
+
+
+def test_rename_ou_with_special_characters(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    ou_dn = f"ou=Temp,{BASE_DN}"
+    ad.create_ou(ou_dn, "Temp")
+    new_name = "Terminale S (2026)"
+    ad.rename_ou(ou_dn, new_name)
+    from ldap3.utils.dn import escape_rdn
+    assert ad.ou_exists(f"ou={escape_rdn(new_name)},{BASE_DN}") is True

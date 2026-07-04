@@ -134,3 +134,25 @@ def export_created_accounts(path: Path, users: list[GeneratedUser]) -> None:
                     user.adresse_mail,
                 ]
             )
+
+
+def export_failed_rows(path: Path, users: list[GeneratedUser]) -> None:
+    """Exporte les lignes en échec au même format que l'import — permet de
+    reprendre un lot après correction sans recréer les comptes déjà réussis."""
+    with path.open("w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f, delimiter=";")
+        writer.writerow(["prenom", "nom", "classe", "ou", "email", "date_naissance", "numero", "erreur"])
+        for user in users:
+            row = user.source
+            writer.writerow(
+                [
+                    row.prenom,
+                    row.nom,
+                    row.classe or "",
+                    row.ou or "",
+                    row.email or "",
+                    row.date_naissance or "",
+                    row.numero or "",
+                    user.erreur or "",
+                ]
+            )

@@ -9,20 +9,27 @@ coloré selon le résultat.
 
 from __future__ import annotations
 
+import logging
 from typing import Callable, Sequence
 
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
+
+from edusync_ad.core.ad.exceptions import ADError
+
+logger = logging.getLogger("edusync_ad.batch")
 
 _COLOR_SUCCESS = QColor("#2f9e56")
 _COLOR_FAILURE = QColor("#d64545")
@@ -48,8 +55,17 @@ class _BatchWorker(QThread):
                 continue
             try:
                 self._run_one(item)
-            except Exception as exc:  # remonté à l'appelant via le signal
+            except ADError as exc:
+                # Refus AD attendu (droits, doublon, referral…) — message
+                # métier direct, pas une anomalie de code.
                 self.item_done.emit(index, False, str(exc))
+            except Exception as exc:
+                # Bug de programmation (TypeError, AttributeError…) : à ne
+                # jamais confondre avec un refus AD légitime. La stacktrace
+                # complète va dans le journal debug ; l'utilisateur ne voit
+                # qu'un message générique mais distinct visuellement.
+                logger.exception("Erreur interne inattendue en traitant %r", item)
+                self.item_done.emit(index, False, f"Erreur interne : {exc}")
             else:
                 self.item_done.emit(index, True, "")
         self.all_done.emit()
@@ -97,6 +113,16 @@ class BatchProgressPanel(QWidget):
 
         self.setVisible(False)
 
+        app = QApplication.instance()
+        if app is not None:
+            # Filet de sécurité : si l'app se ferme pendant qu'un lot tourne,
+            # Qt détruirait le QThread encore actif → crash sec ("QThread:
+            # Destroyed while thread is still running"). On l'arrête proprement.
+            app.aboutToQuit.connect(self._on_app_quit)
+
+    def is_running(self) -> bool:
+        return self._worker is not None and self._worker.isRunning()
+
     def start(
         self,
         title: str,
@@ -105,6 +131,13 @@ class BatchProgressPanel(QWidget):
         run_one: Callable[[object], None],
         on_item_result: Callable[[int, bool, str], None] | None = None,
     ) -> None:
+        if self.is_running():
+            QMessageBox.warning(
+                self, "Traitement en cours",
+                "Une action par lot est déjà en cours sur cette page — attendez sa fin avant d'en lancer une autre.",
+            )
+            return
+
         self.title_label.setText(title)
         self._items = items
         self._labels = labels
@@ -125,6 +158,10 @@ class BatchProgressPanel(QWidget):
         self._worker = _BatchWorker(items, run_one)
         self._worker.item_done.connect(self._on_item_done)
         self._worker.all_done.connect(self._on_all_done)
+        # Signal natif de QThread (fin réelle du thread système), distinct de
+        # all_done (fin logique du traitement) — assure le nettoyage Qt propre
+        # de l'objet thread une fois qu'il a effectivement terminé.
+        self._worker.finished.connect(self._worker.deleteLater)
         self._worker.start()
 
     def _on_item_done(self, index: int, success: bool, message: str) -> None:
@@ -157,3 +194,8 @@ class BatchProgressPanel(QWidget):
         self.cancel_button.setVisible(False)
         self.status_label.setText(self.status_label.text() + "  — Terminé")
         self.finished.emit()
+
+    def _on_app_quit(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.cancel()
+            self._worker.wait(5000)

@@ -32,6 +32,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from ldap3.utils.dn import escape_rdn
+
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
@@ -41,6 +43,7 @@ from edusync_ad.core.csv_io import (
     EXPECTED_COLUMNS,
     REQUIRED_COLUMNS,
     export_created_accounts,
+    export_failed_rows,
     load_preview,
     load_rows,
 )
@@ -587,6 +590,8 @@ class CreateAccountsPage(QWidget):
             )
             if self.progress_panel.success_count:
                 self._propose_export()
+            if self.progress_panel.failure_count:
+                self._propose_failed_export()
 
         self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
         self.progress_panel.start(
@@ -595,7 +600,7 @@ class CreateAccountsPage(QWidget):
 
     def _create_one_user(self, user: GeneratedUser) -> None:
         prenom, nom = user.source.prenom, user.source.nom
-        dn = f"CN={prenom} {nom},{user.ou_cible}"
+        dn = f"CN={escape_rdn(f'{prenom} {nom}')},{user.ou_cible}"
         attributes = {
             "sAMAccountName": user.identifiant,
             "givenName": prenom,
@@ -607,7 +612,7 @@ class CreateAccountsPage(QWidget):
         self.ad_connection.create_user(dn, attributes, password=user.mot_de_passe)
 
         if user.groupe:
-            group_dn = f"CN={user.groupe},{user.ou_cible}"
+            group_dn = f"CN={escape_rdn(user.groupe)},{user.ou_cible}"
             if not self.ad_connection.group_exists(group_dn):
                 self.ad_connection.create_group(group_dn, user.groupe)
             self.ad_connection.add_user_to_group(dn, group_dn)
@@ -620,6 +625,27 @@ class CreateAccountsPage(QWidget):
             return
         export_created_accounts(Path(path), [u for u in self._generated if not u.erreur])
         QMessageBox.information(self, "Export terminé", f"Export enregistré vers {path}")
+
+    def _propose_failed_export(self) -> None:
+        failed = [u for u in self._generated if u.erreur]
+        if not failed:
+            return
+        reply = QMessageBox.question(
+            self, "Lignes en échec",
+            f"{len(failed)} ligne(s) ont échoué. Exporter ces lignes (au même format que "
+            "l'import) pour les corriger et les réimporter, sans recréer les comptes déjà "
+            "réussis ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter les lignes en échec", "comptes_echecs.csv", "CSV (*.csv)"
+        )
+        if not path:
+            return
+        export_failed_rows(Path(path), failed)
+        QMessageBox.information(self, "Export terminé", f"Lignes en échec exportées vers {path}")
 
     def _on_cancel_clicked(self) -> None:
         self._generated = []

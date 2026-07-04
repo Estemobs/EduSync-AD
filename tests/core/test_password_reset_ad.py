@@ -28,15 +28,21 @@ def make_factory():
         USER1_DN,
         {
             "objectClass": ["top", "person", "organizationalPerson", "user"],
+            "objectCategory": "person",
             "sAMAccountName": "thomas.martin",
             "cn": "Thomas Martin",
             "userAccountControl": 512,
+            # MOCK_SYNC ne calcule pas automatiquement le backlink memberOf à
+            # partir du "member" du groupe (contrairement à un vrai AD) — on
+            # le pose explicitement pour que le mock reflète un AD réel.
+            "memberOf": [GROUP_DN],
         },
     )
     seed.strategy.add_entry(
         USER2_DN,
         {
             "objectClass": ["top", "person", "organizationalPerson", "user"],
+            "objectCategory": "person",
             "sAMAccountName": "alice.durand",
             "cn": "Alice Durand",
             "userAccountControl": 514,  # désactivé

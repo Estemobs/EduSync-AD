@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import functools
 import logging
+import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
 from ldap3 import ALL, LEVEL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server
 from ldap3.core.exceptions import LDAPException
+from ldap3.utils.conv import escape_filter_chars
+from ldap3.utils.dn import escape_rdn
 
 from edusync_ad.core.ad.exceptions import (
     ADAuthError,
@@ -38,22 +41,43 @@ UAC_NORMAL_ACCOUNT_DISABLED = 514  # NORMAL_ACCOUNT | ACCOUNTDISABLE
 CONNECT_TIMEOUT_SECONDS = 8
 
 
+def _locked(func):
+    """Sérialise l'accès à la connexion ldap3 partagée entre threads.
+
+    Une action par lot écrit depuis un QThread pendant que le thread principal
+    peut lire au même moment (rafraîchir une liste d'OU, un autre module…).
+    La stratégie SYNC par défaut de ldap3 n'est pas thread-safe : sans ce
+    verrou, les réponses LDAP peuvent être attribuées à la mauvaise requête de
+    façon aléatoire (bugs intermittents difficiles à reproduire)."""
+
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 def _logged_write(action_desc: str):
     """Journalise chaque opération d'écriture AD (visible dans le menu Journal),
-    pour comprendre en direct ce qui se passe pendant une action par lot."""
+    pour comprendre en direct ce qui se passe pendant une action par lot.
+    Sérialise aussi l'accès à la connexion (voir _locked) — le verrou est
+    réentrant (RLock) car create_user rappelle set_password/enable_account,
+    elles-mêmes décorées ici."""
 
     def decorator(func):
         @functools.wraps(func)
         def wrapper(self, dn, *args, **kwargs):
             logger.debug("%s : %s", action_desc, dn)
-            try:
-                result = func(self, dn, *args, **kwargs)
-            except Exception as exc:
-                logger.warning("Échec — %s (%s) : %s", action_desc, dn, exc)
-                raise
-            else:
-                logger.debug("OK — %s : %s", action_desc, dn)
-                return result
+            with self._lock:
+                try:
+                    result = func(self, dn, *args, **kwargs)
+                except Exception as exc:
+                    logger.warning("Échec — %s (%s) : %s", action_desc, dn, exc)
+                    raise
+                else:
+                    logger.debug("OK — %s : %s", action_desc, dn)
+                    return result
 
         return wrapper
 
@@ -157,6 +181,9 @@ class ADConnection:
         self.used_ldaps: bool = False
         self.dry_run: bool = False
         self._conn: Connection | None = None
+        # Réentrant : create_user (déjà verrouillé) rappelle set_password et
+        # enable_account, elles-mêmes verrouillées.
+        self._lock = threading.RLock()
 
     @staticmethod
     def format_bind_user(domain: str, username: str) -> str:
@@ -241,6 +268,7 @@ class ADConnection:
 
     # -- Lecture (toujours réelle, même en mode simulation) -----------------
 
+    @_locked
     def search_existing_identifiers(self, base_dn: str) -> set[str]:
         conn = self._require_connected()
         if not conn.search(
@@ -253,10 +281,12 @@ class ADConnection:
             if entry["sAMAccountName"].value
         }
 
+    @_locked
     def ou_exists(self, ou_dn: str) -> bool:
         conn = self._require_connected()
         return bool(conn.search(ou_dn, "(objectClass=organizationalUnit)", search_scope=BASE))
 
+    @_locked
     def group_exists(self, group_dn: str) -> bool:
         conn = self._require_connected()
         return bool(conn.search(group_dn, "(objectClass=group)", search_scope=BASE))
@@ -320,6 +350,7 @@ class ADConnection:
         if not conn.add(dn, ["top", "organizationalUnit"], {"ou": name}):
             _raise_ad_error(conn, "Échec de création de l'OU.")
 
+    @_locked
     def ou_is_empty(self, ou_dn: str) -> bool:
         """Vérifie qu'une OU ne contient aucun objet direct (protection
         contre une suppression accidentelle d'une OU encore utilisée)."""
@@ -344,7 +375,7 @@ class ADConnection:
         conn = self._require_connected()
         if self.dry_run:
             return
-        if not conn.modify_dn(dn, f"OU={new_name}"):
+        if not conn.modify_dn(dn, f"OU={escape_rdn(new_name)}"):
             _raise_ad_error(conn, "Échec du renommage de l'OU.")
 
     @_logged_write("Création du groupe")
@@ -372,21 +403,25 @@ class ADConnection:
         if not conn.modify(group_dn, {"member": [(MODIFY_DELETE, [user_dn])]}):
             _raise_ad_error(conn, "Échec de suppression du groupe.")
 
+    @_locked
     def search_user_by_cn(self, cn: str, ou_dn: str) -> str | None:
         """Retourne le DN du premier utilisateur avec ce CN dans l'OU, ou None."""
         conn = self._require_connected()
-        if not conn.search(ou_dn, f"(cn={cn})", search_scope=SUBTREE, attributes=["cn"]):
+        if not conn.search(
+            ou_dn, f"(cn={escape_filter_chars(cn)})", search_scope=SUBTREE, attributes=["cn"]
+        ):
             return None
         if not conn.entries:
             return None
         return str(conn.entries[0].entry_dn)
 
+    @_locked
     def search_user_by_sam(self, sam_account_name: str, base_dn: str) -> tuple[str, str] | None:
         """Retourne (dn, cn) du premier utilisateur correspondant, ou None."""
         conn = self._require_connected()
         if not conn.search(
             base_dn,
-            f"(sAMAccountName={sam_account_name})",
+            f"(sAMAccountName={escape_filter_chars(sam_account_name)})",
             search_scope=SUBTREE,
             attributes=["cn"],
         ):
@@ -423,15 +458,19 @@ class ADConnection:
         if not conn.delete(dn):
             _raise_ad_error(conn, "Échec de suppression du compte.")
 
+    @_locked
     def search_user_groups(self, user_dn: str, base_dn: str) -> list[str]:
         """Retourne les DN des groupes dont l'utilisateur est membre."""
         conn = self._require_connected()
-        if not conn.search(base_dn, f"(member={user_dn})", search_scope=SUBTREE, attributes=["cn"]):
+        if not conn.search(
+            base_dn, f"(member={escape_filter_chars(user_dn)})", search_scope=SUBTREE, attributes=["cn"]
+        ):
             return []
         return [str(entry.entry_dn) for entry in conn.entries]
 
     # -- Module 5 : réinitialisation de mot de passe en masse -----------------
 
+    @_locked
     def list_users_in_ou(self, ou_dn: str) -> list[dict]:
         """Retourne les attributs essentiels des utilisateurs d'une OU."""
         conn = self._require_connected()
@@ -452,35 +491,34 @@ class ADConnection:
             })
         return result
 
+    @_locked
     def list_users_in_group(self, group_dn: str, base_dn: str) -> list[dict]:
-        """Retourne les attributs essentiels des membres d'un groupe."""
+        """Retourne les attributs essentiels des membres d'un groupe.
+
+        Une seule requête filtrée sur `memberOf` (backlink AD maintenu
+        automatiquement) au lieu d'une recherche par membre (N+1 requêtes,
+        lent sur un gros groupe)."""
         conn = self._require_connected()
-        if not conn.search(group_dn, "(objectClass=group)", search_scope=BASE, attributes=["member"]):
+        if not conn.search(
+            base_dn,
+            f"(&(objectClass=user)(objectCategory=person)(memberOf={escape_filter_chars(group_dn)}))",
+            search_scope=SUBTREE,
+            attributes=["sAMAccountName", "cn", "userAccountControl"],
+        ):
             return []
-        entries = conn.entries
-        if not entries:
-            return []
-        members = entries[0]["member"].values or []
-        result = []
-        for member_dn in members:
-            if not conn.search(
-                str(member_dn),
-                "(&(objectClass=user)(objectCategory=person))",
-                search_scope=BASE,
-                attributes=["sAMAccountName", "cn", "userAccountControl"],
-            ):
-                continue
-            for e in conn.entries:
-                result.append({
-                    "dn": str(e.entry_dn),
-                    "sam": str(e["sAMAccountName"].value),
-                    "cn": str(e["cn"].value),
-                    "disabled": bool(int(e["userAccountControl"].value or 0) & 2),
-                })
-        return result
+        return [
+            {
+                "dn": str(e.entry_dn),
+                "sam": str(e["sAMAccountName"].value),
+                "cn": str(e["cn"].value),
+                "disabled": bool(int(e["userAccountControl"].value or 0) & 2),
+            }
+            for e in conn.entries
+        ]
 
     # -- Module 6 : explorateur AD -------------------------------------------
 
+    @_locked
     def list_ous(self, base_dn: str) -> list[tuple[str, str]]:
         """Retourne (dn, nom) de toutes les OUs sous base_dn."""
         conn = self._require_connected()
@@ -488,6 +526,7 @@ class ADConnection:
             return []
         return [(str(e.entry_dn), str(e["ou"].value)) for e in conn.entries if e["ou"].value]
 
+    @_locked
     def list_groups(self, base_dn: str) -> list[tuple[str, str]]:
         """Retourne (dn, cn) de tous les groupes sous base_dn."""
         conn = self._require_connected()
@@ -495,6 +534,7 @@ class ADConnection:
             return []
         return [(str(e.entry_dn), str(e["cn"].value)) for e in conn.entries if e["cn"].value]
 
+    @_locked
     def get_user_attributes(self, user_dn: str) -> dict:
         """Retourne les attributs principaux d'un utilisateur.
 
@@ -543,6 +583,6 @@ class ADConnection:
         conn = self._require_connected()
         if self.dry_run:
             return
-        new_rdn = f"CN={new_cn}"
+        new_rdn = f"CN={escape_rdn(new_cn)}"
         if not conn.modify_dn(user_dn, new_rdn):
             _raise_ad_error(conn, "Échec du renommage.")

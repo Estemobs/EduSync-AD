@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from PyQt6.QtCore import QThread, pyqtSignal
 from PyQt6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QDialog,
     QFormLayout,
@@ -25,6 +28,8 @@ from edusync_ad.core.crypto import (
 )
 from edusync_ad.ui.debug_console import DebugConsole
 from edusync_ad.ui.log_manager import AppLogManager
+
+logger = logging.getLogger("edusync_ad.login")
 
 STATUS_COLORS = {"disconnected": "#d24343", "connecting": "#e0a72b", "connected": "#2fa84f"}
 
@@ -54,6 +59,12 @@ class _ConnectWorker(QThread):
             result = self._ad.connect(self._domain, self._controller, self._username, self._password)
         except ADError as exc:
             self.failed.emit(str(exc))
+        except Exception as exc:
+            # Ne doit normalement jamais arriver (bug de programmation plutôt
+            # qu'un refus AD) — sans ce filet, le thread s'arrête en silence
+            # et le bouton "Se connecter" reste bloqué indéfiniment.
+            logger.exception("Erreur interne inattendue pendant la connexion")
+            self.failed.emit(f"Erreur interne : {exc}")
         else:
             self.succeeded.emit(result)
 
@@ -117,6 +128,16 @@ class LoginDialog(QDialog):
         layout.addWidget(self.connect_button)
 
         self._prefill_remembered_connection()
+
+        app = QApplication.instance()
+        if app is not None:
+            # Filet de sécurité : évite un crash "QThread: Destroyed while
+            # thread is still running" si l'app se ferme pendant la connexion.
+            app.aboutToQuit.connect(self._on_app_quit)
+
+    def _on_app_quit(self) -> None:
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.wait(5000)
 
     def _prefill_remembered_connection(self) -> None:
         remembered = load_remembered_connection()
