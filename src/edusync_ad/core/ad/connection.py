@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import functools
 import logging
+import ssl
 import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
-from ldap3 import ALL, LEVEL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server
+from ldap3 import ALL, LEVEL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.utils.dn import escape_rdn
@@ -98,10 +99,33 @@ class ConnectResult:
 
 
 def default_connection_factory(
-    controller: str, bind_user: str, password: str, use_ssl: bool
+    controller: str,
+    bind_user: str,
+    password: str,
+    use_ssl: bool,
+    *,
+    verify_certificate: bool = True,
+    ca_cert_path: str | None = None,
 ) -> Connection:
+    tls = None
+    if use_ssl:
+        # Par défaut, on exige un certificat valide (chaîne de confiance +
+        # nom d'hôte) pour éviter qu'un LDAPS "chiffré" n'authentifie pas
+        # réellement le contrôleur de domaine (interception possible sans
+        # que rien ne le signale). Les AD internes utilisent presque toujours
+        # un certificat émis par leur propre autorité (AD CS) : `ca_cert_path`
+        # permet de pointer vers ce certificat racine exporté (.pem/.crt) sans
+        # avoir à l'installer dans le magasin de confiance du poste.
+        # `verify_certificate=False` reste disponible pour un dépannage
+        # explicite (l'utilisateur doit l'activer sciemment), jamais par défaut.
+        validate = ssl.CERT_REQUIRED if verify_certificate else ssl.CERT_NONE
+        tls = Tls(validate=validate, ca_certs_file=ca_cert_path)
     server = Server(
-        controller, use_ssl=use_ssl, get_info=ALL, connect_timeout=CONNECT_TIMEOUT_SECONDS
+        controller,
+        use_ssl=use_ssl,
+        tls=tls,
+        get_info=ALL,
+        connect_timeout=CONNECT_TIMEOUT_SECONDS,
     )
     return Connection(
         server,
@@ -118,6 +142,23 @@ def default_connection_factory(
         # suivre les référrals ici.
         auto_referrals=False,
     )
+
+
+def _is_certificate_error(exc: BaseException) -> bool:
+    """Détecte une erreur de validation de certificat TLS (chaîne de confiance
+    ou nom d'hôte) au sein d'une exception ldap3, qui enveloppe l'erreur SSL
+    d'origine sans exposer un type dédié."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, ssl.SSLCertVerificationError):
+            return True
+        text = str(current).lower()
+        if "certificate verify failed" in text or "certificate_verify_failed" in text:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 def _raise_ad_error(conn: Connection, default_message: str) -> None:
@@ -172,7 +213,13 @@ def _format_pwd_last_set(value) -> str:
 
 
 class ADConnection:
-    def __init__(self, connection_factory: ConnectionFactory | None = None) -> None:
+    def __init__(
+        self,
+        connection_factory: ConnectionFactory | None = None,
+        *,
+        verify_certificate: bool = True,
+        ca_cert_path: str | None = None,
+    ) -> None:
         self._connection_factory = connection_factory or default_connection_factory
         self.state = ConnectionState.DISCONNECTED
         self.domain: str | None = None
@@ -180,6 +227,11 @@ class ADConnection:
         self.username: str | None = None
         self.used_ldaps: bool = False
         self.dry_run: bool = False
+        # Validation du certificat LDAPS — voir default_connection_factory.
+        # Sans effet si une connection_factory personnalisée est injectée
+        # (tests, notamment), qui reçoit toujours les 4 arguments historiques.
+        self.verify_certificate = verify_certificate
+        self.ca_cert_path = ca_cert_path
         self._conn: Connection | None = None
         # Réentrant : create_user (déjà verrouillé) rappelle set_password et
         # enable_account, elles-mêmes verrouillées.
@@ -233,14 +285,40 @@ class ADConnection:
         self, controller: str, bind_user: str, password: str, *, use_ssl: bool
     ) -> Connection:
         try:
-            conn = self._connection_factory(controller, bind_user, password, use_ssl)
+            if self._connection_factory is default_connection_factory:
+                conn = self._connection_factory(
+                    controller,
+                    bind_user,
+                    password,
+                    use_ssl,
+                    verify_certificate=self.verify_certificate,
+                    ca_cert_path=self.ca_cert_path,
+                )
+            else:
+                conn = self._connection_factory(controller, bind_user, password, use_ssl)
         except LDAPException as exc:
+            if _is_certificate_error(exc):
+                raise ADCertificateError(
+                    "Le certificat présenté par le contrôleur de domaine en LDAPS n'a pas pu être "
+                    "validé (autorité inconnue ou nom d'hôte ne correspondant pas). Un AD interne "
+                    "utilise presque toujours un certificat émis par sa propre autorité (AD CS) : "
+                    "renseignez son certificat racine (.pem/.crt) dans les paramètres de connexion, "
+                    "ou désactivez explicitement la vérification si vous acceptez le risque."
+                ) from exc
             raise ADUnreachableError(f"Serveur injoignable : {exc}") from exc
 
         try:
             logger.debug("Envoi de la requête bind à %s…", controller)
             bound = conn.bind()
         except LDAPException as exc:
+            if _is_certificate_error(exc):
+                raise ADCertificateError(
+                    "Le certificat présenté par le contrôleur de domaine en LDAPS n'a pas pu être "
+                    "validé (autorité inconnue ou nom d'hôte ne correspondant pas). Un AD interne "
+                    "utilise presque toujours un certificat émis par sa propre autorité (AD CS) : "
+                    "renseignez son certificat racine (.pem/.crt) dans les paramètres de connexion, "
+                    "ou désactivez explicitement la vérification si vous acceptez le risque."
+                ) from exc
             raise ADUnreachableError(f"Serveur injoignable ou délai dépassé : {exc}") from exc
 
         if not bound:
@@ -308,8 +386,25 @@ class ADConnection:
         if not conn.add(dn, ["top", "person", "organizationalPerson", "user"], attributes):
             _raise_ad_error(conn, "Échec de création du compte.")
         if password is not None:
-            self.set_password(dn, password)
-            self.enable_account(dn, force_password_change=force_password_change)
+            try:
+                self.set_password(dn, password)
+                self.enable_account(dn, force_password_change=force_password_change)
+            except ADError:
+                # Le compte a bien été créé dans l'AD (add() ci-dessus a réussi) mais
+                # reste désactivé et sans mot de passe si la suite échoue — on le
+                # supprime pour rester atomique plutôt que de laisser un compte
+                # orphelin invisible pour l'opérateur (qui ne verrait qu'un « échec »).
+                logger.warning(
+                    "Mot de passe/activation en échec juste après la création — "
+                    "suppression du compte orphelin : %s", dn,
+                )
+                try:
+                    conn.delete(dn)
+                except LDAPException:
+                    logger.warning(
+                        "Impossible de supprimer le compte orphelin %s — intervention manuelle requise.", dn,
+                    )
+                raise
 
     @_logged_write("Définition du mot de passe")
     def set_password(self, dn: str, password: str) -> None:
@@ -340,6 +435,16 @@ class ADConnection:
         if force_password_change:
             changes["pwdLastSet"] = [(MODIFY_REPLACE, [0])]
         if not conn.modify(dn, changes):
+            result = conn.result or {}
+            if (result.get("description") or "").lower() == "unwillingtoperform":
+                # Cas classique : AD refuse d'activer un compte qui n'a jamais eu de
+                # mot de passe défini (contrainte de sécurité du contrôleur de domaine,
+                # indépendante des droits de l'opérateur) — message brut sinon cryptique.
+                raise ADError(
+                    "Le contrôleur de domaine refuse d'activer ce compte : Active Directory "
+                    "n'autorise pas l'activation d'un compte sans mot de passe défini. "
+                    "Définissez d'abord un mot de passe (réinitialisation) avant de l'activer."
+                )
             _raise_ad_error(conn, "Échec d'activation du compte.")
 
     @_logged_write("Création de l'OU")
