@@ -1,4 +1,4 @@
-"""Tests de la fonction _load_ids_csv du Module 5 et de la génération de mots
+"""Tests de la fonction load_identifiers_csv du Module 5 et de la génération de mots
 de passe en lot pour la réinitialisation."""
 
 import tempfile
@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from edusync_ad.core.csv_io import has_identifier_column, load_identifiers_csv, load_names_csv
 from edusync_ad.core.models import PasswordPolicy
 from edusync_ad.core.passwords import generate_password, generate_passwords_for_batch
-from edusync_ad.ui.modules.password_reset_page import _load_ids_csv
 
 
-# -- _load_ids_csv -------------------------------------------------------------
+# -- load_identifiers_csv -------------------------------------------------------------
 
 def _write_csv(content: str, encoding: str = "utf-8") -> Path:
     tmp = Path(tempfile.mktemp(suffix=".csv"))
@@ -19,47 +19,75 @@ def _write_csv(content: str, encoding: str = "utf-8") -> Path:
     return tmp
 
 
-def test_load_ids_csv_semicolon_delimiter():
+def testload_identifiers_csv_semicolon_delimiter():
     p = _write_csv("identifiant;nom\nthomas.martin;Martin\nalice.durand;Durand\n")
-    ids = _load_ids_csv(p)
+    ids = load_identifiers_csv(p)
     assert ids == ["thomas.martin", "alice.durand"]
 
 
-def test_load_ids_csv_comma_delimiter():
+def testload_identifiers_csv_comma_delimiter():
     p = _write_csv("identifiant,nom\nthomas.martin,Martin\n")
-    ids = _load_ids_csv(p)
+    ids = load_identifiers_csv(p)
     assert ids == ["thomas.martin"]
 
 
-def test_load_ids_csv_skips_empty_lines():
+def testload_identifiers_csv_skips_empty_lines():
     p = _write_csv("identifiant\nthomas.martin\n\nalice.durand\n")
-    ids = _load_ids_csv(p)
+    ids = load_identifiers_csv(p)
     assert "" not in ids
     assert len(ids) == 2
 
 
-def test_load_ids_csv_latin1_encoding():
+def testload_identifiers_csv_latin1_encoding():
     p = _write_csv("identifiant\néléve.martin\n", encoding="latin-1")
-    ids = _load_ids_csv(p)
+    ids = load_identifiers_csv(p)
     assert len(ids) == 1
 
 
-def test_load_ids_csv_empty_file():
+def testload_identifiers_csv_empty_file():
     p = _write_csv("")
-    ids = _load_ids_csv(p)
+    ids = load_identifiers_csv(p)
     assert ids == []
 
 
-def test_load_ids_csv_header_only():
+def testload_identifiers_csv_header_only():
     p = _write_csv("identifiant\n")
-    ids = _load_ids_csv(p)
+    ids = load_identifiers_csv(p)
     assert ids == []
 
 
-def test_load_ids_csv_detects_login_column():
+def testload_identifiers_csv_detects_login_column():
     p = _write_csv("login;nom\nthomas.martin;Martin\n")
-    ids = _load_ids_csv(p)
+    ids = load_identifiers_csv(p)
     assert ids == ["thomas.martin"]
+
+
+# -- has_identifier_column / load_names_csv (le personnel administratif ne fournit
+# jamais d'identifiant AD, seulement prénom+nom) -------------------------------
+
+def test_has_identifier_column_true_when_present():
+    p = _write_csv("identifiant;nom\nthomas.martin;Martin\n")
+    assert has_identifier_column(p) is True
+
+
+def test_has_identifier_column_false_for_names_only():
+    p = _write_csv("prenom;nom\nThomas;Martin\n")
+    assert has_identifier_column(p) is False
+
+
+def test_load_names_csv_extracts_prenom_nom_pairs():
+    p = _write_csv("prenom;nom\nThomas;Martin\nAlice;Durand\n")
+    assert load_names_csv(p) == [("Thomas", "Martin"), ("Alice", "Durand")]
+
+
+def test_load_names_csv_returns_empty_without_prenom_nom_columns():
+    p = _write_csv("identifiant\nthomas.martin\n")
+    assert load_names_csv(p) == []
+
+
+def test_load_names_csv_skips_incomplete_rows():
+    p = _write_csv("prenom;nom\nThomas;Martin\n;Sansprenom\nAlice;\n")
+    assert load_names_csv(p) == [("Thomas", "Martin")]
 
 
 # -- génération de mots de passe en lot ---------------------------------------

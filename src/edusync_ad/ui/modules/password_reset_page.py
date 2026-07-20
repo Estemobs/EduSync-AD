@@ -41,6 +41,7 @@ from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
+from edusync_ad.core.csv_io import has_identifier_column, load_identifiers_csv, load_names_csv
 from edusync_ad.core.models import PasswordPolicy
 from edusync_ad.core.passwords import generate_password
 from edusync_ad.ui.progress_panel import BatchProgressPanel
@@ -147,6 +148,7 @@ class PasswordResetPage(QWidget):
 
         self._csv_path: Path | None = None
         self._csv_ids: list[str] = []
+        self._csv_names: list[tuple[str, str]] = []
 
         load_btn_row = QHBoxLayout()
         self.load_btn = QPushButton("2. Charger les utilisateurs")
@@ -324,18 +326,27 @@ class PasswordResetPage(QWidget):
     # -- Source ----------------------------------------------------------------
 
     def _pick_csv(self) -> None:
-        path_str, _ = QFileDialog.getOpenFileName(self, "Fichier CSV d'identifiants", "", "CSV (*.csv)")
+        path_str, _ = QFileDialog.getOpenFileName(self, "Fichier CSV (identifiants ou prénom/nom)", "", "CSV (*.csv)")
         if not path_str:
             return
         path = Path(path_str)
         try:
-            ids = _load_ids_csv(path)
+            # Le personnel administratif ne fournit jamais d'identifiant AD —
+            # seulement prénom/nom. On ne bascule sur les identifiants que si
+            # une colonne identifiant/login/sam est explicitement présente.
+            if has_identifier_column(path):
+                ids, names = load_identifiers_csv(path), []
+            else:
+                names = load_names_csv(path)
+                ids = [] if names else load_identifiers_csv(path)  # repli colonne unique historique
         except Exception as exc:
             QMessageBox.critical(self, "Erreur", str(exc))
             return
         self._csv_path = path
         self._csv_ids = ids
-        self.csv_label.setText(f"{path.name} — {len(ids)} identifiant(s)")
+        self._csv_names = names
+        total = len(ids) + len(names)
+        self.csv_label.setText(f"{path.name} — {total} identifiant(s)/nom(s)")
 
     def _on_source_changed(self, *_args) -> None:
         source = self._current_source()
@@ -407,7 +418,7 @@ class PasswordResetPage(QWidget):
                     return
                 users = self.ad_connection.list_users_in_group(group_dn, base_dn)
             else:
-                if not self._csv_ids:
+                if not self._csv_ids and not self._csv_names:
                     QMessageBox.warning(self, "Aucun CSV", "Importez un fichier CSV.")
                     return
                 users = self._resolve_csv_ids(base_dn)
@@ -433,10 +444,25 @@ class PasswordResetPage(QWidget):
             else:
                 dn, cn = result
                 users.append({"dn": dn, "sam": sam, "cn": cn, "disabled": False})
+        # Recherche par nom dans tout l'annuaire — cas du personnel
+        # administratif, qui ne fournit jamais d'identifiant AD.
+        for prenom, nom in self._csv_names:
+            full_name = f"{prenom} {nom}"
+            user_dn = self.ad_connection.search_user_by_cn(full_name, base_dn)
+            if user_dn is None:
+                not_found.append(full_name)
+                continue
+            attrs = self.ad_connection.get_user_attributes(user_dn)
+            users.append({
+                "dn": user_dn,
+                "sam": attrs.get("sAMAccountName", full_name),
+                "cn": attrs.get("cn", full_name),
+                "disabled": attrs.get("disabled", False),
+            })
         if not_found:
             QMessageBox.warning(
                 self, "Utilisateurs introuvables",
-                f"{len(not_found)} identifiant(s) non trouvé(s) :\n" + ", ".join(not_found[:20])
+                f"{len(not_found)} identifiant(s)/nom(s) non trouvé(s) :\n" + ", ".join(not_found[:20])
             )
         return users
 
@@ -581,29 +607,3 @@ class PasswordResetPage(QWidget):
         self.export_btn.setEnabled(False)
         self.generate_btn.setEnabled(False)
         self.load_info.setText("")
-
-
-def _load_ids_csv(path: Path) -> list[str]:
-    encodings = ["utf-8-sig", "utf-8", "latin-1"]
-    for encoding in encodings:
-        try:
-            text = path.read_text(encoding=encoding)
-            break
-        except UnicodeDecodeError:
-            continue
-    else:
-        raise ValueError("Impossible de décoder le fichier CSV.")
-
-    try:
-        dialect = csv.Sniffer().sniff(text[:4096], delimiters=",;\t|")
-        delimiter = dialect.delimiter
-    except csv.Error:
-        delimiter = ";"
-
-    reader = csv.reader(text.splitlines(), delimiter=delimiter)
-    rows = list(reader)
-    if not rows:
-        return []
-    headers = [h.strip().lower() for h in rows[0]]
-    col = next((i for i, h in enumerate(headers) if "identifiant" in h or "login" in h or "sam" in h), 0)
-    return [row[col].strip() for row in rows[1:] if len(row) > col and row[col].strip()]

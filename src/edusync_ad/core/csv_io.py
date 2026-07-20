@@ -120,6 +120,66 @@ def load_rows(
     return CsvImportResult(rows=rows, skipped_row_numbers=skipped)
 
 
+def has_identifier_column(path: Path) -> bool:
+    """Indique si le CSV a une colonne identifiant/login/sam explicite —
+    utilisé pour décider entre load_identifiers_csv et load_names_csv."""
+    text, _ = _read_text(path)
+    delimiter = detect_delimiter(text[:4096])
+    reader = csv.reader(text.splitlines(), delimiter=delimiter)
+    rows = list(reader)
+    if not rows:
+        return False
+    headers = [h.strip().lower() for h in rows[0]]
+    return any("identifiant" in h or "login" in h or "sam" in h for h in headers)
+
+
+def load_names_csv(path: Path) -> list[tuple[str, str]]:
+    """Charge des couples (prénom, nom) — un export du personnel
+    administratif ne contient jamais d'identifiant AD, seulement des noms.
+    Retourne une liste vide si le fichier n'a pas de colonnes prenom/nom
+    reconnaissables (l'appelant retombe alors sur load_identifiers_csv)."""
+    text, _ = _read_text(path)
+    delimiter = detect_delimiter(text[:4096])
+    reader = csv.reader(text.splitlines(), delimiter=delimiter)
+    rows = list(reader)
+    if not rows:
+        return []
+    headers = [h.strip().lower() for h in rows[0]]
+    prenom_col = next((i for i, h in enumerate(headers) if h in ("prenom", "prénom")), None)
+    nom_col = next((i for i, h in enumerate(headers) if h == "nom"), None)
+    if prenom_col is None or nom_col is None:
+        return []
+    names: list[tuple[str, str]] = []
+    for row in rows[1:]:
+        if len(row) > max(prenom_col, nom_col):
+            prenom, nom = row[prenom_col].strip(), row[nom_col].strip()
+            if prenom and nom:
+                names.append((prenom, nom))
+    return names
+
+
+def load_identifiers_csv(path: Path) -> list[str]:
+    """Charge une liste d'identifiants depuis un CSV à colonne unique dominante.
+
+    Utilisé par le Module 5 (réinitialisation de mot de passe par CSV) :
+    détecte automatiquement la colonne contenant l'identifiant (en-tête
+    contenant « identifiant », « login » ou « sam »), ou retombe sur la
+    première colonne si aucune ne correspond. Fonction pure (aucune
+    dépendance PyQt6) afin de rester testable sans environnement graphique.
+    """
+    text, _ = _read_text(path)
+    delimiter = detect_delimiter(text[:4096])
+    reader = csv.reader(text.splitlines(), delimiter=delimiter)
+    rows = list(reader)
+    if not rows:
+        return []
+    headers = [h.strip().lower() for h in rows[0]]
+    col = next(
+        (i for i, h in enumerate(headers) if "identifiant" in h or "login" in h or "sam" in h), 0
+    )
+    return [row[col].strip() for row in rows[1:] if len(row) > col and row[col].strip()]
+
+
 def export_created_accounts(path: Path, users: list[GeneratedUser]) -> None:
     with path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.writer(f, delimiter=";")

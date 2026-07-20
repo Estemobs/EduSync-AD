@@ -112,9 +112,11 @@ Un identifiant AD direct reste accepté si vous en disposez (colonne
 
 ### Réinitialisation MDP
 ```
-identifiant
-thomas.martin
+prenom;nom
+Thomas;Martin
 ```
+Un identifiant AD direct reste accepté (colonne `identifiant`, `login` ou
+`sam`, prioritaire s'il est présent).
 
 Des exemples sont disponibles dans le dossier [`exemples/`](exemples/).
 

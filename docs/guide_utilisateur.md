@@ -261,7 +261,7 @@ d'un groupe en début d'année.
 |--------|-------------|
 | **OU entière** | Tous les utilisateurs d'une OU (et ses sous-OUs) |
 | **Groupe AD** | Membres d'un groupe (cliquez **Actualiser** pour charger la liste) |
-| **Fichier CSV** | Colonne `identifiant` ou `login` |
+| **Fichier CSV** | `prenom;nom` (recherche par nom, aucun identifiant AD nécessaire) — ou colonne `identifiant`/`login`/`sam` directe si vous en disposez, prioritaire si présente |
 
 ### Flux de travail
 
