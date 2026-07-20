@@ -1,6 +1,6 @@
 # Guide utilisateur — EduSync AD
 
-**Version 1.0 — Français**
+**Version 1.1 — Français**
 
 EduSync AD est un outil de gestion du cycle de vie des comptes utilisateurs
 dans un Active Directory, conçu pour les administrateurs réseau des
@@ -20,6 +20,7 @@ dans un Active Directory, conçu pour les administrateurs réseau des
 8. [Module 6 — Explorateur AD](#8-module-6--explorateur-ad)
 9. [Journal d'actions](#9-journal-dactions)
 10. [Paramètres globaux](#10-paramètres-globaux)
+11. [Dépannage — Erreur de certificat LDAPS](#11-dépannage--erreur-de-certificat-ldaps)
 
 ---
 
@@ -45,6 +46,20 @@ avertissement.
 
 Cochez **Mémoriser la connexion** pour sauvegarder le domaine et
 l'utilisateur (chiffrés AES-256). Le mot de passe n'est jamais conservé.
+
+### Vérification du certificat LDAPS
+
+Deux champs supplémentaires contrôlent la validation du certificat présenté
+par le contrôleur de domaine en LDAPS :
+
+| Champ | Rôle |
+|-------|------|
+| **Vérifier le certificat du contrôleur en LDAPS** (coché par défaut) | Vérifie que le certificat présenté est valide et correspond bien au contrôleur — protège contre une interception du trafic. |
+| **Certificat CA (optionnel)** | Chemin vers le certificat racine de l'autorité qui a émis le certificat du contrôleur (fichier `.pem`/`.crt`), avec un bouton **Parcourir…**. |
+
+Si la connexion échoue avec un message du type *« Le certificat présenté par
+le contrôleur de domaine en LDAPS n'a pas pu être validé »*, voir la section
+[11. Dépannage — Erreur de certificat LDAPS](#11-dépannage--erreur-de-certificat-ldaps).
 
 ---
 
@@ -359,3 +374,101 @@ Configurées séparément pour les élèves et les personnels :
 
 - **Thème** : Clair / Sombre
 - **Langue** : Français / English
+
+---
+
+## 11. Dépannage — Erreur de certificat LDAPS
+
+### Pourquoi cette erreur apparaît
+
+Un Active Directory interne n'utilise presque jamais un certificat LDAPS
+émis par une autorité publique reconnue (comme le sont les certificats des
+sites web classiques) — il utilise un certificat émis par **sa propre
+autorité de certification** (AD CS), que votre poste ne connaît pas et ne
+peut donc pas valider par défaut. C'est un comportement normal, pas une
+anomalie du contrôleur de domaine.
+
+Le message affiché par EduSync AD :
+
+> *Le certificat présenté par le contrôleur de domaine en LDAPS n'a pas pu
+> être validé (autorité inconnue ou nom d'hôte ne correspondant pas). Un AD
+> interne utilise presque toujours un certificat émis par sa propre autorité
+> (AD CS) : renseignez son certificat racine (.pem/.crt) dans les paramètres
+> de connexion, ou désactivez explicitement la vérification si vous
+> acceptez le risque.*
+
+Deux solutions : réparer LDAPS proprement (recommandé), ou contourner la
+vérification (dépannage rapide / labo de test uniquement).
+
+### Solution recommandée — installer une autorité de certification (AD CS)
+
+Si LDAPS ne répond même pas du tout (le port 636 refuse la connexion, pas
+seulement le certificat), c'est qu'aucun certificat LDAPS n'est installé sur
+le contrôleur de domaine. Il faut d'abord lui en fournir un :
+
+**Sur le contrôleur de domaine**, via le Gestionnaire de serveur :
+
+1. **Gérer** → **Ajouter des rôles et fonctionnalités**.
+2. Passer les écrans jusqu'à **Rôles de serveurs** : cocher **Services de
+   certificats Active Directory (AD CS)**. Accepter l'ajout des
+   fonctionnalités requises proposées automatiquement.
+3. À l'écran **Services de rôle**, cocher **Autorité de certification**.
+4. Terminer l'assistant et lancer l'installation.
+5. Une fois l'installation terminée, cliquer sur le lien **« Configurer les
+   services de certificats Active Directory sur ce serveur »** (ou l'icône
+   ⚑ en haut du Gestionnaire de serveur si la fenêtre a été fermée).
+6. Dans l'assistant de configuration :
+   - **Services de rôle** : Autorité de certification.
+   - **Type d'installation** : Autorité de certification d'entreprise.
+   - **Type d'AC** : AC racine.
+   - **Clé privée** : Créer une nouvelle clé privée.
+   - Chiffrement, nom et validité : laisser les valeurs par défaut.
+   - Cliquer **Configurer**.
+
+Le contrôleur de domaine reçoit alors automatiquement (autoenrollment) un
+certificat adapté à LDAPS. Ça peut prendre quelques minutes à se propager ;
+**si LDAPS ne répond toujours pas après 5-10 minutes, redémarrez le
+contrôleur de domaine** pour forcer la reprise du certificat.
+
+### Renseigner le certificat de cette autorité dans EduSync AD
+
+Une fois LDAPS actif, EduSync AD refusera quand même de valider le
+certificat tant qu'il ne connaît pas cette autorité interne — c'est
+attendu. Il faut lui fournir le certificat racine :
+
+**Sur le contrôleur de domaine**, ouvrir une invite de commandes en
+administrateur et exécuter :
+
+```
+certutil -ca.cert C:\ca_root.cer
+certutil -encode C:\ca_root.cer C:\ca_root_pem.cer
+```
+
+La première commande exporte le certificat de l'autorité en binaire ; la
+seconde produit le fichier texte au format PEM (`-----BEGIN CERTIFICATE-----`)
+qu'il faut réellement utiliser — c'est **`ca_root_pem.cer`**, pas
+`ca_root.cer`.
+
+Transférez ce fichier vers le poste qui exécute EduSync AD (clé USB,
+partage réseau…), puis dans l'écran de connexion :
+
+1. Champ **Certificat CA (optionnel)** → **Parcourir…** → sélectionnez le
+   fichier `ca_root_pem.cer`.
+2. Laissez la case **Vérifier le certificat du contrôleur en LDAPS** cochée.
+3. Connectez-vous — la connexion devrait maintenant passer en LDAPS avec
+   une vérification d'identité réelle du contrôleur.
+
+### Solution rapide (dépannage / labo de test) — désactiver la vérification
+
+Si vous ne pouvez pas récupérer le certificat immédiatement (test rapide,
+labo isolé sans accès administrateur au contrôleur), décochez **Vérifier le
+certificat du contrôleur en LDAPS** et laissez le champ certificat vide. La
+connexion reste chiffrée (LDAPS actif), mais l'identité du contrôleur de
+domaine n'est plus vérifiée — un tiers capable d'intercepter le trafic
+réseau entre le poste et le contrôleur pourrait alors se faire passer pour
+lui.
+
+> **N'utilisez cette option que sur un réseau de confiance** (labo isolé,
+> réseau local sans tiers non fiable). Sur le réseau d'un établissement
+> scolaire en production, privilégiez toujours la solution recommandée
+> ci-dessus.
