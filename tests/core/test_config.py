@@ -30,6 +30,20 @@ def test_load_config_missing_file_returns_defaults(tmp_path):
     assert config == AppConfig()
 
 
+def test_default_config_has_no_ou_parente_classes():
+    # Vide = repli sur la racine du domaine connecté (voir create_accounts_page._resolve_ou) —
+    # la colonne "classe" d'un import doit fonctionner sans configuration préalable.
+    assert AppConfig().ou_parente_classes == ""
+
+
+def test_save_then_load_round_trip_preserves_ou_parente_classes(tmp_path):
+    path = tmp_path / "config.json"
+    config = AppConfig(ou_parente_classes="OU=eleves,DC=lycee,DC=local")
+    save_config(config, path)
+    loaded = load_config(path)
+    assert loaded.ou_parente_classes == "OU=eleves,DC=lycee,DC=local"
+
+
 def test_save_then_load_round_trip(tmp_path):
     path = tmp_path / "config.json"
     config = AppConfig(

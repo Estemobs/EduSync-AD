@@ -350,6 +350,15 @@ Activez **Création automatique des groupes de classe** pour qu'un groupe
 portant le nom de l'OU soit créé automatiquement et que les utilisateurs y
 soient ajoutés lors de la création ou de la migration.
 
+**OU parente pour les classes** : l'OU sous laquelle les OU de classe
+(colonne `classe` d'un import Module 1/4) sont recherchées ou créées, ex.
+`OU=eleves,DC=lycee,DC=local`. Ce réglage est mémorisé une fois pour toutes
+— inutile de le ressaisir à chaque import (il peut toujours être remplacé
+ponctuellement via "OU parente pour les classes" dans le Module 1).
+**Laissé vide, la racine du domaine connecté est utilisée automatiquement**
+: une simple colonne `classe` dans le CSV suffit donc à créer/remplir la
+bonne OU sans aucune configuration préalable.
+
 ### Gestion des départs
 
 - **OU d'archivage** : DN de l'OU vers laquelle les comptes en suppression

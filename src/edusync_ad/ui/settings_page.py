@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Callable
 
 from PyQt6.QtCore import QTimer
@@ -100,6 +101,10 @@ class SettingsPage(QWidget):
         super().__init__(parent)
         self._on_save = on_save
         self._ad_domain = ad_domain
+        # Conservé pour préserver au moment d'enregistrer les champs que ce
+        # formulaire ne gère pas (ex. réglages LDAPS de l'écran de connexion) —
+        # voir _save().
+        self.config = config
 
         self.identifier_eleve_combo = self._build_identifier_combo(config.identifiant_format_eleve)
         self.identifier_personnel_combo = self._build_identifier_combo(
@@ -139,6 +144,11 @@ class SettingsPage(QWidget):
 
         self.groupes_auto_check = QCheckBox("Création automatique des groupes de classe")
         self.groupes_auto_check.setChecked(config.groupes_classe_auto)
+
+        self.ou_parente_classes_edit = QLineEdit(config.ou_parente_classes)
+        self.ou_parente_classes_edit.setPlaceholderText(
+            "Vide = racine du domaine. Ex. : OU=eleves,DC=lycee,DC=local"
+        )
 
         self.ou_archive_edit = QLineEdit(config.ou_archive)
         self.ou_archive_edit.setPlaceholderText("Ex. : OU=Archive,DC=lycee,DC=local")
@@ -197,6 +207,9 @@ class SettingsPage(QWidget):
         groupes_group = QGroupBox("Groupes de classe")
         groupes_layout = QVBoxLayout(groupes_group)
         groupes_layout.addWidget(self.groupes_auto_check)
+        groupes_form = QFormLayout()
+        groupes_form.addRow("OU parente pour les classes", self.ou_parente_classes_edit)
+        groupes_layout.addLayout(groupes_form)
 
         departs_group = QGroupBox("Gestion des départs")
         departs_form = QFormLayout(departs_group)
@@ -264,7 +277,11 @@ class SettingsPage(QWidget):
             self.mail_format_preview_label.setText("(format invalide)")
 
     def _save(self) -> None:
-        config = AppConfig(
+        # dataclasses.replace (et non AppConfig(...) à neuf) : préserve les champs
+        # que ce formulaire ne gère pas (ex. réglages LDAPS de l'écran de connexion)
+        # au lieu de les réinitialiser silencieusement à leur valeur par défaut.
+        config = replace(
+            self.config,
             identifiant_format_eleve=self.identifier_eleve_combo.currentText().strip(),
             identifiant_format_personnel=self.identifier_personnel_combo.currentText().strip(),
             regle_doublons=self.doublon_combo.currentData(),
@@ -274,11 +291,13 @@ class SettingsPage(QWidget):
             format_mail=self.mail_format_combo.currentText().strip(),
             regle_prenom_compose=self.prenom_compose_combo.currentData(),
             groupes_classe_auto=self.groupes_auto_check.isChecked(),
+            ou_parente_classes=self.ou_parente_classes_edit.text().strip(),
             ou_archive=self.ou_archive_edit.text().strip(),
             delai_suppression_jours=self.delai_spin.value(),
             theme=self.theme_combo.currentData(),
             langue=self.langue_combo.currentData(),
         )
+        self.config = config
         self._on_save(config)
 
         self.save_confirmation_label.setVisible(True)

@@ -55,6 +55,13 @@ class AppConfig:
     # Groupes de classe automatiques
     groupes_classe_auto: bool = True
 
+    # OU parente sous laquelle les OU de classe (colonne "classe" d'un import)
+    # sont recherchées/créées, ex. "OU=eleves,DC=lycee,DC=local". Si vide, la
+    # racine du domaine connecté est utilisée automatiquement — la colonne
+    # "classe" seule doit toujours suffire à créer/remplir la bonne OU, sans
+    # configuration préalable obligatoire.
+    ou_parente_classes: str = ""
+
     # Gestion des départs
     ou_archive: str = ""
     delai_suppression_jours: int = 30

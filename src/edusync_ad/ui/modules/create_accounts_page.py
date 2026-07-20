@@ -295,6 +295,11 @@ class CreateAccountsPage(QWidget):
 
         for combo in (self.classe_parent_ou_combo, self.default_ou_combo):
             previous = combo.currentData()
+            if not previous and combo is self.classe_parent_ou_combo:
+                # Première ouverture (pas encore de sélection ponctuelle) :
+                # préremplit avec le réglage permanent des Paramètres, pour ne
+                # pas avoir à le resélectionner à chaque import.
+                previous = self.config.ou_parente_classes
             combo.clear()
             combo.addItem("(aucune)", "")
             for dn, name in sorted(ous, key=lambda x: x[0]):
@@ -303,11 +308,20 @@ class CreateAccountsPage(QWidget):
             combo.setCurrentIndex(idx if idx >= 0 else 0)
 
     def _resolve_ou(self, row: RawUserRow) -> tuple[str, bool]:
-        """Retourne (ou_dn, générée_depuis_la_classe)."""
+        """Retourne (ou_dn, générée_depuis_la_classe).
+
+        La colonne "classe" doit toujours suffire à produire une OU valide
+        sans configuration préalable obligatoire : sélection ponctuelle dans
+        "OU parente pour les classes" > réglage permanent des Paramètres >
+        racine du domaine connecté en dernier recours."""
         if row.ou:
             return row.ou, False
         if row.classe:
-            parent = self.classe_parent_ou_combo.currentData()
+            parent = (
+                self.classe_parent_ou_combo.currentData()
+                or self.config.ou_parente_classes
+                or (ADConnection.domain_to_base_dn(self.ad_connection.domain) if self.ad_connection.domain else "")
+            )
             if parent:
                 return f"OU={row.classe},{parent}", True
         return self.default_ou_combo.currentData() or "", False
