@@ -1,17 +1,7 @@
-Nouveau module d'export (CSV et étiquettes PDF imprimables), et trois vrais bugs corrigés dans l'Explorateur AD suite aux retours d'usage sur le double-clic façon RSAT de la version précédente.
+Les étiquettes PDF passent d'un simple texte noir sur blanc à un vrai rendu visuel : fond coloré au choix, et un QR code optionnel encodant l'identifiant.
 
-### Nouveau : module Export (CSV / étiquettes)
+### Export : étiquettes PDF plus visuelles
 
-- Nouvelle entrée de menu **Export (CSV / étiquettes)**. Sélectionnez une OU (avec ou sans ses sous-OU), prévisualisez les comptes, cochez les champs à inclure (identifiant, nom complet, prénom, nom, classe/OU, adresse mail, état).
-- **Export CSV** : mêmes conventions que le reste de l'appli (`;`, UTF-8).
-- **Export étiquettes PDF** : planches A4 imprimables, formats standards du commerce (Avery L7160 — 21 étiquettes/planche ; Avery L7163 — 14 étiquettes/planche, format large), plusieurs planches générées automatiquement si nécessaire.
-
-### Explorateur AD : le double-clic marche vraiment cette fois
-
-- **Clic sur une OU imbriquée** : elle se déplie désormais automatiquement dans l'arborescence, à n'importe quelle profondeur — avant, seule la petite flèche fonctionnait, ce qui donnait l'impression que les sous-OU "ne s'ouvraient pas".
-- **Double-clic sur un groupe dans l'onglet Groupes** : ouvre enfin la gestion des membres — cet onglet n'avait aucun gestionnaire de double-clic jusqu'ici, le double-clic n'y faisait donc rien.
-- **Double-clic sur un utilisateur** : ouvre une vraie fiche **Propriétés**, façon RSAT — tous les attributs modifiables réunis dans une seule fenêtre (au lieu d'un par un), avec la case **Compte activé** et des raccourcis directs vers changer d'OU / réinitialiser le mot de passe / gérer les groupes. Avant, cette action dépendait d'un état interne fragile et pouvait rester silencieusement sans effet.
-
-### Migration
-
-- L'onglet "Via l'interface" utilisait déjà des menus déroulants d'OU depuis la version précédente — confirmé toujours en place, aucun changement nécessaire ici.
+- **Fond coloré** : 5 thèmes pastel au choix (Bleu, Vert, Jaune, Corail, Gris) au lieu du blanc uni jusqu'ici — coins arrondis, texte recoloré pour rester lisible.
+- **QR code (identifiant)** : case à cocher optionnelle qui ajoute un QR code encodant l'identifiant sur chaque étiquette (pratique pour un scan rapide en salle informatique). Omis automatiquement pour un compte sans identifiant disponible, pas d'erreur.
+- Le texte se recale automatiquement à gauche quand le QR code est activé, pour ne jamais empiéter dessus — vérifié visuellement sur les deux formats de planche (Avery L7160 et L7163) avant publication.
