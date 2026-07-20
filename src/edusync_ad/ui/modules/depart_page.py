@@ -97,7 +97,7 @@ class DepartPage(QWidget):
         self._csv_path: Path | None = None
         self._csv_headers: list[str] = []
         self._csv_data_rows: list[list[str]] = []
-        self._mapping_combo: QComboBox | None = None
+        self._mapping_combos: dict[str, QComboBox] = {}
         self._rows: list[DepartRow] = []
 
         self._build_ui()
@@ -256,15 +256,21 @@ class DepartPage(QWidget):
     def _rebuild_mapping_form(self, headers: list[str]) -> None:
         while self.mapping_form.rowCount():
             self.mapping_form.removeRow(0)
+        self._mapping_combos.clear()
 
-        combo = QComboBox()
-        combo.addItem("(non utilisé)", "")
-        for header in headers:
-            combo.addItem(header, header)
-        if "identifiant" in headers:
-            combo.setCurrentIndex(combo.findData("identifiant"))
-        self._mapping_combo = combo
-        self.mapping_form.addRow("identifiant *", combo)
+        # Le personnel administratif ne connaît jamais l'identifiant AD d'un
+        # élève — seulement son prénom et son nom. On accepte donc soit
+        # "identifiant" (recherche exacte si disponible), soit "prenom" +
+        # "nom" (recherche par nom dans tout l'annuaire), au choix.
+        for column in ("identifiant", "prenom", "nom"):
+            combo = QComboBox()
+            combo.addItem("(non utilisé)", "")
+            for header in headers:
+                combo.addItem(header, header)
+            if column in headers:
+                combo.setCurrentIndex(combo.findData(column))
+            self._mapping_combos[column] = combo
+            self.mapping_form.addRow(column, combo)
 
     # -- Résolution -----------------------------------------------------------
 
@@ -272,36 +278,50 @@ class DepartPage(QWidget):
         if self._csv_path is None:
             QMessageBox.warning(self, "Aucun fichier", "Importez d'abord un fichier CSV.")
             return
-        if self._mapping_combo is None or not self._mapping_combo.currentData():
-            QMessageBox.warning(self, "Colonne manquante", "Associez la colonne 'identifiant'.")
+
+        col_id = self._mapping_combos["identifiant"].currentData()
+        col_prenom = self._mapping_combos["prenom"].currentData()
+        col_nom = self._mapping_combos["nom"].currentData()
+        if not col_id and not (col_prenom and col_nom):
+            QMessageBox.warning(
+                self, "Colonnes manquantes",
+                "Associez soit la colonne 'identifiant', soit les colonnes 'prenom' et 'nom'.",
+            )
             return
         if self.ad_connection.domain is None:
             QMessageBox.critical(self, "Non connecté", "Aucune connexion à l'Active Directory.")
             return
 
-        col_name = self._mapping_combo.currentData()
-        if col_name not in self._csv_headers:
-            QMessageBox.warning(self, "Colonne introuvable", f"Colonne '{col_name}' absente du fichier.")
-            return
-
-        idx = self._csv_headers.index(col_name)
+        idx_id = self._csv_headers.index(col_id) if col_id else None
+        idx_prenom = self._csv_headers.index(col_prenom) if col_prenom else None
+        idx_nom = self._csv_headers.index(col_nom) if col_nom else None
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
 
+        # Chaque ligne est résolue soit par identifiant direct, soit par
+        # recherche prénom+nom dans tout l'annuaire (cas le plus courant pour
+        # une liste fournie par le personnel administratif, qui ne connaît
+        # jamais l'identifiant AD d'un élève).
         rows: list[DepartRow] = []
+        by_sam_idx: list[int] = []
+        by_name_idx: list[tuple[int, str]] = []
         for data_row in self._csv_data_rows:
-            if len(data_row) <= idx:
-                continue
-            identifiant = data_row[idx].strip()
-            if not identifiant:
-                continue
-            rows.append(DepartRow(identifiant=identifiant))
+            if idx_id is not None and len(data_row) > idx_id and data_row[idx_id].strip():
+                rows.append(DepartRow(identifiant=data_row[idx_id].strip()))
+                by_sam_idx.append(len(rows) - 1)
+            elif idx_prenom is not None and idx_nom is not None and len(data_row) > max(idx_prenom, idx_nom):
+                prenom, nom = data_row[idx_prenom].strip(), data_row[idx_nom].strip()
+                if prenom and nom:
+                    rows.append(DepartRow(identifiant=""))
+                    by_name_idx.append((len(rows) - 1, f"{prenom} {nom}"))
 
         if not rows:
             QMessageBox.warning(self, "Aucune ligne valide", "Le fichier ne contient aucune ligne exploitable.")
             return
 
         not_found = 0
-        for row in rows:
+
+        for row_index in by_sam_idx:
+            row = rows[row_index]
             try:
                 result = self.ad_connection.search_user_by_sam(row.identifiant, base_dn)
             except ADError as exc:
@@ -311,6 +331,29 @@ class DepartPage(QWidget):
                 not_found += 1
                 continue
             row.user_dn, row.nom_complet = result
+
+        for row_index, full_name in by_name_idx:
+            row = rows[row_index]
+            try:
+                user_dn = self.ad_connection.search_user_by_cn(full_name, base_dn)
+            except ADError as exc:
+                row.erreur = str(exc)
+                continue
+            if user_dn is None:
+                not_found += 1
+                continue
+            try:
+                attrs = self.ad_connection.get_user_attributes(user_dn)
+            except ADError as exc:
+                row.erreur = str(exc)
+                continue
+            row.identifiant = attrs.get("sAMAccountName", full_name)
+            row.user_dn = user_dn
+            row.nom_complet = attrs.get("cn", full_name)
+
+        for row in rows:
+            if not row.user_dn or row.erreur:
+                continue
             try:
                 row.groupe_dns = self.ad_connection.search_user_groups(row.user_dn, base_dn)
             except ADError:

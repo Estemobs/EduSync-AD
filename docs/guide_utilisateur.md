@@ -157,11 +157,24 @@ Deux modes disponibles (onglets) :
 
 ### Via CSV
 
-Format attendu :
+Format attendu — **prénom, nom et noms de classe en clair**, jamais de
+chemin AD à connaître ou saisir :
 ```
-identifiant;ou_source;ou_destination
-thomas.martin;OU=4emeA,OU=Eleves,DC=lycee,DC=local;OU=3emeA,OU=Eleves,DC=lycee,DC=local
+prenom;nom;classe_source;classe_destination
+Thomas;Martin;4emeA;3emeA
 ```
+
+`classe_source` et `classe_destination` sont résolues automatiquement en OU
+complète : réglage **"OU parente pour les classes"** des Paramètres si
+configuré, sinon racine du domaine connecté (voir
+[10. Paramètres globaux](#10-paramètres-globaux)). L'élève est ensuite
+retrouvé par prénom+nom dans l'OU source résolue — aucun identifiant AD à
+connaître.
+
+D'autres noms de colonnes courants sont reconnus automatiquement pour
+`classe_source`/`classe_destination` : `ancienne_classe`/`nouvelle_classe`,
+`classe_actuelle`/`nouvelle_classe`. Sinon, associez-les manuellement dans
+le mapping.
 
 1. Importez le fichier CSV
 2. Vérifiez le mapping des colonnes
@@ -201,8 +214,12 @@ l'établissement.
 
 ### Flux de travail
 
-1. Importez un CSV contenant la colonne `identifiant`
-2. Associez la colonne identifiant si nécessaire
+1. Importez un CSV — deux formats possibles :
+   - **`prenom;nom`** (recommandé, aucun identifiant AD à connaître) —
+     recherche par nom dans tout l'annuaire.
+   - **`identifiant`** — si vous disposez déjà des identifiants AD (recherche
+     exacte, prioritaire sur prénom+nom si les deux colonnes sont présentes).
+2. Associez les colonnes si le mapping automatique ne les a pas détectées
 3. Choisissez le mode d'action
 4. Cliquez **Résoudre dans l'AD**
 5. Vérifiez la prévisualisation (groupes détectés, statut)

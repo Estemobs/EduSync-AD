@@ -91,12 +91,26 @@ Léa;Petit;;4emeB;;2011-01-20
 ```
 
 ### Migration
+Le personnel administratif ne connaît jamais les chemins AD (OU=...) —
+seulement les noms de classe. L'appli résout elle-même la classe vers la
+bonne OU (réglage "OU parente pour les classes" dans les Paramètres, ou
+racine du domaine par défaut) et retrouve l'élève par prénom+nom :
 ```
-identifiant;ou_source;ou_destination
-thomas.martin;OU=4emeA,OU=Eleves,DC=lycee,DC=local;OU=3emeA,OU=Eleves,DC=lycee,DC=local
+prenom;nom;classe_source;classe_destination
+Thomas;Martin;4emeA;3emeA
 ```
 
-### Départs / Réinitialisation MDP
+### Départs
+Recherche par prénom+nom dans tout l'annuaire (pas besoin de connaître
+l'identifiant AD) :
+```
+prenom;nom
+Thomas;Martin
+```
+Un identifiant AD direct reste accepté si vous en disposez (colonne
+`identifiant`, prioritaire sur prénom+nom si les deux sont présents).
+
+### Réinitialisation MDP
 ```
 identifiant
 thomas.martin

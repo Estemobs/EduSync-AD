@@ -37,7 +37,15 @@ from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import MigrationRow
 from edusync_ad.ui.progress_panel import BatchProgressPanel
 
-MIGRATION_COLUMNS = ["identifiant", "ou_source", "ou_destination"]
+MIGRATION_COLUMNS = ["prenom", "nom", "classe_source", "classe_destination"]
+
+# Un export du personnel administratif n'utilise jamais nos noms de colonne
+# internes exacts — quelques synonymes courants pour préremplir le mapping
+# automatiquement (la sélection manuelle reste toujours possible sinon).
+MIGRATION_COLUMN_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "classe_source": ("classe_source", "ancienne_classe", "classe_actuelle", "classe_depart", "ancienneclasse"),
+    "classe_destination": ("classe_destination", "nouvelle_classe", "classe_arrivee", "nouvelleclasse"),
+}
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "OU source", "OU destination", "État"]
 COL_ID, COL_NOM, COL_SRC, COL_DST, COL_ETAT = range(5)
 
@@ -270,7 +278,8 @@ class MigrationPage(QWidget):
             combo.addItem("(non utilisé)", "")
             for header in headers:
                 combo.addItem(header, header)
-            suggested = column if column in headers else ""
+            candidates = MIGRATION_COLUMN_SYNONYMS.get(column, (column,))
+            suggested = next((c for c in candidates if c in headers), "")
             if suggested:
                 combo.setCurrentIndex(combo.findData(suggested))
             label = column + " *"
@@ -281,6 +290,14 @@ class MigrationPage(QWidget):
         return {col: combo.currentData() or "" for col, combo in self._mapping_combos.items()}
 
     # -- Résolution dans l'AD -------------------------------------------------
+
+    def _resolve_classe_ou(self, classe: str, base_dn: str) -> str:
+        """Traduit un simple nom de classe (ex. "6emeA", tel que fourni par le
+        personnel administratif) en DN d'OU complet — jamais un DN brut à
+        connaître ou saisir. Même repli que Module 1 : réglage permanent des
+        Paramètres, sinon racine du domaine connecté."""
+        parent = self.config.ou_parente_classes or base_dn
+        return f"OU={classe},{parent}"
 
     def _on_resolve_clicked(self) -> None:
         if self._csv_path is None:
@@ -299,38 +316,56 @@ class MigrationPage(QWidget):
             QMessageBox.critical(self, "Non connecté", "Aucune connexion à l'Active Directory.")
             return
 
-        idx_id = self._csv_headers.index(mapping["identifiant"])
-        idx_src = self._csv_headers.index(mapping["ou_source"])
-        idx_dst = self._csv_headers.index(mapping["ou_destination"])
+        idx_p = self._csv_headers.index(mapping["prenom"])
+        idx_n = self._csv_headers.index(mapping["nom"])
+        idx_src = self._csv_headers.index(mapping["classe_source"])
+        idx_dst = self._csv_headers.index(mapping["classe_destination"])
 
-        rows: list[MigrationRow] = []
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        raw_rows: list[tuple[str, str, str, str]] = []  # prenom, nom, classe_src, classe_dst
         for data_row in self._csv_data_rows:
-            if len(data_row) <= max(idx_id, idx_src, idx_dst):
+            if len(data_row) <= max(idx_p, idx_n, idx_src, idx_dst):
                 continue
-            identifiant = data_row[idx_id].strip()
-            ou_src = data_row[idx_src].strip()
-            ou_dst = data_row[idx_dst].strip()
-            if not identifiant or not ou_src or not ou_dst:
+            prenom, nom = data_row[idx_p].strip(), data_row[idx_n].strip()
+            classe_src, classe_dst = data_row[idx_src].strip(), data_row[idx_dst].strip()
+            if not prenom or not nom or not classe_src or not classe_dst:
                 continue
-            rows.append(MigrationRow(identifiant=identifiant, ou_source=ou_src, ou_destination=ou_dst))
+            raw_rows.append((prenom, nom, classe_src, classe_dst))
 
-        if not rows:
+        if not raw_rows:
             QMessageBox.warning(self, "Aucune ligne valide", "Le fichier ne contient aucune ligne exploitable.")
             return
 
-        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        # Une seule lecture de l'OU source par classe (pas une recherche par élève) :
+        # rapide même sur une classe de 30, et permet de retrouver l'élève par
+        # prénom+nom sans jamais exiger un identifiant AD dans le fichier.
+        users_by_source_ou: dict[str, list[dict]] = {}
+        rows: list[MigrationRow] = []
         not_found_count = 0
 
-        for row in rows:
-            try:
-                result = self.ad_connection.search_user_by_sam(row.identifiant, base_dn)
-            except ADError as exc:
-                row.erreur = str(exc)
-                continue
-            if result is None:
+        for prenom, nom, classe_src, classe_dst in raw_rows:
+            ou_src = self._resolve_classe_ou(classe_src, base_dn)
+            ou_dst = self._resolve_classe_ou(classe_dst, base_dn)
+            row = MigrationRow(identifiant="", ou_source=ou_src, ou_destination=ou_dst)
+
+            if ou_src not in users_by_source_ou:
+                try:
+                    users_by_source_ou[ou_src] = self.ad_connection.list_users_in_ou(ou_src)
+                except ADError as exc:
+                    users_by_source_ou[ou_src] = []
+                    row.erreur = str(exc)
+                    rows.append(row)
+                    continue
+
+            cn = f"{prenom} {nom}".strip().lower()
+            match = next((u for u in users_by_source_ou[ou_src] if u["cn"].strip().lower() == cn), None)
+            if match is None:
                 not_found_count += 1
             else:
-                row.user_dn, row.nom_complet = result
+                row.identifiant = match["sam"]
+                row.user_dn = match["dn"]
+                row.nom_complet = match["cn"]
+            rows.append(row)
 
         self._rows = rows
         self._populate_table()
