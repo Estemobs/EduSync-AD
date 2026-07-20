@@ -1,9 +1,12 @@
-Correctif important sur la mise à jour automatique, plus une réécriture du README.
+Amélioration de l'Explorateur AD pour se rapprocher encore d'un vrai outil d'admin (RSAT/ADUC), plus une simplification côté Migration.
 
-### Mise à jour automatique : le bon ordre, enfin
+### Explorateur AD : le double-clic fait enfin quelque chose
 
-Le redémarrage automatique après mise à jour (introduit récemment) pouvait déclencher le lancement de l'installateur (Windows) ou la relance de l'application (Linux) **avant** même que la boîte de dialogue de confirmation ne s'affiche — une nouvelle fenêtre pouvait donc apparaître pendant que l'ancienne affichait encore "Mise à jour prête", avant le clic sur OK. C'est corrigé : la relance ne se déclenche désormais qu'après confirmation explicite, jamais avant.
+- **Double-clic sur une sous-OU** : navigue dedans (avant : rien ne se passait).
+- **Double-clic sur un groupe** : ouvre la gestion des membres.
+- **Double-clic sur un utilisateur** : ouvre l'édition d'attribut.
+- **Clic droit sur une sous-OU** : nouvelle action "Ouvrir…".
 
-### README
+### Migration : fini les chemins AD à taper à la main
 
-Réécrit avec le logo de l'application et de vraies captures d'écran (pas des maquettes) : écran de connexion, création de comptes en masse, Explorateur AD.
+L'onglet "Via l'interface" utilisait deux champs de texte libre attendant un DN complet (`OU=...,DC=...`). Remplacés par des menus déroulants alimentés directement depuis l'AD — sélectionnez simplement l'OU source et l'OU destination dans la liste.
