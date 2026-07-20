@@ -42,7 +42,7 @@ def main() -> int:
     config = load_config()
     app.setStyleSheet(stylesheet_for(config.theme))
 
-    login = LoginDialog()
+    login = LoginDialog(config=config)
     if login.exec() != LoginDialog.DialogCode.Accepted:
         return 0
 

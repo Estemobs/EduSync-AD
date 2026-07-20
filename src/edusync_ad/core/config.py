@@ -63,6 +63,13 @@ class AppConfig:
     theme: str = "clair"  # "clair" | "sombre"
     langue: str = "fr"    # "fr" | "en"
 
+    # Sécurité de la connexion LDAPS — voir core/ad/connection.py.
+    # Un AD interne utilise presque toujours un certificat émis par sa propre
+    # autorité (AD CS), absente du magasin de confiance du poste : indiquer
+    # son certificat racine ici évite d'avoir à désactiver la vérification.
+    ldaps_verifier_certificat: bool = True
+    ldaps_chemin_certificat_ca: str = ""
+
     def to_dict(self) -> dict:
         data = asdict(self)
         data["regle_doublons"] = self.regle_doublons.value

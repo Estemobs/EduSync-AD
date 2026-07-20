@@ -1,11 +1,24 @@
 """Tests de la couche AD via la stratégie MOCK_SYNC de ldap3 — un serveur LDAP
 simulé en mémoire, sans dépendance à un Active Directory réel."""
 
+import ssl
+
 import pytest
 from ldap3 import MOCK_SYNC, Connection, Server
+from ldap3.core.exceptions import LDAPSocketOpenError
 
-from edusync_ad.core.ad.connection import ADConnection, ConnectionState, _raise_ad_error
-from edusync_ad.core.ad.exceptions import ADAuthError, ADError, ADUnreachableError
+from edusync_ad.core.ad.connection import (
+    ADConnection,
+    ConnectionState,
+    _is_certificate_error,
+    _raise_ad_error,
+)
+from edusync_ad.core.ad.exceptions import (
+    ADAuthError,
+    ADCertificateError,
+    ADError,
+    ADUnreachableError,
+)
 
 DOMAIN = "lycee.local"
 BASE_DN = "dc=lycee,dc=local"
@@ -234,6 +247,46 @@ def test_create_user_and_search_by_cn_with_special_characters(ad):
     ad.create_user(new_dn, {"sAMAccountName": "jean-pierre.obrien", "cn": cn})
     found_dn = ad.search_user_by_cn(cn, OU_3EMEA_DN)
     assert found_dn is not None
+
+
+def test_is_certificate_error_detects_ssl_cert_verification_error():
+    exc = ssl.SSLCertVerificationError("certificate verify failed: self-signed certificate")
+    assert _is_certificate_error(exc) is True
+
+
+def test_is_certificate_error_detects_wrapped_cause():
+    inner = ssl.SSLCertVerificationError("certificate verify failed")
+    wrapper = LDAPSocketOpenError("unable to open socket")
+    wrapper.__cause__ = inner
+    assert _is_certificate_error(wrapper) is True
+
+
+def test_is_certificate_error_false_for_unrelated_error():
+    assert _is_certificate_error(LDAPSocketOpenError("connection refused")) is False
+
+
+def test_connect_raises_ad_certificate_error_without_ldap_fallback():
+    """Une erreur de certificat LDAPS ne doit jamais entraîner un repli silencieux
+    vers du LDAP non chiffré (contrairement à un simple problème de jointure
+    réseau) : l'utilisateur doit être informé explicitement."""
+
+    def factory(controller, bind_user, password, use_ssl):
+        if use_ssl:
+            raise LDAPSocketOpenError(
+                "certificate verify failed: self-signed certificate in certificate chain"
+            )
+        raise AssertionError("Ne doit jamais tenter un repli LDAP après une erreur de certificat")
+
+    ad = ADConnection(connection_factory=factory)
+    with pytest.raises(ADCertificateError):
+        ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    assert ad.state == ConnectionState.DISCONNECTED
+
+
+def test_ad_connection_defaults_to_verifying_certificate():
+    ad = ADConnection(connection_factory=make_mock_connection_factory())
+    assert ad.verify_certificate is True
+    assert ad.ca_cert_path is None
 
 
 def test_rename_ou_with_special_characters(ad):

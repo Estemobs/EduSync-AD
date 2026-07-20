@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
     QDialog,
+    QFileDialog,
     QFormLayout,
     QHBoxLayout,
     QLabel,
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
 
 from edusync_ad.core.ad.connection import ADConnection, ConnectResult
 from edusync_ad.core.ad.exceptions import ADError
+from edusync_ad.core.config import AppConfig, save_config
 from edusync_ad.core.crypto import (
     RememberedConnection,
     clear_remembered_connection,
@@ -70,12 +72,16 @@ class _ConnectWorker(QThread):
 
 
 class LoginDialog(QDialog):
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, config: AppConfig | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("EduSync AD — Connexion")
         self.setMinimumWidth(440)
 
-        self.ad_connection = ADConnection()
+        self.config = config or AppConfig()
+        self.ad_connection = ADConnection(
+            verify_certificate=self.config.ldaps_verifier_certificat,
+            ca_cert_path=self.config.ldaps_chemin_certificat_ca or None,
+        )
         self._worker: _ConnectWorker | None = None
 
         self.domain_edit = QLineEdit()
@@ -101,6 +107,23 @@ class LoginDialog(QDialog):
         self.debug_checkbox = QCheckBox("Mode debug (journal de connexion en direct)")
         self._debug_console: DebugConsole | None = None
 
+        self.verify_cert_checkbox = QCheckBox("Vérifier le certificat du contrôleur en LDAPS (recommandé)")
+        self.verify_cert_checkbox.setChecked(self.config.ldaps_verifier_certificat)
+        self.verify_cert_checkbox.setToolTip(
+            "Désactiver revient à accepter n'importe quel certificat en LDAPS — le chiffrement\n"
+            "reste actif mais l'identité du contrôleur de domaine n'est plus vérifiée\n"
+            "(risque d'interception). À ne faire qu'en connaissance de cause."
+        )
+        self.ca_cert_path_edit = QLineEdit(self.config.ldaps_chemin_certificat_ca)
+        self.ca_cert_path_edit.setPlaceholderText(
+            "Certificat racine de l'AD (.pem/.crt), optionnel — nécessaire si l'AD utilise sa propre autorité"
+        )
+        self.ca_cert_browse_button = QPushButton("Parcourir…")
+        self.ca_cert_browse_button.clicked.connect(self._on_browse_ca_cert)
+        ca_cert_row = QHBoxLayout()
+        ca_cert_row.addWidget(self.ca_cert_path_edit)
+        ca_cert_row.addWidget(self.ca_cert_browse_button)
+
         self.status_dot = QLabel("●")
         self.status_label = QLabel("Déconnecté")
         self._set_status("disconnected", "Déconnecté")
@@ -115,6 +138,8 @@ class LoginDialog(QDialog):
         form.addRow("Mot de passe", self.password_edit)
         form.addRow("", self.remember_checkbox)
         form.addRow("", self.remember_password_checkbox)
+        form.addRow("", self.verify_cert_checkbox)
+        form.addRow("Certificat CA (optionnel)", ca_cert_row)
         form.addRow("", self.debug_checkbox)
 
         status_layout = QHBoxLayout()
@@ -150,6 +175,13 @@ class LoginDialog(QDialog):
                 self.password_edit.setText(remembered.mot_de_passe)
                 self.remember_password_checkbox.setChecked(True)
 
+    def _on_browse_ca_cert(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Certificat racine de l'AD", "", "Certificats (*.pem *.crt *.cer);;Tous les fichiers (*)"
+        )
+        if path:
+            self.ca_cert_path_edit.setText(path)
+
     def _set_status(self, state: str, text: str) -> None:
         self.status_dot.setStyleSheet(f"color: {STATUS_COLORS.get(state, '#999')}; font-size: 16px;")
         self.status_label.setText(text)
@@ -173,6 +205,9 @@ class LoginDialog(QDialog):
             self._debug_console.activateWindow()
         else:
             AppLogManager.instance().set_debug(False)
+
+        self.ad_connection.verify_certificate = self.verify_cert_checkbox.isChecked()
+        self.ad_connection.ca_cert_path = self.ca_cert_path_edit.text().strip() or None
 
         self.connect_button.setEnabled(False)
         self._set_status("connecting", "Connexion en cours…")
@@ -202,6 +237,10 @@ class LoginDialog(QDialog):
             )
         else:
             clear_remembered_connection()
+
+        self.config.ldaps_verifier_certificat = self.verify_cert_checkbox.isChecked()
+        self.config.ldaps_chemin_certificat_ca = self.ca_cert_path_edit.text().strip()
+        save_config(self.config)
 
         if result.warning:
             QMessageBox.warning(self, "Avertissement", result.warning)
