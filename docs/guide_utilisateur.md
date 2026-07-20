@@ -312,8 +312,9 @@ ou identifiant (filtre en temps réel).
 
 ### Actions sur un compte sélectionné
 
-Sélectionnez un utilisateur dans la liste centrale pour activer le panneau
-de droite :
+Sélectionnez un utilisateur dans la liste centrale (clic simple, panneau de
+droite) ou faites **clic droit** dessus pour accéder directement au même
+menu d'actions :
 
 | Action | Description |
 |--------|-------------|
@@ -322,8 +323,16 @@ de droite :
 | **Réinitialiser le mot de passe** | Génère un nouveau mot de passe affiché avant confirmation |
 | **Activer / Désactiver** | Bascule l'état du compte (userAccountControl) |
 | **Gérer les groupes** | Liste tous les groupes avec cases à cocher pour ajouter/retirer |
+| **Supprimer l'utilisateur** (clic droit) | Suppression définitive — irréversible, confirmation par ressaisie de l'identifiant |
 
 Toutes ces actions respectent le mode simulation et sont journalisées.
+
+### Groupes
+
+Clic droit dans le panneau **Groupes** : **Créer un groupe…**, ou sur un
+groupe existant, **Gérer les membres…** et **Supprimer le groupe…**
+(confirmation par ressaisie du nom — ne retire pas les membres au
+préalable, ils perdent simplement cette appartenance).
 
 ---
 
