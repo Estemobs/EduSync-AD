@@ -15,6 +15,7 @@ Actions disponibles :
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -34,6 +35,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSplitter,
+    QStyle,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -63,6 +65,35 @@ EDITABLE_ATTRS = [
 ]
 
 USER_COLS = ["Identifiant", "Nom complet", "État"]
+
+# Repères visuels façon RSAT/ADUC — Qt n'a pas d'icône standard "groupe" ou
+# "utilisateur" (QStyle.StandardPixmap se limite aux dialogues/fichiers), on
+# garde donc un dossier natif pour les OU (vraie correspondance) et un
+# glyphe pour groupes/utilisateurs, cohérent avec le reste de l'appli
+# (⚠, ✓, ✗… déjà utilisés ailleurs).
+ICON_GROUPE = "👥"
+ICON_UTILISATEUR = "👤"
+ICON_UTILISATEUR_DESACTIVE = "🔒"
+
+_emoji_icon_cache: dict[str, QIcon] = {}
+
+
+def _emoji_icon(emoji: str, size: int = 20) -> QIcon:
+    """Rend un glyphe emoji en QIcon — utilisé là où Qt n'a pas d'icône
+    standard adaptée (groupe, utilisateur). Ne modifie jamais item.text(),
+    contrairement à un préfixe textuel, qui casserait les comparaisons de
+    nom exact (ex. confirmation de suppression par ressaisie)."""
+    if emoji not in _emoji_icon_cache:
+        pixmap = QPixmap(size, size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        font = painter.font()
+        font.setPointSize(int(size * 0.7))
+        painter.setFont(font)
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, emoji)
+        painter.end()
+        _emoji_icon_cache[emoji] = QIcon(pixmap)
+    return _emoji_icon_cache[emoji]
 COL_SAM, COL_CN, COL_ETAT = range(3)
 
 
@@ -161,6 +192,8 @@ class ADExplorerPage(QWidget):
         self.user_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.user_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.user_table.itemSelectionChanged.connect(self._on_user_selected)
+        self.user_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.user_table.customContextMenuRequested.connect(self._on_user_context_menu)
         center_layout.addWidget(self.user_table)
         center.setMinimumWidth(300)
 
@@ -237,8 +270,12 @@ class ADExplorerPage(QWidget):
             QMessageBox.critical(self, "Erreur", str(exc))
             return
 
+        folder_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
+        domain_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DriveNetIcon)
+
         self.ou_tree.clear()
         root_item = QTreeWidgetItem([self.ad_connection.domain])
+        root_item.setIcon(0, domain_icon)
         root_item.setData(0, Qt.ItemDataRole.UserRole, base_dn)
         self.ou_tree.addTopLevelItem(root_item)
 
@@ -247,6 +284,7 @@ class ADExplorerPage(QWidget):
             parent_dn = dn.split(",", 1)[1] if "," in dn else base_dn
             parent_item = dn_to_item.get(parent_dn, root_item)
             item = QTreeWidgetItem([name])
+            item.setIcon(0, folder_icon)
             item.setData(0, Qt.ItemDataRole.UserRole, dn)
             parent_item.addChild(item)
             dn_to_item[dn] = item
@@ -261,9 +299,11 @@ class ADExplorerPage(QWidget):
             QMessageBox.critical(self, "Erreur", str(exc))
             return
 
+        group_icon = _emoji_icon(ICON_GROUPE)
         self.group_list.clear()
         for dn, name in sorted(groups, key=lambda x: x[1].lower()):
             item = QListWidgetItem(name)
+            item.setIcon(group_icon)
             item.setData(Qt.ItemDataRole.UserRole, dn)
             self.group_list.addItem(item)
 
@@ -427,14 +467,43 @@ class ADExplorerPage(QWidget):
         menu = QMenu(self)
         create_action = menu.addAction("Créer un groupe…")
         manage_action = None
+        delete_action = None
         if item is not None:
             manage_action = menu.addAction(f"Gérer les membres de « {item.text()} »…")
+            menu.addSeparator()
+            delete_action = menu.addAction(f"Supprimer « {item.text()} »…")
         chosen = menu.exec(self.group_list.viewport().mapToGlobal(pos))
 
         if chosen == create_action:
             self._create_group_dialog()
         elif chosen is not None and chosen == manage_action:
             self._manage_group_members_dialog(item.data(Qt.ItemDataRole.UserRole), item.text())
+        elif chosen is not None and chosen == delete_action:
+            self._delete_group(item.data(Qt.ItemDataRole.UserRole), item.text())
+
+    def _delete_group(self, group_dn: str, group_name: str) -> None:
+        typed, ok = QInputDialog.getText(
+            self, "Confirmer la suppression",
+            f"Cette action est irréversible et ne retire pas les membres au préalable "
+            f"(ils perdent simplement cette appartenance). Retapez « {group_name} » "
+            f"pour confirmer la suppression :",
+        )
+        if not ok or typed.strip() != group_name:
+            return
+
+        simulation = self.ad_connection.dry_run
+        try:
+            self.ad_connection.delete_group(group_dn)
+            self.audit_log.record(
+                "suppression_groupe", group_name, "succes", self.session_id, simulation=simulation,
+            )
+            QMessageBox.information(self, "Succès", f"Groupe supprimé{'  (simulé)' if simulation else ''}.")
+            self._load_group_list()
+        except ADError as exc:
+            self.audit_log.record(
+                "suppression_groupe", group_name, "echec", self.session_id, simulation=simulation, detail=str(exc),
+            )
+            QMessageBox.critical(self, "Erreur", str(exc))
 
     def _create_group_dialog(self) -> None:
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
@@ -534,10 +603,14 @@ class ADExplorerPage(QWidget):
     # -- Table utilisateurs ---------------------------------------------------
 
     def _populate_user_table(self, users: list[dict]) -> None:
+        icon_actif = _emoji_icon(ICON_UTILISATEUR)
+        icon_desactive = _emoji_icon(ICON_UTILISATEUR_DESACTIVE)
         self.user_table.setRowCount(len(users))
         for i, u in enumerate(users):
             self.user_table.setItem(i, COL_SAM, QTableWidgetItem(u["sam"]))
-            self.user_table.setItem(i, COL_CN, QTableWidgetItem(u["cn"]))
+            cn_item = QTableWidgetItem(u["cn"])
+            cn_item.setIcon(icon_desactive if u.get("disabled") else icon_actif)
+            self.user_table.setItem(i, COL_CN, cn_item)
             self.user_table.setItem(i, COL_ETAT, QTableWidgetItem("Désactivé" if u.get("disabled") else "Actif"))
         self._displayed_users = users  # référence aux users affichés après filtre
 
@@ -561,6 +634,74 @@ class ADExplorerPage(QWidget):
         for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
                     self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(True)
+
+    def _on_user_context_menu(self, pos) -> None:
+        item = self.user_table.itemAt(pos)
+        if item is None:
+            return
+        self.user_table.selectRow(item.row())
+        if not self._current_user:
+            return
+
+        menu = QMenu(self)
+        action_edit = menu.addAction("Modifier un attribut…")
+        action_ou = menu.addAction("Changer d'OU…")
+        action_pwd = menu.addAction("Réinitialiser le mot de passe…")
+        toggle_label = "Activer le compte" if self._current_user.get("disabled") else "Désactiver le compte"
+        action_toggle = menu.addAction(toggle_label)
+        action_groups = menu.addAction("Gérer les groupes…")
+        menu.addSeparator()
+        action_delete = menu.addAction("Supprimer l'utilisateur…")
+        chosen = menu.exec(self.user_table.viewport().mapToGlobal(pos))
+
+        if chosen == action_edit:
+            self._on_edit_attr()
+        elif chosen == action_ou:
+            self._on_change_ou()
+        elif chosen == action_pwd:
+            self._on_reset_password()
+        elif chosen == action_toggle:
+            self._on_toggle_account()
+        elif chosen == action_groups:
+            self._on_manage_groups()
+        elif chosen == action_delete:
+            self._on_delete_user()
+
+    def _on_delete_user(self) -> None:
+        if not self._current_user:
+            return
+        sam = self._current_user.get("sAMAccountName", "")
+        cn = self._current_user.get("cn", sam)
+        user_dn = self._current_user["dn"]
+
+        # Protection contre la suppression accidentelle : on exige de retaper
+        # l'identifiant exact plutôt qu'une simple case Oui/Non (même
+        # convention que la suppression d'OU).
+        typed, ok = QInputDialog.getText(
+            self, "Confirmer la suppression",
+            f"Cette action est irréversible. Retapez « {sam} » pour confirmer la "
+            f"suppression du compte {cn} :",
+        )
+        if not ok or typed.strip() != sam:
+            return
+
+        simulation = self.ad_connection.dry_run
+        try:
+            self.ad_connection.delete_user(user_dn)
+            self.audit_log.record(
+                "suppression_compte", sam, "succes", self.session_id, simulation=simulation,
+            )
+            QMessageBox.information(self, "Succès", f"Compte supprimé{'  (simulé)' if simulation else ''}.")
+            if self._current_ou_dn:
+                leaf = self._current_ou_dn.split(",", 1)[0]
+                label = leaf.split("=", 1)[-1] if "=" in leaf else leaf
+                self._load_users_for_ou(self._current_ou_dn, label)
+            self._clear_detail_panel()
+        except ADError as exc:
+            self.audit_log.record(
+                "suppression_compte", sam, "echec", self.session_id, simulation=simulation, detail=str(exc),
+            )
+            QMessageBox.critical(self, "Erreur", str(exc))
 
     def _refresh_detail_panel(self, attrs: dict) -> None:
         for attr_key, _ in EDITABLE_ATTRS:
@@ -1012,9 +1153,11 @@ class ChooseOUDialog(QDialog):
         layout.addWidget(self.tree)
 
         # Construire l'arbre
+        folder_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
         dn_to_item: dict[str, QTreeWidgetItem] = {}
         for dn, name in sorted(ous, key=lambda x: x[0].count(",")):
             item = QTreeWidgetItem([name])
+            item.setIcon(0, folder_icon)
             item.setData(0, Qt.ItemDataRole.UserRole, dn)
             parent_dn = dn.split(",", 1)[1] if "," in dn else ""
             parent_item = dn_to_item.get(parent_dn)

@@ -30,12 +30,13 @@ class _DownloadWorker(QThread):
     progress = pyqtSignal(int)
     done = pyqtSignal(bool)
 
-    def __init__(self, url: str):
+    def __init__(self, url: str, checksum_url: str | None = None):
         super().__init__()
         self._url = url
+        self._checksum_url = checksum_url
 
     def run(self):
-        ok = download_and_install(self._url, progress_callback=self.progress.emit)
+        ok = download_and_install(self._url, self._checksum_url, progress_callback=self.progress.emit)
         self.done.emit(ok)
 
 
@@ -120,29 +121,24 @@ class UpdateDialog(QDialog):
         self.progress.setValue(0)
         self.status_label.setText("Téléchargement en cours…")
 
-        self._dl_worker = _DownloadWorker(self._info["download_url"])
+        self._dl_worker = _DownloadWorker(self._info["download_url"], self._info.get("checksum_url"))
         self._dl_worker.progress.connect(self.progress.setValue)
         self._dl_worker.done.connect(self._on_download_done)
         self._dl_worker.start()
 
     def _on_download_done(self, ok: bool):
         if ok:
-            if platform.system() == "Windows":
-                QMessageBox.information(
-                    self,
-                    "Mise à jour prête",
-                    "La mise à jour va s'appliquer. L'application va redémarrer automatiquement.",
-                )
-                import sys
-                sys.exit(0)
-            else:
-                QMessageBox.information(
-                    self,
-                    "Mise à jour installée",
-                    "La mise à jour a été installée avec succès. Fermez et relancez "
-                    "l'application pour utiliser la nouvelle version.",
-                )
-                self.accept()
+            # Les deux plateformes relancent désormais l'application
+            # automatiquement (installateur Windows en mode postinstall,
+            # _relaunch_linux_flatpak côté Linux) — il suffit de quitter
+            # proprement le processus courant.
+            QMessageBox.information(
+                self,
+                "Mise à jour prête",
+                "La mise à jour va s'appliquer. L'application va redémarrer automatiquement.",
+            )
+            import sys
+            sys.exit(0)
         else:
             details = (
                 "L'installation a échoué. Le détail technique (commande exécutée, "

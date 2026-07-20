@@ -22,6 +22,7 @@ RELEASES_API_URL = "https://api.github.com/repos/estemobs/EduSync-AD/releases/la
 CURRENT_VERSION = "1.6.2"
 APP_NAME = "EduSyncAD"
 APP_AUTHOR = "EduSyncAD"
+FLATPAK_APP_ID = "org.edusync.AD"
 
 
 def _parse_version(v: str) -> tuple[int, ...]:
@@ -176,6 +177,23 @@ def _run_logged(cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
     return result
 
 
+def _relaunch_linux_flatpak() -> None:
+    """Relance l'application après une mise à jour Flatpak réussie — la
+    nouvelle version démarre en processus détaché (start_new_session) pour
+    survivre à la fin du processus courant, qui va appeler sys.exit() juste
+    après (symétrique au comportement Windows : l'installateur relance déjà
+    l'exe automatiquement après une mise à jour silencieuse)."""
+    host_prefix = ["flatpak-spawn", "--host"] if shutil.which("flatpak-spawn") else []
+    cmd = host_prefix + ["flatpak", "run", FLATPAK_APP_ID]
+    try:
+        subprocess.Popen(
+            cmd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        logger.info("Relance de l'application après mise à jour : %s", " ".join(cmd))
+    except OSError as exc:
+        logger.warning("Impossible de relancer l'application automatiquement : %s", exc)
+
+
 def _install_linux_flatpak(download_url: str, checksum_url: str | None = None, progress_callback=None) -> bool:
     # "flatpak-spawn --host" exécute flatpak sur l'HÔTE, pas dans le bac à sable :
     # /tmp (tempfile.mkdtemp par défaut) y est un tmpfs privé au bac à sable, jamais
@@ -213,6 +231,7 @@ def _install_linux_flatpak(download_url: str, checksum_url: str | None = None, p
         result = _run_logged(user_cmd, timeout=120)
         if result.returncode == 0:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+            _relaunch_linux_flatpak()
             return True
 
         # Repli : l'app est peut-être installée en --system (nécessite les
@@ -220,6 +239,8 @@ def _install_linux_flatpak(download_url: str, checksum_url: str | None = None, p
         # native (comme l'UAC Windows) — ce n'est pas une élévation silencieuse.
         result = _run_logged(system_cmd, timeout=180)
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        if result.returncode == 0:
+            _relaunch_linux_flatpak()
         return result.returncode == 0
     except Exception as exc:
         logger.warning("Échec de la mise à jour Flatpak : %s", exc)

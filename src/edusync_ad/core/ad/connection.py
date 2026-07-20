@@ -492,6 +492,14 @@ class ADConnection:
         if not conn.add(dn, ["top", "group"], attributes):
             _raise_ad_error(conn, "Échec de création du groupe.")
 
+    @_logged_write("Suppression du groupe")
+    def delete_group(self, dn: str) -> None:
+        conn = self._require_connected()
+        if self.dry_run:
+            return
+        if not conn.delete(dn):
+            _raise_ad_error(conn, "Échec de suppression du groupe.")
+
     @_logged_write("Ajout au groupe")
     def add_user_to_group(self, user_dn: str, group_dn: str) -> None:
         conn = self._require_connected()

@@ -171,6 +171,14 @@ def test_create_group_and_add_user(ad):
     ad.add_user_to_group(user_dn, GROUP_3EMEA_DN)  # ne doit pas lever
 
 
+def test_delete_group(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    ad.create_group(GROUP_3EMEA_DN, "3emeA")
+    assert ad.group_exists(GROUP_3EMEA_DN) is True
+    ad.delete_group(GROUP_3EMEA_DN)
+    assert ad.group_exists(GROUP_3EMEA_DN) is False
+
+
 def test_dry_run_does_not_write_to_ad(ad):
     ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
     ad.dry_run = True

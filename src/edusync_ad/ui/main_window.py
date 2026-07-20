@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
-from edusync_ad.core.updater import check_for_update
+from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
 from edusync_ad.ui.audit_page import AuditPage
 from edusync_ad.ui.log_view_widget import LogViewWidget
 from edusync_ad.ui.modules.ad_explorer_page import ADExplorerPage
@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         self.audit_log = audit_log
         self.session_id = new_session_id()
 
-        self.setWindowTitle("EduSync AD")
+        self.setWindowTitle(f"EduSync AD — v{CURRENT_VERSION}")
         self.resize(1100, 720)
 
         self._build_top_bar()
@@ -96,6 +96,10 @@ class MainWindow(QMainWindow):
         update_btn = QPushButton("⟳ Mises à jour")
         update_btn.clicked.connect(self._on_check_update)
         layout.addWidget(update_btn)
+
+        version_label = QLabel(f"v{CURRENT_VERSION}")
+        version_label.setStyleSheet("color: #888; font-size: 11px; padding-left: 6px;")
+        layout.addWidget(version_label)
 
         self.setMenuWidget(top_bar)
 
