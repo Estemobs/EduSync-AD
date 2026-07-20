@@ -388,7 +388,7 @@ une liste à un autre service.
 
 Identifiant, nom complet, prénom, nom, classe/OU, adresse mail, état
 (actif/désactivé) — cochez ceux à inclure. Pour les étiquettes, les champs
-cochés s'empilent verticalement, centrés sur chaque étiquette.
+cochés s'empilent verticalement sur chaque étiquette.
 
 ### Formats d'export
 
@@ -396,6 +396,16 @@ cochés s'empilent verticalement, centrés sur chaque étiquette.
 |--------|-------------|
 | **CSV** | Une colonne par champ coché, même convention que le reste de l'appli (`;`, UTF-8) |
 | **Étiquettes PDF** | Planche A4 imprimable, formats standards du commerce (Avery L7160 — 21 étiquettes/planche ; Avery L7163 — 14 étiquettes/planche, format large) — plusieurs planches générées automatiquement si nécessaire |
+
+Pour les étiquettes, deux options supplémentaires apparaissent :
+
+- **Couleur** : fond pastel au choix (Bleu, Vert, Jaune, Corail, Gris) au
+  lieu du blanc uni — un coup d'œil suffit pour repérer une planche parmi
+  d'autres.
+- **QR code (identifiant)** : ajoute un QR code encodant l'identifiant sur
+  chaque étiquette (scan rapide en salle informatique, par ex. pour
+  renseigner un identifiant sans le retaper) — omis automatiquement pour un
+  compte sans identifiant disponible.
 
 Cliquez **Exporter…** et choisissez où enregistrer le fichier.
 

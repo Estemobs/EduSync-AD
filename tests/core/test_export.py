@@ -2,6 +2,7 @@
 
 from edusync_ad.core.export import (
     EXPORT_FIELDS,
+    LABEL_COLOR_THEMES,
     LABEL_FORMATS,
     build_export_row,
     export_users_csv,
@@ -83,5 +84,40 @@ def test_generate_labels_pdf_skips_users_with_no_selected_field_populated(tmp_pa
     users = [{"nom_complet": "", "identifiant": ""}]
     path = tmp_path / "vide.pdf"
     generate_labels_pdf(path, users, ["nom_complet", "identifiant"], "avery_l7160")
+    assert path.exists()
+    assert path.read_bytes().startswith(b"%PDF-")
+
+
+def test_all_color_themes_are_valid_hex():
+    for theme in LABEL_COLOR_THEMES.values():
+        assert theme.fond_hex.startswith("#") and len(theme.fond_hex) == 7
+        assert theme.texte_hex.startswith("#") and len(theme.texte_hex) == 7
+
+
+def test_generate_labels_pdf_with_color_theme_produces_valid_pdf(tmp_path):
+    users = [build_export_row({
+        "dn": "CN=Eleve 1,OU=3emeA,DC=a,DC=b", "sam": "eleve1", "cn": "Eleve 1",
+    })]
+    path = tmp_path / "couleur.pdf"
+    generate_labels_pdf(path, users, ["nom_complet"], "avery_l7160", color_theme="vert")
+    assert path.exists()
+    assert path.read_bytes().startswith(b"%PDF-")
+
+
+def test_generate_labels_pdf_with_qr_code_produces_valid_pdf(tmp_path):
+    users = [build_export_row({
+        "dn": "CN=Eleve 1,OU=3emeA,DC=a,DC=b", "sam": "eleve1", "cn": "Eleve 1",
+    })]
+    path = tmp_path / "qr.pdf"
+    generate_labels_pdf(path, users, ["nom_complet", "identifiant"], "avery_l7160", qr_code=True)
+    assert path.exists()
+    assert path.read_bytes().startswith(b"%PDF-")
+
+
+def test_generate_labels_pdf_qr_code_skipped_when_no_identifiant(tmp_path):
+    # Sans identifiant, pas de QR possible : ne doit pas planter, juste l'omettre.
+    users = [{"nom_complet": "Eleve Sans Id", "identifiant": ""}]
+    path = tmp_path / "sans_id.pdf"
+    generate_labels_pdf(path, users, ["nom_complet"], "avery_l7160", qr_code=True)
     assert path.exists()
     assert path.read_bytes().startswith(b"%PDF-")

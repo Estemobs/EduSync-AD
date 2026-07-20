@@ -33,6 +33,7 @@ from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.export import (
     EXPORT_FIELDS,
+    LABEL_COLOR_THEMES,
     LABEL_FORMATS,
     build_export_row,
     export_users_csv,
@@ -130,6 +131,13 @@ class ExportPage(QWidget):
         for key, fmt in LABEL_FORMATS.items():
             self.label_format_combo.addItem(fmt.nom, key)
         label_format_layout.addWidget(self.label_format_combo)
+        label_format_layout.addWidget(QLabel("Couleur :"))
+        self.label_color_combo = QComboBox()
+        for key, theme in LABEL_COLOR_THEMES.items():
+            self.label_color_combo.addItem(theme.nom, key)
+        label_format_layout.addWidget(self.label_color_combo)
+        self.chk_qr_code = QCheckBox("QR code (identifiant)")
+        label_format_layout.addWidget(self.chk_qr_code)
         label_format_layout.addStretch()
         self.label_format_row.setVisible(False)
         format_layout.addWidget(self.label_format_row)
@@ -254,13 +262,18 @@ class ExportPage(QWidget):
             if not path_str:
                 return
             format_key = self.label_format_combo.currentData()
+            color_theme = self.label_color_combo.currentData()
+            qr_code = self.chk_qr_code.isChecked()
             try:
-                generate_labels_pdf(Path(path_str), rows, fields, format_key)
+                generate_labels_pdf(
+                    Path(path_str), rows, fields, format_key,
+                    color_theme=color_theme, qr_code=qr_code,
+                )
             except OSError as exc:
                 QMessageBox.critical(self, "Erreur d'export", str(exc))
                 return
             self.audit_log.record(
                 "export_etiquettes", f"{len(rows)} compte(s)", "succes", self.session_id,
-                detail=f"champs={','.join(fields)}, format={format_key}",
+                detail=f"champs={','.join(fields)}, format={format_key}, couleur={color_theme}, qr={qr_code}",
             )
             QMessageBox.information(self, "Export terminé", f"Fichier enregistré : {path_str}")
