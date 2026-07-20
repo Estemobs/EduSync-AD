@@ -323,16 +323,25 @@ menu d'actions :
 | **Réinitialiser le mot de passe** | Génère un nouveau mot de passe affiché avant confirmation |
 | **Activer / Désactiver** | Bascule l'état du compte (userAccountControl) |
 | **Gérer les groupes** | Liste tous les groupes avec cases à cocher pour ajouter/retirer |
-| **Supprimer l'utilisateur** (clic droit) | Suppression définitive — irréversible, confirmation par ressaisie de l'identifiant |
+| **Supprimer l'utilisateur** (clic droit) | Suppression définitive — irréversible, confirmation Oui/Non |
 
 Toutes ces actions respectent le mode simulation et sont journalisées.
 
+**Suppression multiple** : sélectionnez plusieurs comptes dans la liste
+centrale (Ctrl/Shift-clic), puis clic droit → **Supprimer les comptes
+sélectionnés…** — une seule confirmation pour tout le lot.
+
 ### Groupes
+
+Le panneau **Groupes** (et le dialogue "Gérer les groupes", et la source
+"Groupe AD" du Module 5) n'affichent que les groupes créés par
+l'établissement — les groupes système d'Active Directory (Administrateurs,
+Opérateurs de sauvegarde…) sont automatiquement masqués.
 
 Clic droit dans le panneau **Groupes** : **Créer un groupe…**, ou sur un
 groupe existant, **Gérer les membres…** et **Supprimer le groupe…**
-(confirmation par ressaisie du nom — ne retire pas les membres au
-préalable, ils perdent simplement cette appartenance).
+(confirmation Oui/Non — ne retire pas les membres au préalable, ils
+perdent simplement cette appartenance).
 
 ---
 
