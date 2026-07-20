@@ -24,6 +24,7 @@ from edusync_ad.ui.log_view_widget import LogViewWidget
 from edusync_ad.ui.modules.ad_explorer_page import ADExplorerPage
 from edusync_ad.ui.modules.create_accounts_page import CreateAccountsPage
 from edusync_ad.ui.modules.depart_page import DepartPage
+from edusync_ad.ui.modules.export_page import ExportPage
 from edusync_ad.ui.modules.inscription_page import InscriptionPage
 from edusync_ad.ui.modules.migration_page import MigrationPage
 from edusync_ad.ui.modules.password_reset_page import PasswordResetPage
@@ -164,6 +165,9 @@ class MainWindow(QMainWindow):
         self.ad_explorer_page = ADExplorerPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.export_page = ExportPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
@@ -176,9 +180,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.depart_page)             # index 3
         self.pages.addWidget(self.password_reset_page)     # index 4
         self.pages.addWidget(self.ad_explorer_page)        # index 5
-        self.pages.addWidget(self.audit_page)              # index 6
-        self.pages.addWidget(self.logs_page)                # index 7
-        self.pages.addWidget(self.settings_page)           # index 8
+        self.pages.addWidget(self.export_page)              # index 6
+        self.pages.addWidget(self.audit_page)              # index 7
+        self.pages.addWidget(self.logs_page)                # index 8
+        self.pages.addWidget(self.settings_page)           # index 9
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -189,9 +194,10 @@ class MainWindow(QMainWindow):
             ("Gestion des départs", 3),
             ("Réinit. mots de passe", 4),
             ("Explorateur AD", 5),
-            ("Journal d'actions", 6),
-            ("Journal de l'application", 7),
-            ("Paramètres", 8),
+            ("Export (CSV / étiquettes)", 6),
+            ("Journal d'actions", 7),
+            ("Journal de l'application", 8),
+            ("Paramètres", 9),
         ]
         for label, index in nav_items:
             button = QPushButton(label)
@@ -217,6 +223,7 @@ class MainWindow(QMainWindow):
         self.depart_page.update_config(config)
         self.password_reset_page.update_config(config)
         self.ad_explorer_page.update_config(config)
+        self.export_page.update_config(config)
         self.apply_theme()
 
     def _on_check_update(self) -> None:

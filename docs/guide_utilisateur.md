@@ -18,9 +18,10 @@ dans un Active Directory, conçu pour les administrateurs réseau des
 6. [Module 4 — Arrivées en cours d'année](#6-module-4--arrivées-en-cours-dannée)
 7. [Module 5 — Réinitialisation de mot de passe](#7-module-5--réinitialisation-de-mot-de-passe)
 8. [Module 6 — Explorateur AD](#8-module-6--explorateur-ad)
-9. [Journal d'actions](#9-journal-dactions)
-10. [Paramètres globaux](#10-paramètres-globaux)
-11. [Dépannage — Erreur de certificat LDAPS](#11-dépannage--erreur-de-certificat-ldaps)
+9. [Export (CSV / étiquettes)](#9-export-csv--étiquettes)
+10. [Journal d'actions](#10-journal-dactions)
+11. [Paramètres globaux](#11-paramètres-globaux)
+12. [Dépannage — Erreur de certificat LDAPS](#12-dépannage--erreur-de-certificat-ldaps)
 
 ---
 
@@ -308,10 +309,20 @@ Cliquez sur une OU pour afficher **tout son contenu direct** dans le
 panneau central — utilisateurs, groupes et sous-OU, avec une colonne
 **Type** pour les distinguer (rien de caché : un groupe de classe qui vit
 dans la même OU que la classe, par exemple, apparaît au même titre que les
-élèves).
+élèves). Une OU qui contient des sous-OU se **déplie automatiquement** au
+clic, à n'importe quel niveau de profondeur — plus besoin de viser
+précisément la petite flèche.
 
 **Panneau gauche — Onglet Groupes** : liste de tous les groupes AD (hors
 groupes système). Cliquez sur un groupe pour lister ses membres.
+
+**Double-clic façon RSAT/ADUC** : sur une sous-OU (arborescence ou panneau
+central), navigue dedans ; sur un groupe (onglet Groupes ou panneau
+central), ouvre directement la gestion des membres ; sur un utilisateur,
+ouvre sa fiche **Propriétés** — tous les attributs modifiables réunis dans
+une seule fenêtre (plutôt qu'un par un), avec la case **Compte activé** et
+des raccourcis directs vers changer d'OU, réinitialiser le mot de passe ou
+gérer les groupes.
 
 **Barre de recherche** : filtre le panneau central par nom complet ou
 identifiant (filtre en temps réel, tous types confondus).
@@ -358,7 +369,39 @@ perdent simplement cette appartenance).
 
 ---
 
-## 9. Journal d'actions
+## 9. Export (CSV / étiquettes)
+
+Un module dédié pour extraire des données de l'AD, sans passer par
+l'Explorateur — pratique pour imprimer des étiquettes de rentrée ou fournir
+une liste à un autre service.
+
+### Source
+
+1. Choisissez une **OU** dans le menu déroulant (alimenté depuis l'AD —
+   "(racine du domaine)" est proposé pour exporter tout l'annuaire).
+2. Cochez **Inclure les sous-OU** pour parcourir toute la hiérarchie sous
+   cette OU (ex. une OU "Classes" contenant plusieurs OU de classe) — décochez
+   pour ne prendre que les comptes directement dans l'OU choisie.
+3. Cliquez **Charger les comptes** pour prévisualiser la liste.
+
+### Champs disponibles
+
+Identifiant, nom complet, prénom, nom, classe/OU, adresse mail, état
+(actif/désactivé) — cochez ceux à inclure. Pour les étiquettes, les champs
+cochés s'empilent verticalement, centrés sur chaque étiquette.
+
+### Formats d'export
+
+| Format | Description |
+|--------|-------------|
+| **CSV** | Une colonne par champ coché, même convention que le reste de l'appli (`;`, UTF-8) |
+| **Étiquettes PDF** | Planche A4 imprimable, formats standards du commerce (Avery L7160 — 21 étiquettes/planche ; Avery L7163 — 14 étiquettes/planche, format large) — plusieurs planches générées automatiquement si nécessaire |
+
+Cliquez **Exporter…** et choisissez où enregistrer le fichier.
+
+---
+
+## 10. Journal d'actions
 
 Le journal enregistre chaque opération : type d'action, compte concerné,
 OU source et destination, résultat (succès/échec), identifiant de session,
@@ -385,7 +428,7 @@ Le journal est stocké localement sur la machine de l'administrateur
 
 ---
 
-## 10. Paramètres globaux
+## 11. Paramètres globaux
 
 Accessibles via **Paramètres** dans la sidebar.
 

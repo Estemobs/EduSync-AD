@@ -163,6 +163,7 @@ class ADExplorerPage(QWidget):
         group_layout.setContentsMargins(0, 0, 0, 0)
         self.group_list = QListWidget()
         self.group_list.itemClicked.connect(self._on_group_selected)
+        self.group_list.itemDoubleClicked.connect(self._on_group_double_clicked)
         self.group_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.group_list.customContextMenuRequested.connect(self._on_group_context_menu)
         group_layout.addWidget(self.group_list)
@@ -322,6 +323,10 @@ class ADExplorerPage(QWidget):
         ou_dn = item.data(0, Qt.ItemDataRole.UserRole)
         if not ou_dn:
             return
+        # Façon RSAT/ADUC : cliquer sur une OU la déplie aussi, pas seulement
+        # la petite flèche — sinon les sous-OU semblent ne "rien faire" au clic.
+        if item.childCount():
+            item.setExpanded(True)
         self._load_users_for_ou(ou_dn, item.text(0))
 
     def _load_users_for_ou(self, ou_dn: str, label: str) -> None:
@@ -358,6 +363,15 @@ class ADExplorerPage(QWidget):
         self._populate_user_table(users)
         self.user_count_label.setText(f"{len(users)} membre(s) dans « {item.text()} »")
         self._clear_detail_panel()
+
+    def _on_group_double_clicked(self, item: QListWidgetItem) -> None:
+        """Double-clic façon RSAT sur l'onglet Groupes : ouvre directement la
+        gestion des membres (jusqu'ici sans effet, contrairement au double-clic
+        sur un groupe rencontré dans le panneau central, qui l'ouvrait déjà)."""
+        group_dn = item.data(Qt.ItemDataRole.UserRole)
+        if not group_dn:
+            return
+        self._manage_group_members_dialog(group_dn, item.text())
 
     # -- Menus contextuels (clic droit) ----------------------------------------
 
@@ -694,8 +708,7 @@ class ADExplorerPage(QWidget):
         elif kind == "group":
             self._manage_group_members_dialog(target["dn"], target["cn"])
         else:
-            if self._current_user and self._current_user.get("dn", "").lower() == target["dn"].lower():
-                self._on_edit_attr()
+            self._open_user_properties(target["dn"])
 
     def _select_tree_item_by_dn(self, dn: str) -> None:
         """Sélectionne et déplie l'item de l'arborescence OUs correspondant à
@@ -875,6 +888,64 @@ class ADExplorerPage(QWidget):
             btn.setEnabled(False)
 
     # -- Actions ---------------------------------------------------------------
+
+    def _open_user_properties(self, user_dn: str) -> None:
+        """Fiche complète d'un utilisateur façon RSAT — ouverte au double-clic,
+        avec tous les attributs modifiables réunis dans une seule fenêtre
+        plutôt qu'un par un. Relit toujours les attributs depuis l'AD plutôt
+        que de dépendre de self._current_user : sinon, si le premier clic du
+        double-clic n'avait pas encore fini de charger le compte précédent
+        sélectionné (ou avait échoué), le double-clic ne faisait rien."""
+        try:
+            attrs = self.ad_connection.get_user_attributes(user_dn)
+        except ADError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+        self._current_user = attrs
+        self._refresh_detail_panel(attrs)
+        for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
+                    self.btn_toggle_account, self.btn_manage_groups):
+            btn.setEnabled(True)
+
+        dialog = UserPropertiesDialog(attrs, EDITABLE_ATTRS, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        if dialog.request_change_ou:
+            self._on_change_ou()
+            return
+        if dialog.request_reset_password:
+            self._on_reset_password()
+            return
+        if dialog.request_manage_groups:
+            self._on_manage_groups()
+            return
+
+        sam = attrs.get("sAMAccountName", "")
+        simulation = self.ad_connection.dry_run
+        changed = {
+            key: value for key, value in dialog.result_values.items()
+            if value != (attrs.get(key) or "")
+        }
+        for attr_key, new_value in changed.items():
+            try:
+                self.ad_connection.update_user_attribute(user_dn, attr_key, new_value)
+                self._current_user[attr_key] = new_value
+                self.audit_log.record(
+                    "modification_attribut", sam, "succes", self.session_id,
+                    simulation=simulation, detail=f"{attr_key}={new_value}",
+                )
+            except ADError as exc:
+                self.audit_log.record(
+                    "modification_attribut", sam, "echec", self.session_id,
+                    simulation=simulation, detail=str(exc),
+                )
+                QMessageBox.critical(self, "Erreur", str(exc))
+
+        if dialog.result_toggle_account:
+            self._on_toggle_account()
+        else:
+            self._refresh_detail_panel(self._current_user)
 
     def _on_edit_attr(self) -> None:
         if not self._current_user:
@@ -1288,6 +1359,85 @@ class EditAttributeDialog(QDialog):
     def _on_accept(self) -> None:
         self.result_attr = self.attr_combo.currentData()
         self.result_value = self.value_edit.text().strip()
+        self.accept()
+
+
+class UserPropertiesDialog(QDialog):
+    """Fiche « Propriétés » d'un utilisateur, façon RSAT/ADUC : tous les
+    attributs modifiables affichés et éditables ensemble (au lieu d'un par un
+    comme EditAttributeDialog), plus des raccourcis vers les autres actions.
+    Les boutons d'action ferment ce dialogue et signalent au parent
+    (ADExplorerPage._open_user_properties) quelle action enchaîner, pour
+    réutiliser les flux existants (changement d'OU, mot de passe, groupes)
+    plutôt que de les dupliquer ici."""
+
+    def __init__(self, user_attrs: dict, editable_attrs: list[tuple[str, str]], parent=None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(f"Propriétés de {user_attrs.get('cn', '')}")
+        self.setMinimumWidth(460)
+        self.result_values: dict[str, str] = {}
+        self.result_toggle_account = False
+        self.request_change_ou = False
+        self.request_reset_password = False
+        self.request_manage_groups = False
+
+        self._initial_active = not user_attrs.get("disabled", False)
+
+        form = QFormLayout()
+        form.addRow("Identifiant :", QLabel(user_attrs.get("sAMAccountName", "") or "—"))
+
+        self._edits: dict[str, QLineEdit] = {}
+        for key, label in editable_attrs:
+            edit = QLineEdit(user_attrs.get(key) or "")
+            self._edits[key] = edit
+            form.addRow(f"{label} :", edit)
+
+        dn = user_attrs.get("dn", "")
+        ou_part = dn.split(",", 1)[1] if "," in dn else dn
+        ou_label = QLabel(ou_part or "—")
+        ou_label.setWordWrap(True)
+        form.addRow("OU :", ou_label)
+        form.addRow("Dernier changement mdp :", QLabel(user_attrs.get("dernier_changement_mdp") or "—"))
+
+        self.chk_active = QCheckBox("Compte activé")
+        self.chk_active.setChecked(self._initial_active)
+        form.addRow("", self.chk_active)
+
+        actions_row = QHBoxLayout()
+        btn_ou = QPushButton("Changer d'OU…")
+        btn_ou.clicked.connect(self._on_request_change_ou)
+        btn_pwd = QPushButton("Réinitialiser le mot de passe…")
+        btn_pwd.clicked.connect(self._on_request_reset_password)
+        btn_groups = QPushButton("Gérer les groupes…")
+        btn_groups.clicked.connect(self._on_request_manage_groups)
+        actions_row.addWidget(btn_ou)
+        actions_row.addWidget(btn_pwd)
+        actions_row.addWidget(btn_groups)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addLayout(form)
+        layout.addLayout(actions_row)
+        layout.addWidget(buttons)
+
+    def _on_request_change_ou(self) -> None:
+        self.request_change_ou = True
+        self.accept()
+
+    def _on_request_reset_password(self) -> None:
+        self.request_reset_password = True
+        self.accept()
+
+    def _on_request_manage_groups(self) -> None:
+        self.request_manage_groups = True
+        self.accept()
+
+    def _on_accept(self) -> None:
+        self.result_values = {key: edit.text().strip() for key, edit in self._edits.items()}
+        self.result_toggle_account = self.chk_active.isChecked() != self._initial_active
         self.accept()
 
 

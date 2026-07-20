@@ -25,7 +25,7 @@ modules:
   - name: python-deps
     buildsystem: simple
     build-commands:
-      - pip3 install --prefix=/app PyQt6 ldap3 cryptography platformdirs
+      - pip3 install --prefix=/app PyQt6 ldap3 cryptography platformdirs reportlab
     sources:
       - type: shell
         commands: []
