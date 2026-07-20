@@ -4,6 +4,8 @@
 
 Créez, migrez, archivez et gérez les comptes élèves et personnels en quelques clics — sans toucher aux consoles Microsoft.
 
+📖 **[Documentation complète (Wiki)](http://192.168.1.109:3000/estemobs/EduSync-AD/wiki)**
+
 ---
 
 ## Téléchargement
