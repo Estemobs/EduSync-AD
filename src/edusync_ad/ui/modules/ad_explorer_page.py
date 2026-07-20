@@ -64,7 +64,9 @@ EDITABLE_ATTRS = [
     ("mail", "Adresse mail"),
 ]
 
-USER_COLS = ["Identifiant", "Nom complet", "État"]
+USER_COLS = ["Type", "Identifiant", "Nom complet", "État"]
+
+KIND_LABELS = {"user": "Utilisateur", "group": "Groupe", "ou": "OU", "autre": "Autre"}
 
 # Repères visuels façon RSAT/ADUC — Qt n'a pas d'icône standard "groupe" ou
 # "utilisateur" (QStyle.StandardPixmap se limite aux dialogues/fichiers), on
@@ -94,7 +96,7 @@ def _emoji_icon(emoji: str, size: int = 20) -> QIcon:
         painter.end()
         _emoji_icon_cache[emoji] = QIcon(pixmap)
     return _emoji_icon_cache[emoji]
-COL_SAM, COL_CN, COL_ETAT = range(3)
+COL_TYPE, COL_SAM, COL_CN, COL_ETAT = range(4)
 
 
 class ADExplorerPage(QWidget):
@@ -321,17 +323,21 @@ class ADExplorerPage(QWidget):
         self._load_users_for_ou(ou_dn, item.text(0))
 
     def _load_users_for_ou(self, ou_dn: str, label: str) -> None:
+        # list_ou_contents (pas list_users_in_ou) : montre TOUT ce qui vit
+        # dans l'OU (utilisateurs, groupes, sous-OU), pas seulement les
+        # comptes — sinon un groupe de classe reste invisible ici alors
+        # qu'il bloque la suppression de l'OU (voir list_ou_children).
         try:
-            users = self.ad_connection.list_users_in_ou(ou_dn)
+            items = self.ad_connection.list_ou_contents(ou_dn)
         except ADError as exc:
             QMessageBox.critical(self, "Erreur", str(exc))
             return
         self._current_ou_dn = ou_dn
-        self._all_users = users
+        self._all_users = items
         self._current_user = None
         self.search_edit.clear()
-        self._populate_user_table(users)
-        self.user_count_label.setText(f"{len(users)} utilisateur(s) dans « {label} »")
+        self._populate_user_table(items)
+        self.user_count_label.setText(f"{len(items)} objet(s) dans « {label} »")
         self._clear_detail_panel()
 
     def _on_group_selected(self, item: QListWidgetItem) -> None:
@@ -606,11 +612,11 @@ class ADExplorerPage(QWidget):
         else:
             filtered = [
                 u for u in self._all_users
-                if needle in u["sam"].lower() or needle in u["cn"].lower()
+                if needle in u.get("sam", "").lower() or needle in u.get("cn", "").lower()
             ]
         self._populate_user_table(filtered)
         self.user_count_label.setText(
-            f"{len(filtered)} utilisateur(s) affiché(s)"
+            f"{len(filtered)} objet(s) affiché(s)"
             + (f" (filtre : « {text.strip()} »)" if needle else "")
         )
 
@@ -619,14 +625,22 @@ class ADExplorerPage(QWidget):
     def _populate_user_table(self, users: list[dict]) -> None:
         icon_actif = _emoji_icon(ICON_UTILISATEUR)
         icon_desactive = _emoji_icon(ICON_UTILISATEUR_DESACTIVE)
+        icon_groupe = _emoji_icon(ICON_GROUPE)
+        folder_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon)
         self.user_table.setRowCount(len(users))
         for i, u in enumerate(users):
-            self.user_table.setItem(i, COL_SAM, QTableWidgetItem(u["sam"]))
-            cn_item = QTableWidgetItem(u["cn"])
-            cn_item.setIcon(icon_desactive if u.get("disabled") else icon_actif)
+            kind = u.get("kind", "user")  # absent (list_users_in_group) = toujours un utilisateur
+            type_item = QTableWidgetItem(KIND_LABELS.get(kind, kind))
+            type_item.setIcon({"user": icon_actif, "group": icon_groupe, "ou": folder_icon}.get(kind, icon_actif))
+            self.user_table.setItem(i, COL_TYPE, type_item)
+            self.user_table.setItem(i, COL_SAM, QTableWidgetItem(u.get("sam", "")))
+            cn_item = QTableWidgetItem(u.get("cn", ""))
+            if kind == "user":
+                cn_item.setIcon(icon_desactive if u.get("disabled") else icon_actif)
             self.user_table.setItem(i, COL_CN, cn_item)
-            self.user_table.setItem(i, COL_ETAT, QTableWidgetItem("Désactivé" if u.get("disabled") else "Actif"))
-        self._displayed_users = users  # référence aux users affichés après filtre
+            etat = ("Désactivé" if u.get("disabled") else "Actif") if kind == "user" else "—"
+            self.user_table.setItem(i, COL_ETAT, QTableWidgetItem(etat))
+        self._displayed_users = users  # référence aux éléments affichés après filtre
 
     # -- Sélection utilisateur ------------------------------------------------
 
@@ -644,6 +658,11 @@ class ADExplorerPage(QWidget):
         if idx >= len(self._displayed_users):
             return
         user_info = self._displayed_users[idx]
+        if user_info.get("kind", "user") != "user":
+            # Groupe ou sous-OU sélectionné : le panneau détaillé (attributs,
+            # mot de passe…) n'a de sens que pour un compte utilisateur.
+            self._clear_detail_panel()
+            return
         try:
             attrs = self.ad_connection.get_user_attributes(user_info["dn"])
         except ADError as exc:
@@ -657,7 +676,7 @@ class ADExplorerPage(QWidget):
 
     def _on_user_context_menu(self, pos) -> None:
         item = self.user_table.itemAt(pos)
-        if item is None:
+        if item is None or not hasattr(self, "_displayed_users"):
             return
         selected_rows = {idx.row() for idx in self.user_table.selectionModel().selectedRows()}
         if item.row() not in selected_rows:
@@ -666,11 +685,36 @@ class ADExplorerPage(QWidget):
 
         menu = QMenu(self)
         if len(selected_rows) > 1:
-            # Sélection multiple : seule la suppression en masse a un sens.
-            action_delete = menu.addAction(f"Supprimer les {len(selected_rows)} comptes sélectionnés…")
+            # Sélection multiple : seule la suppression en masse a un sens
+            # (utilisateurs et/ou groupes — les sous-OU s'excluent d'elles-
+            # mêmes de la sélection ci-dessous, leur suppression passe par
+            # l'arborescence de gauche à cause du contrôle "OU non vide").
+            action_delete = menu.addAction(f"Supprimer les {len(selected_rows)} éléments sélectionnés…")
             chosen = menu.exec(self.user_table.viewport().mapToGlobal(pos))
             if chosen == action_delete:
-                self._on_delete_selected_users(selected_rows)
+                self._on_delete_selected_items(selected_rows)
+            return
+
+        target = self._displayed_users[item.row()] if item.row() < len(self._displayed_users) else None
+        kind = target.get("kind", "user") if target else "user"
+
+        if kind == "group":
+            action_manage = menu.addAction("Gérer les membres…")
+            menu.addSeparator()
+            action_delete = menu.addAction("Supprimer le groupe…")
+            chosen = menu.exec(self.user_table.viewport().mapToGlobal(pos))
+            if chosen == action_manage:
+                self._manage_group_members_dialog(target["dn"], target["cn"])
+            elif chosen == action_delete:
+                self._delete_group(target["dn"], target["cn"])
+            return
+
+        if kind == "ou":
+            QMessageBox.information(
+                self, "Sous-OU",
+                "La gestion des OU (renommer, supprimer…) se fait depuis "
+                "l'arborescence à gauche — cliquez dessus pour y naviguer.",
+            )
             return
 
         if not self._current_user:
@@ -696,26 +740,37 @@ class ADExplorerPage(QWidget):
         elif chosen == action_groups:
             self._on_manage_groups()
         elif chosen == action_delete:
-            self._on_delete_selected_users(selected_rows)
+            self._on_delete_selected_items(selected_rows)
 
-    def _on_delete_selected_users(self, row_indices: set[int]) -> None:
+    def _on_delete_selected_items(self, row_indices: set[int]) -> None:
         if not hasattr(self, "_displayed_users"):
             return
-        targets = [self._displayed_users[i] for i in sorted(row_indices) if i < len(self._displayed_users)]
+        all_targets = [self._displayed_users[i] for i in sorted(row_indices) if i < len(self._displayed_users)]
+        # Les sous-OU ne se suppriment que depuis l'arborescence (contrôle
+        # "OU non vide" différent) — on les exclut d'une suppression en masse.
+        targets = [t for t in all_targets if t.get("kind", "user") != "ou"]
+        skipped_ou = len(all_targets) - len(targets)
         if not targets:
+            if skipped_ou:
+                QMessageBox.information(
+                    self, "Sous-OU",
+                    "La suppression d'OU se fait depuis l'arborescence à gauche.",
+                )
             return
 
         if len(targets) == 1:
+            kind_label = KIND_LABELS.get(targets[0].get("kind", "user"), "élément")
             message = (
-                f"Supprimer définitivement le compte « {targets[0]['cn']} » ? "
+                f"Supprimer définitivement {kind_label.lower()} « {targets[0]['cn']} » ? "
                 f"Cette action est irréversible."
             )
         else:
-            names = ", ".join(t["cn"] for t in targets[:10])
+            names = ", ".join(f"{t['cn']} ({KIND_LABELS.get(t.get('kind', 'user'), '?')})" for t in targets[:10])
             if len(targets) > 10:
                 names += f", … (+{len(targets) - 10})"
+            suffix = f" ({skipped_ou} sous-OU ignorée(s), à supprimer depuis l'arborescence)" if skipped_ou else ""
             message = (
-                f"Supprimer définitivement ces {len(targets)} comptes ? "
+                f"Supprimer définitivement ces {len(targets)} éléments{suffix} ? "
                 f"Cette action est irréversible.\n\n{names}"
             )
 
@@ -730,28 +785,30 @@ class ADExplorerPage(QWidget):
         success = 0
         failed: list[str] = []
         for t in targets:
+            action_type = "suppression_compte" if t.get("kind", "user") == "user" else "suppression_groupe"
+            label = t.get("sam") or t["cn"]
             try:
-                self.ad_connection.delete_user(t["dn"])
-                self.audit_log.record(
-                    "suppression_compte", t["sam"], "succes", self.session_id, simulation=simulation,
-                )
+                if t.get("kind", "user") == "group":
+                    self.ad_connection.delete_group(t["dn"])
+                else:
+                    self.ad_connection.delete_user(t["dn"])
+                self.audit_log.record(action_type, label, "succes", self.session_id, simulation=simulation)
                 success += 1
             except ADError as exc:
                 self.audit_log.record(
-                    "suppression_compte", t["sam"], "echec", self.session_id,
-                    simulation=simulation, detail=str(exc),
+                    action_type, label, "echec", self.session_id, simulation=simulation, detail=str(exc),
                 )
                 failed.append(f"{t['cn']} : {exc}")
 
         if failed:
             QMessageBox.warning(
                 self, "Suppression partielle",
-                f"{success}/{len(targets)} compte(s) supprimé(s)"
+                f"{success}/{len(targets)} élément(s) supprimé(s)"
                 f"{'  (simulé)' if simulation else ''}.\n\nÉchecs :\n" + "\n".join(failed[:10]),
             )
         else:
             QMessageBox.information(
-                self, "Succès", f"{success} compte(s) supprimé(s){'  (simulé)' if simulation else ''}.",
+                self, "Succès", f"{success} élément(s) supprimé(s){'  (simulé)' if simulation else ''}.",
             )
 
         if self._current_ou_dn:

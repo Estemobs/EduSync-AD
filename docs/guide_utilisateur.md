@@ -302,13 +302,24 @@ sur les comptes sans passer par un import CSV.
 ### Navigation
 
 **Panneau gauche — Onglet OUs** : arborescence des Unités Organisationnelles.
-Cliquez sur une OU pour lister ses utilisateurs.
+Cliquez sur une OU pour afficher **tout son contenu direct** dans le
+panneau central — utilisateurs, groupes et sous-OU, avec une colonne
+**Type** pour les distinguer (rien de caché : un groupe de classe qui vit
+dans la même OU que la classe, par exemple, apparaît au même titre que les
+élèves).
 
-**Panneau gauche — Onglet Groupes** : liste de tous les groupes AD.
-Cliquez sur un groupe pour lister ses membres.
+**Panneau gauche — Onglet Groupes** : liste de tous les groupes AD (hors
+groupes système). Cliquez sur un groupe pour lister ses membres.
 
-**Barre de recherche** : filtrez les utilisateurs affichés par nom complet
-ou identifiant (filtre en temps réel).
+**Barre de recherche** : filtre le panneau central par nom complet ou
+identifiant (filtre en temps réel, tous types confondus).
+
+**Clic droit selon le type d'objet** : sur un utilisateur, le menu complet
+habituel (modifier, changer d'OU, réinitialiser le mot de passe,
+activer/désactiver, gérer les groupes, supprimer) ; sur un groupe, gérer
+les membres ou le supprimer ; une sous-OU se gère depuis l'arborescence à
+gauche. Une sélection multiple (Ctrl/Shift-clic) mélangeant utilisateurs et
+groupes peut être supprimée en une seule fois.
 
 ### Actions sur un compte sélectionné
 

@@ -201,6 +201,30 @@ def test_is_builtin_group_dn_false_for_custom_ou_group():
     assert is_builtin_group_dn("CN=6emeA,OU=6emeA,OU=eleves,DC=bdc,DC=fr") is False
 
 
+def test_list_ou_contents_returns_typed_mix_of_users_groups_and_sub_ous(ad):
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    ou_dn = f"ou=6emeC,{BASE_DN}"
+    ad.create_ou(ou_dn, "6emeC")
+    ad.create_user(f"cn=Thomas Martin,{ou_dn}", {"sAMAccountName": "thomas.martin2"})
+    ad.create_group(f"cn=6emeC,{ou_dn}", "6emeC")
+    ad.create_ou(f"ou=sous-groupe,{ou_dn}", "sous-groupe")
+
+    contents = ad.list_ou_contents(ou_dn)
+    kinds = {c["kind"] for c in contents}
+    assert kinds == {"user", "group", "ou"}
+    assert len(contents) == 3
+
+    user_entry = next(c for c in contents if c["kind"] == "user")
+    assert user_entry["sam"] == "thomas.martin2"
+    assert user_entry["disabled"] is False
+
+    group_entry = next(c for c in contents if c["kind"] == "group")
+    assert group_entry["cn"] == "6emeC"
+
+    ou_entry = next(c for c in contents if c["kind"] == "ou")
+    assert ou_entry["cn"] == "sous-groupe"
+
+
 def test_delete_group(ad):
     ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
     ad.create_group(GROUP_3EMEA_DN, "3emeA")

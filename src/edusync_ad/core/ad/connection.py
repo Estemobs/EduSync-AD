@@ -496,6 +496,46 @@ class ADConnection:
             if str(e.entry_dn).lower() != ou_dn.lower()
         ]
 
+    @_locked
+    def list_ou_contents(self, ou_dn: str) -> list[dict]:
+        """Retourne TOUS les objets directement enfants d'une OU (utilisateurs,
+        groupes, sous-OU) avec leur type — contrairement à list_users_in_ou,
+        qui ne montre que les comptes utilisateurs et masque donc les groupes
+        (ex. le groupe de classe auto-créé par les Modules 1/2, qui vit dans
+        la même OU que la classe) et les sous-OU, pour un affichage complet
+        façon ADUC/RSAT où rien ne reste invisible."""
+        conn = self._require_connected()
+        if not conn.search(
+            ou_dn, "(objectClass=*)", search_scope=LEVEL,
+            attributes=["objectClass", "cn", "ou", "sAMAccountName", "userAccountControl"],
+        ):
+            return []
+        # "cn" comme clé du nom affiché, même convention que list_users_in_ou /
+        # list_users_in_group (y compris pour les OU/groupes, où ce n'est pas
+        # littéralement l'attribut LDAP cn — évite une clé différente par type
+        # que l'UI devrait démêler).
+        result: list[dict] = []
+        for e in conn.entries:
+            dn = str(e.entry_dn)
+            if dn.lower() == ou_dn.lower():
+                continue
+            leaf = dn.split(",")[0]
+            classes = {str(c).lower() for c in (e["objectClass"].values or [])}
+            if "organizationalunit" in classes:
+                name = str(e["ou"].value) if e["ou"].value else leaf.split("=", 1)[-1]
+                result.append({"dn": dn, "cn": name, "kind": "ou"})
+            elif "group" in classes:
+                name = str(e["cn"].value) if e["cn"].value else leaf.split("=", 1)[-1]
+                result.append({"dn": dn, "cn": name, "kind": "group"})
+            elif "user" in classes:
+                sam = str(e["sAMAccountName"].value) if e["sAMAccountName"].value else ""
+                name = str(e["cn"].value) if e["cn"].value else leaf.split("=", 1)[-1]
+                uac = int(e["userAccountControl"].value or 0) if e["userAccountControl"].value else 0
+                result.append({"dn": dn, "cn": name, "sam": sam, "kind": "user", "disabled": bool(uac & 2)})
+            else:
+                result.append({"dn": dn, "cn": leaf.split("=", 1)[-1], "kind": "autre"})
+        return result
+
     @_logged_write("Suppression de l'OU")
     def delete_ou(self, dn: str) -> None:
         conn = self._require_connected()
