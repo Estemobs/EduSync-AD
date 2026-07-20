@@ -152,6 +152,25 @@ def test_delete_ou(ad):
     assert ad.ou_exists(new_ou_dn) is False
 
 
+def test_list_ou_children_lists_remaining_group_after_users_deleted(ad):
+    """Reproduit le cas signalé : le groupe de classe auto-créé vit dans la
+    même OU que la classe — vider les élèves ne suffit pas à vider l'OU, ce
+    test vérifie que list_ou_children rend ça visible."""
+    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
+    ou_dn = f"ou=6emeB,{BASE_DN}"
+    ad.create_ou(ou_dn, "6emeB")
+    assert ad.list_ou_children(ou_dn) == []
+    assert ad.ou_is_empty(ou_dn) is True
+
+    group_dn = f"cn=6emeB,{ou_dn}"
+    ad.create_group(group_dn, "6emeB")
+
+    assert ad.ou_is_empty(ou_dn) is False
+    children = ad.list_ou_children(ou_dn)
+    assert len(children) == 1
+    assert children[0].lower() == "cn=6emeb"
+
+
 def test_rename_ou(ad):
     ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
     old_dn = f"ou=4emeE,ou=eleves,{BASE_DN}"

@@ -431,11 +431,21 @@ class ADExplorerPage(QWidget):
             QMessageBox.critical(self, "Erreur", str(exc))
             return
         if not empty:
+            try:
+                children = self.ad_connection.list_ou_children(ou_dn)
+            except ADError:
+                children = []
+            # Cas fréquent : le groupe de classe auto-créé (Module 1/2) vit
+            # dans la même OU que la classe — supprimer les élèves ne suffit
+            # pas à vider l'OU, ce message rend visible ce qui reste.
+            details = "\n".join(f"  • {c}" for c in children[:15]) or "(détail indisponible)"
+            if len(children) > 15:
+                details += f"\n  … (+{len(children) - 15})"
             QMessageBox.warning(
                 self, "OU non vide",
-                f"« {name} » contient encore des objets (comptes, groupes, sous-OU…) — "
-                "elle ne peut pas être supprimée tant qu'elle n'est pas vide, pour éviter "
-                "une suppression accidentelle en masse.",
+                f"« {name} » ne peut pas être supprimée tant qu'elle n'est pas vide, "
+                f"pour éviter une suppression accidentelle en masse. Objets encore "
+                f"présents :\n\n{details}",
             )
             return
 

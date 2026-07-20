@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -65,12 +66,30 @@ class LogViewWidget(QWidget):
         bar = self.text.verticalScrollBar()
         bar.setValue(bar.maximum())
 
+    def _flash_success(self, button: QPushButton, success_text: str) -> None:
+        """Confirmation visuelle brève (flash vert) qu'un clic a bien été pris
+        en compte — un simple clic sans aucun retour laisse deviner si
+        l'action a marché. Même convention que le bouton d'enregistrement
+        des Paramètres."""
+        original_text = button.text()
+        original_style = button.styleSheet()
+        button.setText(success_text)
+        button.setStyleSheet("background-color: #1f9d55; color: white;")
+
+        def _revert() -> None:
+            button.setText(original_text)
+            button.setStyleSheet(original_style)
+
+        QTimer.singleShot(1200, _revert)
+
     def _on_copy(self) -> None:
         QApplication.clipboard().setText(self.text.toPlainText())
+        self._flash_success(self.copy_button, "✓ Copié")
 
     def _on_clear(self) -> None:
         self._manager.clear()
         self.text.clear()
+        self._flash_success(self.clear_button, "✓ Vidé")
 
     def _on_export(self) -> None:
         path_str, _ = QFileDialog.getSaveFileName(
@@ -79,3 +98,4 @@ class LogViewWidget(QWidget):
         if not path_str:
             return
         Path(path_str).write_text(self.text.toPlainText(), encoding="utf-8")
+        self._flash_success(self.export_button, "✓ Exporté")

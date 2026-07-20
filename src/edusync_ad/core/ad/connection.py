@@ -480,6 +480,22 @@ class ADConnection:
         children = [e for e in conn.entries if str(e.entry_dn).lower() != ou_dn.lower()]
         return not children
 
+    @_locked
+    def list_ou_children(self, ou_dn: str) -> list[str]:
+        """Retourne le RDN (ex. "CN=6emeB", "OU=sous-classe") de chaque objet
+        directement enfant de l'OU — sert à expliquer concrètement ce qui
+        bloque une suppression d'OU refusée par ou_is_empty (comptes,
+        groupes, sous-OU… déjà vidés de leurs élèves mais pas du groupe de
+        classe auto-créé, typiquement)."""
+        conn = self._require_connected()
+        if not conn.search(ou_dn, "(objectClass=*)", search_scope=LEVEL):
+            return []
+        return [
+            str(e.entry_dn).split(",")[0]
+            for e in conn.entries
+            if str(e.entry_dn).lower() != ou_dn.lower()
+        ]
+
     @_logged_write("Suppression de l'OU")
     def delete_ou(self, dn: str) -> None:
         conn = self._require_connected()
