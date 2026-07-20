@@ -201,12 +201,14 @@ le mapping.
 
 ### Via l'interface
 
-Sans fichier CSV, saisissez directement :
-- **OU source** : DN de l'OU de départ
-- **OU destination** : DN de l'OU d'arrivée
+Sans fichier CSV, choisissez directement dans les menus déroulants
+(alimentés depuis l'AD, aucun chemin à taper) :
+- **OU source** : l'OU de départ
+- **OU destination** : l'OU d'arrivée
 
-Cliquez **Charger les utilisateurs de l'OU source** pour lister tous les
-comptes de l'OU, puis **Valider la migration**.
+Cliquez **Actualiser la liste des OUs** si une OU créée récemment
+n'apparaît pas encore, puis **Charger les utilisateurs de l'OU source**
+pour lister tous les comptes de l'OU, et **Valider la migration**.
 
 ### Ce que fait la migration
 

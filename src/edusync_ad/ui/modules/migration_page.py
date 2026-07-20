@@ -20,7 +20,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QLineEdit,
     QMessageBox,
     QPushButton,
     QTabWidget,
@@ -118,6 +117,11 @@ class MigrationPage(QWidget):
     def update_config(self, config: AppConfig) -> None:
         self.config = config
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self.ad_connection.domain is not None and self.iface_ou_src.count() == 0:
+            self._load_iface_ous()
+
     # -- Construction UI -------------------------------------------------------
 
     def _build_ui(self) -> None:
@@ -158,17 +162,20 @@ class MigrationPage(QWidget):
         iface_layout = QVBoxLayout(iface_tab)
         iface_group = QGroupBox("Sélection directe des OUs")
         iface_form = QFormLayout(iface_group)
-        self.iface_ou_src = QLineEdit()
-        self.iface_ou_src.setPlaceholderText("OU=4emeA,OU=eleves,DC=lycee,DC=local")
-        self.iface_ou_dst = QLineEdit()
-        self.iface_ou_dst.setPlaceholderText("OU=3emeA,OU=eleves,DC=lycee,DC=local")
+        self.iface_ou_src = QComboBox()
+        self.iface_ou_src.setMinimumWidth(320)
+        self.iface_ou_dst = QComboBox()
+        self.iface_ou_dst.setMinimumWidth(320)
         iface_form.addRow("OU source :", self.iface_ou_src)
         iface_form.addRow("OU destination :", self.iface_ou_dst)
         iface_layout.addWidget(iface_group)
 
         iface_load_row = QHBoxLayout()
+        self.iface_refresh_button = QPushButton("Actualiser la liste des OUs")
+        self.iface_refresh_button.clicked.connect(self._load_iface_ous)
         self.iface_load_button = QPushButton("Charger les utilisateurs de l'OU source")
         self.iface_load_button.clicked.connect(self._on_iface_load_clicked)
+        iface_load_row.addWidget(self.iface_refresh_button)
         iface_load_row.addWidget(self.iface_load_button)
         iface_load_row.addStretch()
         iface_layout.addLayout(iface_load_row)
@@ -209,11 +216,29 @@ class MigrationPage(QWidget):
 
     # -- Mode Via l'interface --------------------------------------------------
 
+    def _load_iface_ous(self) -> None:
+        if self.ad_connection.domain is None:
+            return
+        base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
+        try:
+            ous = self.ad_connection.list_ous(base_dn)
+        except ADError as exc:
+            QMessageBox.warning(self, "Erreur", str(exc))
+            return
+        for combo in (self.iface_ou_src, self.iface_ou_dst):
+            previous = combo.currentData()
+            combo.clear()
+            for dn, name in sorted(ous, key=lambda x: x[0]):
+                combo.addItem(f"{name}  ({dn})", dn)
+            idx = combo.findData(previous)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+
     def _on_iface_load_clicked(self) -> None:
-        ou_src = self.iface_ou_src.text().strip()
-        ou_dst = self.iface_ou_dst.text().strip()
+        ou_src = self.iface_ou_src.currentData()
+        ou_dst = self.iface_ou_dst.currentData()
         if not ou_src or not ou_dst:
-            QMessageBox.warning(self, "Champs vides", "Saisissez l'OU source et l'OU destination.")
+            QMessageBox.warning(self, "OUs manquantes", "Sélectionnez l'OU source et l'OU destination.")
             return
         if self.ad_connection.domain is None:
             QMessageBox.critical(self, "Non connecté", "Aucune connexion à l'Active Directory.")

@@ -41,6 +41,7 @@ from PyQt6.QtWidgets import (
     QTableWidgetItem,
     QTreeWidget,
     QTreeWidgetItem,
+    QTreeWidgetItemIterator,
     QVBoxLayout,
     QWidget,
 )
@@ -195,6 +196,7 @@ class ADExplorerPage(QWidget):
         self.user_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.user_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.user_table.itemSelectionChanged.connect(self._on_user_selected)
+        self.user_table.itemDoubleClicked.connect(self._on_user_double_clicked)
         self.user_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.user_table.customContextMenuRequested.connect(self._on_user_context_menu)
         center_layout.addWidget(self.user_table)
@@ -674,6 +676,44 @@ class ADExplorerPage(QWidget):
                     self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(True)
 
+    def _on_user_double_clicked(self, item: QTableWidgetItem) -> None:
+        """Double-clic façon RSAT : ouvre l'objet plutôt que de se contenter
+        de le sélectionner — navigue dans une sous-OU, ouvre la gestion des
+        membres d'un groupe, ou l'édition d'attribut d'un utilisateur."""
+        row = item.row()
+        if not hasattr(self, "_displayed_users") or row >= len(self._displayed_users):
+            return
+        target = self._displayed_users[row]
+        kind = target.get("kind", "user")
+
+        if kind == "ou":
+            leaf = target["dn"].split(",", 1)[0]
+            label = leaf.split("=", 1)[-1] if "=" in leaf else leaf
+            self._load_users_for_ou(target["dn"], label)
+            self._select_tree_item_by_dn(target["dn"])
+        elif kind == "group":
+            self._manage_group_members_dialog(target["dn"], target["cn"])
+        else:
+            if self._current_user and self._current_user.get("dn", "").lower() == target["dn"].lower():
+                self._on_edit_attr()
+
+    def _select_tree_item_by_dn(self, dn: str) -> None:
+        """Sélectionne et déplie l'item de l'arborescence OUs correspondant à
+        ce DN, pour que la navigation par double-clic dans le tableau reste
+        cohérente avec le panneau de gauche."""
+        it = QTreeWidgetItemIterator(self.ou_tree)
+        while it.value():
+            tree_item = it.value()
+            if (tree_item.data(0, Qt.ItemDataRole.UserRole) or "").lower() == dn.lower():
+                self.ou_tree.setCurrentItem(tree_item)
+                self.ou_tree.scrollToItem(tree_item)
+                parent = tree_item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                return
+            it += 1
+
     def _on_user_context_menu(self, pos) -> None:
         item = self.user_table.itemAt(pos)
         if item is None or not hasattr(self, "_displayed_users"):
@@ -710,11 +750,10 @@ class ADExplorerPage(QWidget):
             return
 
         if kind == "ou":
-            QMessageBox.information(
-                self, "Sous-OU",
-                "La gestion des OU (renommer, supprimer…) se fait depuis "
-                "l'arborescence à gauche — cliquez dessus pour y naviguer.",
-            )
+            action_open = menu.addAction("Ouvrir…")
+            chosen = menu.exec(self.user_table.viewport().mapToGlobal(pos))
+            if chosen == action_open:
+                self._on_user_double_clicked(item)
             return
 
         if not self._current_user:
