@@ -1,11 +1,9 @@
-Correctif de fond sur l'Explorateur AD, qui répond directement à la confusion "OU non vide alors qu'elle semblait vide" du changelog précédent.
+Correctif important sur la mise à jour automatique, plus une réécriture du README.
 
-### Le panneau central montre enfin tout le contenu d'une OU
+### Mise à jour automatique : le bon ordre, enfin
 
-Jusqu'ici, cliquer sur une OU ne listait que les comptes utilisateurs — les groupes et sous-OU qui vivent dans le même conteneur restaient invisibles. C'est exactement ce qui rendait le groupe de classe auto-créé (Modules 1/2) indétectable : vider les élèves d'une classe laissait croire l'OU vide, alors que son groupe y était toujours.
+Le redémarrage automatique après mise à jour (introduit récemment) pouvait déclencher le lancement de l'installateur (Windows) ou la relance de l'application (Linux) **avant** même que la boîte de dialogue de confirmation ne s'affiche — une nouvelle fenêtre pouvait donc apparaître pendant que l'ancienne affichait encore "Mise à jour prête", avant le clic sur OK. C'est corrigé : la relance ne se déclenche désormais qu'après confirmation explicite, jamais avant.
 
-- Nouvelle colonne **Type** dans le tableau central : utilisateurs, groupes et sous-OU apparaissent désormais ensemble, rien n'est caché.
-- Le clic droit s'adapte au type sélectionné : menu complet sur un utilisateur, gérer les membres/supprimer sur un groupe, renvoi vers l'arborescence pour une sous-OU.
-- La sélection multiple (Ctrl/Shift-clic) peut désormais mélanger utilisateurs et groupes pour une suppression groupée en une seule confirmation.
+### README
 
-Vérifié de bout en bout contre un vrai Active Directory, y compris une suppression multiple mixte utilisateurs+groupes.
+Réécrit avec le logo de l'application et de vraies captures d'écran (pas des maquettes) : écran de connexion, création de comptes en masse, Explorateur AD.
