@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import Callable
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 import json
@@ -137,7 +138,13 @@ def _download_to(url: str, dest: Path, progress_callback=None) -> None:
                 progress_callback(pct)
 
 
-def _install_windows(download_url: str, checksum_url: str | None = None, progress_callback=None) -> bool:
+def _install_windows(
+    download_url: str, checksum_url: str | None = None, progress_callback=None
+) -> tuple[bool, Callable[[], None] | None]:
+    """Télécharge et vérifie l'installateur, mais ne le LANCE pas — voir
+    download_and_install : le lancement (donc la fermeture/relance de l'appli)
+    ne doit se déclencher qu'après confirmation explicite de l'utilisateur,
+    jamais pendant que le téléchargement tourne en arrière-plan."""
     tmp_dir = Path(tempfile.mkdtemp(prefix="edusync_update_"))
     installer_path = tmp_dir / "EduSyncAD-Setup.exe"
     try:
@@ -145,10 +152,11 @@ def _install_windows(download_url: str, checksum_url: str | None = None, progres
 
         if not _verify_checksum(installer_path, checksum_url):
             shutil.rmtree(tmp_dir, ignore_errors=True)
-            return False
+            return False, None
 
-        # Laisse le process courant se terminer (l'UI appelle sys.exit juste après)
-        # avant de lancer l'installateur, qui remplace EduSyncAD.exe puis le relance.
+        # Laisse le process courant se terminer (l'appelant fait sys.exit juste
+        # après avoir invoqué le callable ci-dessous) avant de lancer
+        # l'installateur, qui remplace EduSyncAD.exe puis le relance.
         bat = tmp_dir / "run_installer.bat"
         bat.write_text(
             f"@echo off\n"
@@ -157,11 +165,14 @@ def _install_windows(download_url: str, checksum_url: str | None = None, progres
             f'rmdir /S /Q "{tmp_dir}"\n',
             encoding="utf-8",
         )
-        subprocess.Popen(["cmd.exe", "/c", str(bat)], creationflags=0x08000000)
-        return True
+
+        def _launch_installer() -> None:
+            subprocess.Popen(["cmd.exe", "/c", str(bat)], creationflags=0x08000000)
+
+        return True, _launch_installer
     except Exception:
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        return False
+        return False, None
 
 
 def _run_logged(cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
@@ -194,7 +205,9 @@ def _relaunch_linux_flatpak() -> None:
         logger.warning("Impossible de relancer l'application automatiquement : %s", exc)
 
 
-def _install_linux_flatpak(download_url: str, checksum_url: str | None = None, progress_callback=None) -> bool:
+def _install_linux_flatpak(
+    download_url: str, checksum_url: str | None = None, progress_callback=None
+) -> tuple[bool, Callable[[], None] | None]:
     # "flatpak-spawn --host" exécute flatpak sur l'HÔTE, pas dans le bac à sable :
     # /tmp (tempfile.mkdtemp par défaut) y est un tmpfs privé au bac à sable, jamais
     # visible de l'hôte ("Aucun fichier ou dossier de ce nom" au moment d'installer,
@@ -210,7 +223,7 @@ def _install_linux_flatpak(download_url: str, checksum_url: str | None = None, p
 
         if not _verify_checksum(bundle_path, checksum_url):
             shutil.rmtree(tmp_dir, ignore_errors=True)
-            return False
+            return False, None
 
         # Depuis le bac à sable Flatpak, "flatpak-spawn --host" exécute la
         # commande sur l'hôte (nécessite --talk-name=org.freedesktop.Flatpak
@@ -227,12 +240,13 @@ def _install_linux_flatpak(download_url: str, checksum_url: str | None = None, p
             "pkexec", "flatpak", "install", "--system", "--noninteractive", "--or-update", "-y", str(bundle_path),
         ]
 
+        # Installation elle-même (flatpak install) déjà faite ici — seule la
+        # RELANCE de l'application est différée (voir download_and_install).
         # Tentative en --user d'abord : aucune élévation de privilèges requise.
         result = _run_logged(user_cmd, timeout=120)
         if result.returncode == 0:
             shutil.rmtree(tmp_dir, ignore_errors=True)
-            _relaunch_linux_flatpak()
-            return True
+            return True, _relaunch_linux_flatpak
 
         # Repli : l'app est peut-être installée en --system (nécessite les
         # droits root). pkexec affiche sa propre fenêtre d'autorisation
@@ -240,22 +254,28 @@ def _install_linux_flatpak(download_url: str, checksum_url: str | None = None, p
         result = _run_logged(system_cmd, timeout=180)
         shutil.rmtree(tmp_dir, ignore_errors=True)
         if result.returncode == 0:
-            _relaunch_linux_flatpak()
-        return result.returncode == 0
+            return True, _relaunch_linux_flatpak
+        return False, None
     except Exception as exc:
         logger.warning("Échec de la mise à jour Flatpak : %s", exc)
         shutil.rmtree(tmp_dir, ignore_errors=True)
-        return False
+        return False, None
 
 
 def download_and_install(
     download_url: str, checksum_url: str | None = None, progress_callback=None
-) -> bool:
+) -> tuple[bool, Callable[[], None] | None]:
     """Télécharge, vérifie l'intégrité (SHA-256, voir _verify_checksum) et
-    installe la mise à jour. Retourne True si succès."""
+    installe la mise à jour (côté Flatpak) ou prépare l'installateur (côté
+    Windows). Retourne (succès, finalize) — `finalize`, si non None, DOIT
+    être appelé par l'appelant uniquement après confirmation explicite de
+    l'utilisateur (ex. clic sur OK d'un message "redémarrage imminent"),
+    jamais avant : c'est lui qui ferme l'ancienne instance et lance la
+    nouvelle, et les faire cohabiter avant cette confirmation surprendrait
+    l'utilisateur avec deux fenêtres ouvertes en même temps."""
     system = platform.system()
     if system == "Windows":
         return _install_windows(download_url, checksum_url, progress_callback)
     if system == "Linux":
         return _install_linux_flatpak(download_url, checksum_url, progress_callback)
-    return False
+    return False, None

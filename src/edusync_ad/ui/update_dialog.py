@@ -28,7 +28,7 @@ class _CheckWorker(QThread):
 
 class _DownloadWorker(QThread):
     progress = pyqtSignal(int)
-    done = pyqtSignal(bool)
+    done = pyqtSignal(bool, object)  # succès, finalize (callable ou None)
 
     def __init__(self, url: str, checksum_url: str | None = None):
         super().__init__()
@@ -36,8 +36,10 @@ class _DownloadWorker(QThread):
         self._checksum_url = checksum_url
 
     def run(self):
-        ok = download_and_install(self._url, self._checksum_url, progress_callback=self.progress.emit)
-        self.done.emit(ok)
+        ok, finalize = download_and_install(
+            self._url, self._checksum_url, progress_callback=self.progress.emit
+        )
+        self.done.emit(ok, finalize)
 
 
 class UpdateDialog(QDialog):
@@ -126,17 +128,19 @@ class UpdateDialog(QDialog):
         self._dl_worker.done.connect(self._on_download_done)
         self._dl_worker.start()
 
-    def _on_download_done(self, ok: bool):
+    def _on_download_done(self, ok: bool, finalize):
         if ok:
-            # Les deux plateformes relancent désormais l'application
-            # automatiquement (installateur Windows en mode postinstall,
-            # _relaunch_linux_flatpak côté Linux) — il suffit de quitter
-            # proprement le processus courant.
             QMessageBox.information(
                 self,
                 "Mise à jour prête",
                 "La mise à jour va s'appliquer. L'application va redémarrer automatiquement.",
             )
+            # Le lancement de l'installateur (Windows) / la relance de l'appli
+            # (Linux) se déclenche seulement maintenant, après le clic sur OK —
+            # jamais avant, pour ne jamais faire cohabiter l'ancienne et la
+            # nouvelle instance avant que l'utilisateur ait confirmé.
+            if finalize is not None:
+                finalize()
             import sys
             sys.exit(0)
         else:

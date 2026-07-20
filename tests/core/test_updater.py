@@ -125,11 +125,18 @@ def test_install_linux_flatpak_downloads_under_user_cache_not_system_tmp(tmp_pat
     fake_result = mocker.Mock(returncode=0, stdout="", stderr="")
     mocker.patch("edusync_ad.core.updater.subprocess.run", return_value=fake_result)
 
-    ok = _install_linux_flatpak("https://example.invalid/EduSyncAD-linux.flatpak")
+    ok, finalize = _install_linux_flatpak("https://example.invalid/EduSyncAD-linux.flatpak")
 
     assert ok is True
     assert len(downloaded_paths) == 1
     assert str(downloaded_paths[0]).startswith(str(fake_cache))
+    # La relance ne doit pas avoir eu lieu pendant l'installation elle-même —
+    # seulement quand l'appelant invoque explicitement `finalize` (après
+    # confirmation de l'utilisateur, voir update_dialog.py).
+    assert finalize is not None
+    fake_popen = mocker.patch("edusync_ad.core.updater.subprocess.Popen")
+    finalize()
+    fake_popen.assert_called_once()
 
 
 def test_check_for_update_checksum_url_none_when_asset_missing(mocker):
