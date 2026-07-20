@@ -1,17 +1,9 @@
-Correctifs et améliorations demandés après un premier essai de l'Explorateur AD (clic droit, confirmations, volume de groupes affichés), plus un correctif de fiabilité sur la publication des releases elle-même.
+Correctif ciblé sur un blocage réel rencontré en usage, plus un petit ajustement d'ergonomie.
 
-### Confirmations de suppression simplifiées
+### Message "OU non vide" enfin explicite
 
-- OU, utilisateur, groupe : la ressaisie obligatoire du nom exact est remplacée par une simple confirmation Oui/Non — jugée trop lourde à l'usage pour une opération déjà protégée par ailleurs (mode simulation, journal d'actions).
+- Impossible de supprimer une OU alors qu'elle semblait vide : en réalité, le groupe de classe créé automatiquement par les Modules 1/2 vit dans la même OU que la classe elle-même — supprimer tous les élèves ne suffit donc pas à vider l'OU tant que ce groupe existe encore, mais l'appli ne le disait pas. Le message liste désormais concrètement les objets qui bloquent (ex. `CN=6emeB`), au lieu d'un texte générique.
 
-### Suppression multiple dans l'Explorateur AD
+### Retour visuel sur les boutons du journal de l'application
 
-- Sélection de plusieurs comptes (Ctrl/Shift-clic) dans la liste centrale, puis **clic droit → Supprimer les comptes sélectionnés…** : une seule confirmation pour tout le lot, avec un résumé des échecs éventuels si certains comptes ne peuvent pas être supprimés.
-
-### Listes de groupes allégées
-
-- La liste "Groupes" (panneau gauche), le dialogue "Gérer les groupes" et la source "Groupe AD" du Module 5 n'affichent plus les dizaines de groupes système d'Active Directory (Administrateurs, Opérateurs de sauvegarde, Contrôleurs de domaine…) — seuls les groupes créés par l'établissement (classes, personnels) apparaissent désormais. Vérifié contre un vrai AD : 51 groupes réduits à 3 pertinents.
-
-### Fiabilité de la publication des releases
-
-- Les notes de version affichées sur GitHub se perdaient de façon répétée (contenu vide ou tronqué à un simple message de commit) à cause d'un problème dans la synchronisation Gitea → GitHub qui ne préservait pas le message du tag annoté. Les notes proviennent désormais de ce fichier, suivi normalement dans le dépôt — ne dépend plus de cette synchronisation fragile.
+- **Copier**, **Vider le journal**, **Exporter…** confirment maintenant visuellement (flash vert) que le clic a bien été pris en compte.
