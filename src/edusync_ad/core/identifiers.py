@@ -28,6 +28,28 @@ from edusync_ad.core.models import DoublonRule, PrenomComposeRule
 _VAR_RE = re.compile(r"\{(P|N|AN|ANNEE|p\d+|n\d+)\}")
 _INVALID_CHARS_RE = re.compile(r"[^a-z0-9._-]")
 
+# sAMAccountName (identifiant de connexion pré-Windows 2000) est limité à 20
+# caractères par Active Directory lui-même — contrainte historique de la base
+# SAM, non configurable. Un identifiant plus long est rejeté par le contrôleur
+# de domaine à la création (erreur AD peu explicite) ; on tronque donc ici
+# plutôt que de laisser passer un format/nom qui dépasserait cette limite.
+MAX_IDENTIFIER_LENGTH = 20
+
+
+def _cap(identifier: str) -> str:
+    return identifier[:MAX_IDENTIFIER_LENGTH]
+
+
+def _cap_with_suffix(base: str, suffix: str) -> str:
+    """Tronque `base` (pas `suffix`) pour que `base + suffix` tienne dans la
+    limite — sinon un suffixe de désambiguïsation pourrait lui-même être
+    coupé par une troncature naïve en fin de chaîne, annulant la résolution
+    de doublon qu'il est censé apporter."""
+    room = MAX_IDENTIFIER_LENGTH - len(suffix)
+    if room < 1:
+        return suffix[:MAX_IDENTIFIER_LENGTH]
+    return base[:room] + suffix
+
 PRESETS: dict[str, str] = {
     "prenom": "{P}",
     "nom": "{N}",
@@ -142,9 +164,9 @@ class IdentifierEngine:
     def base_identifier(self, prenom_raw: str, nom_raw: str) -> str:
         prenom, nom = self._clean_parts(prenom_raw, nom_raw)
         if self.format_key in CAMEL_PRESETS:
-            return _camel_identifier(self.format_key, prenom, nom)
+            return _cap(_camel_identifier(self.format_key, prenom, nom))
         template = self._resolved_template()
-        return render_template(template, prenom, nom, year=self.annee)
+        return _cap(render_template(template, prenom, nom, year=self.annee))
 
     def generate_unique(
         self, prenom_raw: str, nom_raw: str, existing_ids: set[str]
@@ -169,10 +191,12 @@ class IdentifierEngine:
             yield from self._numeric_suffix_candidates(base)
         elif rule == DoublonRule.SUFFIXE_NUMERIQUE_SEPARATEUR:
             for n in range(2, 1000):
-                yield f"{base}{self.separateur_doublon}{n}"
+                yield _cap_with_suffix(base, f"{self.separateur_doublon}{n}")
         elif rule == DoublonRule.PREFIXE_NUMERIQUE:
             for n in range(2, 1000):
-                yield f"{n}.{base}"
+                # Préfixe : la troncature en fin de chaîne préserve naturellement
+                # le "{n}." en tête, pas besoin de _cap_with_suffix ici.
+                yield _cap(f"{n}.{base}")
         elif rule == DoublonRule.LETTRES_PRENOM:
             yield from self._lettres_candidates("p", base, prenom, nom)
             yield from self._numeric_suffix_candidates(base)
@@ -181,12 +205,12 @@ class IdentifierEngine:
             yield from self._numeric_suffix_candidates(base)
         elif rule == DoublonRule.ANNEE_SUFFIXE:
             year = self.annee if self.annee is not None else date.today().year
-            yield f"{base}{year}"
+            yield _cap_with_suffix(base, str(year))
             yield from self._numeric_suffix_candidates(base)
 
     def _numeric_suffix_candidates(self, base: str) -> Iterator[str]:
         for n in range(2, 1000):
-            yield f"{base}{n}"
+            yield _cap_with_suffix(base, str(n))
 
     def _lettres_candidates(
         self, which: str, base: str, prenom: str, nom: str
@@ -198,8 +222,8 @@ class IdentifierEngine:
         start_length = int(match.group(1)) + 1
         max_length = len(prenom) if which == "p" else len(nom)
         for length in range(start_length, max_length + 1):
-            candidate = render_template(
+            candidate = _cap(render_template(
                 template, prenom, nom, year=self.annee, override=(which, length)
-            )
+            ))
             if candidate != base:
                 yield candidate

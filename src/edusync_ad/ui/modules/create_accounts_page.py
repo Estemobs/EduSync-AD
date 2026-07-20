@@ -600,7 +600,14 @@ class CreateAccountsPage(QWidget):
 
     def _create_one_user(self, user: GeneratedUser) -> None:
         prenom, nom = user.source.prenom, user.source.nom
-        dn = f"CN={escape_rdn(f'{prenom} {nom}')},{user.ou_cible}"
+        cn = f"{prenom} {nom}"
+        if user.doublon_resolu:
+            # Le CN est le RDN AD : deux personnes de même prénom+nom dans la
+            # même OU produiraient sinon un DN identique et un échec brut
+            # "entryAlreadyExists" pour la 2e, alors même que son identifiant
+            # (sAMAccountName) a déjà été rendu unique ci-dessus.
+            cn = f"{cn} ({user.identifiant})"
+        dn = f"CN={escape_rdn(cn)},{user.ou_cible}"
         attributes = {
             "sAMAccountName": user.identifiant,
             "givenName": prenom,

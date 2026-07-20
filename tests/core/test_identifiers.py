@@ -147,3 +147,29 @@ def test_no_doublon_returns_base():
     identifiant, doublon = engine.generate_unique("Thomas", "Martin", existing_ids=set())
     assert identifiant == "thomas.martin"
     assert doublon is False
+
+
+# sAMAccountName est limité à 20 caractères par AD lui-même (contrainte SAM
+# pré-Windows 2000, non configurable) — un identifiant plus long est rejeté
+# à la création avec une erreur AD peu explicite, découvert en testant contre
+# un vrai AD ("Thérèse Müller-Özdemir" -> "therese.mullerozdemir", 21 car.).
+
+def test_base_identifier_truncated_to_ad_sam_limit():
+    engine = IdentifierEngine(format_key="prenom.nom")
+    identifiant = engine.base_identifier("Thérèse", "Müller-Özdemir")
+    assert identifiant == "therese.muller-ozdem"
+    assert len(identifiant) <= 20
+
+
+def test_doublon_numeric_suffix_stays_within_ad_sam_limit():
+    engine = IdentifierEngine(format_key="prenom.nom")
+    base = engine.base_identifier("Thérèse", "Müller-Özdemir")
+    identifiant, doublon = engine.generate_unique(
+        "Thérèse", "Müller-Özdemir", existing_ids={base}
+    )
+    assert doublon is True
+    assert len(identifiant) <= 20
+    # Le suffixe "2" ne doit jamais être coupé par la troncature (sinon
+    # l'identifiant retomberait sur `base`, déjà pris).
+    assert identifiant.endswith("2")
+    assert identifiant != base
