@@ -37,10 +37,19 @@ jobs:
           $version = "${{ github.ref_name }}" -replace '^v', ''
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" packaging\installer.iss
 
+      - name: Calculer le hash SHA-256
+        shell: pwsh
+        # Vérifié par l'updater intégré (core/updater.py) avant exécution silencieuse
+        # de l'installeur téléchargé — voir _verify_checksum.
+        run: |
+          (Get-FileHash EduSyncAD-Setup.exe -Algorithm SHA256).Hash.ToLower() | Set-Content -NoNewline EduSyncAD-Setup.exe.sha256
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows-build
-          path: EduSyncAD-Setup.exe
+          path: |
+            EduSyncAD-Setup.exe
+            EduSyncAD-Setup.exe.sha256
 
   # ── Build Linux .flatpak ────────────────────────────────────────────────────
   build-flatpak:
@@ -67,10 +76,15 @@ jobs:
           flatpak-builder --force-clean --repo=repo flatpak-build packaging/org.edusync.AD.yml
           flatpak build-bundle repo EduSyncAD-linux.flatpak org.edusync.AD
 
+      - name: Calculer le hash SHA-256
+        run: sha256sum EduSyncAD-linux.flatpak | cut -d ' ' -f1 > EduSyncAD-linux.flatpak.sha256
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: EduSyncAD-linux.flatpak
+          path: |
+            EduSyncAD-linux.flatpak
+            EduSyncAD-linux.flatpak.sha256
 
   # ── Publier la Release GitHub ───────────────────────────────────────────────
   release:
@@ -90,12 +104,17 @@ jobs:
         with:
           name: linux-build
 
-      - name: Extraire le changelog depuis le tag annoté
+      - name: Extraire le changelog depuis RELEASE_NOTES.md
+        # Un fichier suivi normalement dans le dépôt, pas le message du tag
+        # annoté : celui-ci se perd de façon répétée dans la synchronisation
+        # Gitea -> GitHub (le tag arrive en lightweight côté GitHub, sans
+        # son message), alors qu'un fichier de commit normal, lui, arrive
+        # toujours intact.
         run: |
           {
             echo "## EduSync AD ${{ github.ref_name }}"
             echo ""
-            git tag -l --format='%(contents)' "${{ github.ref_name }}"
+            cat RELEASE_NOTES.md
             echo ""
             echo "---"
             echo ""
@@ -105,6 +124,11 @@ jobs:
             echo "|---|---|---|"
             echo "| Windows 10/11 | \`EduSyncAD-Setup.exe\` | Installateur classique (raccourcis menu Démarrer/Bureau, désinstallation propre) |"
             echo "| Linux | \`EduSyncAD-linux.flatpak\` | \`flatpak install EduSyncAD-linux.flatpak\` puis \`flatpak run org.edusync.AD\` |"
+            echo ""
+            echo "Les fichiers \`.sha256\` associés permettent de vérifier l'intégrité du"
+            echo "téléchargement (\`certutil -hashfile EduSyncAD-Setup.exe SHA256\` sous Windows,"
+            echo "\`sha256sum -c EduSyncAD-linux.flatpak.sha256\` sous Linux) — la mise à jour"
+            echo "intégrée de l'application les vérifie déjà automatiquement."
             echo ""
             echo "### Prérequis"
             echo "- Active Directory accessible sur le réseau (LDAP port 389 ou LDAPS port 636)"
@@ -121,6 +145,8 @@ jobs:
           body_path: release_notes.md
           files: |
             EduSyncAD-Setup.exe
+            EduSyncAD-Setup.exe.sha256
             EduSyncAD-linux.flatpak
+            EduSyncAD-linux.flatpak.sha256
           draft: false
           prerelease: false

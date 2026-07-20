@@ -12,6 +12,7 @@ from edusync_ad.core.ad.connection import (
     ConnectionState,
     _is_certificate_error,
     _raise_ad_error,
+    is_builtin_group_dn,
 )
 from edusync_ad.core.ad.exceptions import (
     ADAuthError,
@@ -169,6 +170,16 @@ def test_create_group_and_add_user(ad):
     user_dn = f"cn=Thomas Martin,{OU_3EMEA_DN}"
     ad.create_user(user_dn, {"sAMAccountName": "thomas.martin"})
     ad.add_user_to_group(user_dn, GROUP_3EMEA_DN)  # ne doit pas lever
+
+
+def test_is_builtin_group_dn_detects_builtin_and_users_containers():
+    assert is_builtin_group_dn("CN=Administrateurs,CN=Builtin,DC=bdc,DC=fr") is True
+    assert is_builtin_group_dn("CN=DnsAdmins,CN=Users,DC=bdc,DC=fr") is True
+    assert is_builtin_group_dn("cn=domain admins,cn=users,dc=bdc,dc=fr") is True  # insensible à la casse
+
+
+def test_is_builtin_group_dn_false_for_custom_ou_group():
+    assert is_builtin_group_dn("CN=6emeA,OU=6emeA,OU=eleves,DC=bdc,DC=fr") is False
 
 
 def test_delete_group(ad):

@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from edusync_ad.core.ad.connection import ADConnection
+from edusync_ad.core.ad.connection import ADConnection, is_builtin_group_dn
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
@@ -386,6 +386,7 @@ class PasswordResetPage(QWidget):
             if not silent:
                 QMessageBox.warning(self, "Erreur", str(exc))
             return
+        groups = [(dn, name) for dn, name in groups if not is_builtin_group_dn(dn)]
         previous = self.groupe_combo.currentData()
         self.groupe_combo.clear()
         for dn, name in sorted(groups, key=lambda x: x[1].lower()):

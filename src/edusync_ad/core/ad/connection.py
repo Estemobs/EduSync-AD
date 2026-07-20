@@ -188,6 +188,19 @@ def _raise_ad_error(conn: Connection, default_message: str) -> None:
     raise ADError(result.get("description") or default_message)
 
 
+def is_builtin_group_dn(dn: str) -> bool:
+    """Indique si un groupe vit dans un conteneur intégré par défaut d'AD
+    (CN=Builtin, CN=Users) plutôt que dans une OU créée par l'établissement.
+
+    Un domaine AD compte plusieurs dizaines de groupes système (Administrateurs,
+    Opérateurs de sauvegarde, Contrôleurs de domaine…) qui n'ont aucun intérêt
+    dans les vues de sélection de groupes de cette application (gestion des
+    classes/personnels) — sert à les filtrer plutôt que de noyer les quelques
+    groupes réellement pertinents dedans."""
+    lowered = f",{dn.lower()},"
+    return ",cn=builtin," in lowered or ",cn=users," in lowered
+
+
 def _format_pwd_last_set(value) -> str:
     """Formate l'attribut AD pwdLastSet en date lisible.
 

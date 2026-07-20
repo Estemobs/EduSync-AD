@@ -47,7 +47,7 @@ from PyQt6.QtWidgets import (
 
 from ldap3.utils.dn import escape_rdn
 
-from edusync_ad.core.ad.connection import ADConnection
+from edusync_ad.core.ad.connection import ADConnection, is_builtin_group_dn
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
@@ -191,6 +191,7 @@ class ADExplorerPage(QWidget):
         self.user_table.horizontalHeader().setStretchLastSection(True)
         self.user_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.user_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.user_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.user_table.itemSelectionChanged.connect(self._on_user_selected)
         self.user_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.user_table.customContextMenuRequested.connect(self._on_user_context_menu)
@@ -298,6 +299,10 @@ class ADExplorerPage(QWidget):
         except ADError as exc:
             QMessageBox.critical(self, "Erreur", str(exc))
             return
+        # Masque les dizaines de groupes système d'AD (Administrateurs,
+        # Opérateurs de sauvegarde…) sans intérêt pour la gestion des
+        # classes/personnels — ne garde que les groupes créés par l'établissement.
+        groups = [(dn, name) for dn, name in groups if not is_builtin_group_dn(dn)]
 
         group_icon = _emoji_icon(ICON_GROUPE)
         self.group_list.clear()
@@ -434,13 +439,12 @@ class ADExplorerPage(QWidget):
             )
             return
 
-        # Protection contre la suppression accidentelle : on exige de retaper
-        # le nom exact de l'OU plutôt qu'une simple case Oui/Non.
-        typed, ok = QInputDialog.getText(
+        reply = QMessageBox.question(
             self, "Confirmer la suppression",
-            f"Cette action est irréversible. Retapez « {name} » pour confirmer la suppression :",
+            f"Supprimer définitivement l'OU « {name} » ? Cette action est irréversible.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
-        if not ok or typed.strip() != name:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         simulation = self.ad_connection.dry_run
@@ -482,13 +486,13 @@ class ADExplorerPage(QWidget):
             self._delete_group(item.data(Qt.ItemDataRole.UserRole), item.text())
 
     def _delete_group(self, group_dn: str, group_name: str) -> None:
-        typed, ok = QInputDialog.getText(
+        reply = QMessageBox.question(
             self, "Confirmer la suppression",
-            f"Cette action est irréversible et ne retire pas les membres au préalable "
-            f"(ils perdent simplement cette appartenance). Retapez « {group_name} » "
-            f"pour confirmer la suppression :",
+            f"Supprimer définitivement le groupe « {group_name} » ? Cette action est "
+            f"irréversible (les membres perdent simplement cette appartenance).",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
-        if not ok or typed.strip() != group_name:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         simulation = self.ad_connection.dry_run
@@ -620,6 +624,12 @@ class ADExplorerPage(QWidget):
         rows = self.user_table.selectionModel().selectedRows()
         if not rows or not hasattr(self, "_displayed_users"):
             return
+        if len(rows) > 1:
+            # Plusieurs comptes sélectionnés : seule la suppression en masse
+            # (menu clic droit) a un sens ici — les actions unitaires
+            # (modifier un attribut, changer d'OU…) restent désactivées.
+            self._clear_detail_panel()
+            return
         idx = rows[0].row()
         if idx >= len(self._displayed_users):
             return
@@ -639,11 +649,22 @@ class ADExplorerPage(QWidget):
         item = self.user_table.itemAt(pos)
         if item is None:
             return
-        self.user_table.selectRow(item.row())
-        if not self._current_user:
-            return
+        selected_rows = {idx.row() for idx in self.user_table.selectionModel().selectedRows()}
+        if item.row() not in selected_rows:
+            self.user_table.selectRow(item.row())
+            selected_rows = {item.row()}
 
         menu = QMenu(self)
+        if len(selected_rows) > 1:
+            # Sélection multiple : seule la suppression en masse a un sens.
+            action_delete = menu.addAction(f"Supprimer les {len(selected_rows)} comptes sélectionnés…")
+            chosen = menu.exec(self.user_table.viewport().mapToGlobal(pos))
+            if chosen == action_delete:
+                self._on_delete_selected_users(selected_rows)
+            return
+
+        if not self._current_user:
+            return
         action_edit = menu.addAction("Modifier un attribut…")
         action_ou = menu.addAction("Changer d'OU…")
         action_pwd = menu.addAction("Réinitialiser le mot de passe…")
@@ -665,43 +686,69 @@ class ADExplorerPage(QWidget):
         elif chosen == action_groups:
             self._on_manage_groups()
         elif chosen == action_delete:
-            self._on_delete_user()
+            self._on_delete_selected_users(selected_rows)
 
-    def _on_delete_user(self) -> None:
-        if not self._current_user:
+    def _on_delete_selected_users(self, row_indices: set[int]) -> None:
+        if not hasattr(self, "_displayed_users"):
             return
-        sam = self._current_user.get("sAMAccountName", "")
-        cn = self._current_user.get("cn", sam)
-        user_dn = self._current_user["dn"]
+        targets = [self._displayed_users[i] for i in sorted(row_indices) if i < len(self._displayed_users)]
+        if not targets:
+            return
 
-        # Protection contre la suppression accidentelle : on exige de retaper
-        # l'identifiant exact plutôt qu'une simple case Oui/Non (même
-        # convention que la suppression d'OU).
-        typed, ok = QInputDialog.getText(
-            self, "Confirmer la suppression",
-            f"Cette action est irréversible. Retapez « {sam} » pour confirmer la "
-            f"suppression du compte {cn} :",
+        if len(targets) == 1:
+            message = (
+                f"Supprimer définitivement le compte « {targets[0]['cn']} » ? "
+                f"Cette action est irréversible."
+            )
+        else:
+            names = ", ".join(t["cn"] for t in targets[:10])
+            if len(targets) > 10:
+                names += f", … (+{len(targets) - 10})"
+            message = (
+                f"Supprimer définitivement ces {len(targets)} comptes ? "
+                f"Cette action est irréversible.\n\n{names}"
+            )
+
+        reply = QMessageBox.question(
+            self, "Confirmer la suppression", message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
-        if not ok or typed.strip() != sam:
+        if reply != QMessageBox.StandardButton.Yes:
             return
 
         simulation = self.ad_connection.dry_run
-        try:
-            self.ad_connection.delete_user(user_dn)
-            self.audit_log.record(
-                "suppression_compte", sam, "succes", self.session_id, simulation=simulation,
+        success = 0
+        failed: list[str] = []
+        for t in targets:
+            try:
+                self.ad_connection.delete_user(t["dn"])
+                self.audit_log.record(
+                    "suppression_compte", t["sam"], "succes", self.session_id, simulation=simulation,
+                )
+                success += 1
+            except ADError as exc:
+                self.audit_log.record(
+                    "suppression_compte", t["sam"], "echec", self.session_id,
+                    simulation=simulation, detail=str(exc),
+                )
+                failed.append(f"{t['cn']} : {exc}")
+
+        if failed:
+            QMessageBox.warning(
+                self, "Suppression partielle",
+                f"{success}/{len(targets)} compte(s) supprimé(s)"
+                f"{'  (simulé)' if simulation else ''}.\n\nÉchecs :\n" + "\n".join(failed[:10]),
             )
-            QMessageBox.information(self, "Succès", f"Compte supprimé{'  (simulé)' if simulation else ''}.")
-            if self._current_ou_dn:
-                leaf = self._current_ou_dn.split(",", 1)[0]
-                label = leaf.split("=", 1)[-1] if "=" in leaf else leaf
-                self._load_users_for_ou(self._current_ou_dn, label)
-            self._clear_detail_panel()
-        except ADError as exc:
-            self.audit_log.record(
-                "suppression_compte", sam, "echec", self.session_id, simulation=simulation, detail=str(exc),
+        else:
+            QMessageBox.information(
+                self, "Succès", f"{success} compte(s) supprimé(s){'  (simulé)' if simulation else ''}.",
             )
-            QMessageBox.critical(self, "Erreur", str(exc))
+
+        if self._current_ou_dn:
+            leaf = self._current_ou_dn.split(",", 1)[0]
+            label = leaf.split("=", 1)[-1] if "=" in leaf else leaf
+            self._load_users_for_ou(self._current_ou_dn, label)
+        self._clear_detail_panel()
 
     def _refresh_detail_panel(self, attrs: dict) -> None:
         for attr_key, _ in EDITABLE_ATTRS:
@@ -909,7 +956,10 @@ class ADExplorerPage(QWidget):
             return
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
         try:
-            all_groups = self.ad_connection.list_groups(base_dn)
+            all_groups = [
+                (dn, name) for dn, name in self.ad_connection.list_groups(base_dn)
+                if not is_builtin_group_dn(dn)
+            ]
             member_of = self._current_user.get("memberOf") or []
             member_dns = {str(g).lower() for g in member_of}
         except ADError as exc:
