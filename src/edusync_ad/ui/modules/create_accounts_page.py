@@ -247,6 +247,11 @@ class CreateAccountsPage(QWidget):
             if suggested:
                 combo.setCurrentIndex(combo.findData(suggested))
             label = column + (" *" if column in REQUIRED_COLUMNS else "")
+            if column == "ou":
+                # Piège fréquent : associer par erreur cette colonne au nom
+                # de classe (ex. "6emeA") au lieu de "classe" — ce champ
+                # attend un chemin AD complet (OU=...,DC=...), pas un nom.
+                label += "  (chemin AD complet — laissez « (non utilisé) » si vous n'avez qu'un nom de classe)"
             self.mapping_form.addRow(label, combo)
             self._mapping_combos[column] = combo
 
@@ -442,6 +447,22 @@ class CreateAccountsPage(QWidget):
                         source=row, identifiant="", mot_de_passe="", adresse_mail="", ou_cible="",
                         erreur="Aucune OU déterminée — précisez une classe, une OU par défaut, "
                                "ou une colonne OU dans le fichier.",
+                    )
+                )
+                continue
+            if not from_classe and "=" not in ou_dn:
+                # Un vrai DN AD contient toujours au moins un "=" (OU=, DC=…).
+                # Une valeur sans "=" (ex. juste "6emeA") vient presque
+                # toujours d'une colonne "ou" associée par erreur à la
+                # colonne "classe" dans le mapping — sans ce garde-fou, AD ne
+                # refuserait qu'au moment de la création réelle, avec un
+                # "noSuchObject" incompréhensible.
+                generated.append(
+                    GeneratedUser(
+                        source=row, identifiant="", mot_de_passe="", adresse_mail="", ou_cible=ou_dn,
+                        erreur=f"« {ou_dn} » ne ressemble pas à un chemin AD valide (attendu : "
+                               f"OU=...,DC=...). Si c'est un nom de classe, associez plutôt cette "
+                               f"colonne à « classe » (pas « ou ») dans le mapping ci-dessus.",
                     )
                 )
                 continue

@@ -92,15 +92,33 @@ toutes les opérations sans aucune écriture réelle dans l'AD.
 Cliquez sur **Choisir un fichier CSV…** et sélectionnez votre fichier.
 Un aperçu des 5 premières lignes s'affiche pour vérification.
 
-Format attendu (délimiteur `;` ou `,`) :
+Format attendu (délimiteur `;` ou `,`) — **deux façons de cibler l'OU, ne
+mélangez pas les deux** :
 
 ```
-prenom;nom;ou;email_perso;date_naissance;numero
-Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee,DC=local;;2010-03-15;
+prenom;nom;classe
+Thomas;Martin;3emeA
 ```
 
-Colonnes **obligatoires** : `prenom`, `nom`, `ou`
-Colonnes **facultatives** : `email_perso`, `date_naissance`, `numero`
+ou, si vous connaissez déjà le chemin AD complet :
+
+```
+prenom;nom;ou
+Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee,DC=local
+```
+
+Colonnes **obligatoires** : `prenom`, `nom`.
+Colonnes **facultatives** : `classe` **ou** `ou` (l'une des deux, pas les
+deux — voir ci-dessous), `email_perso`, `date_naissance`, `numero`.
+
+> ⚠️ **Piège fréquent** : dans l'écran de mapping, la colonne `ou` attend un
+> **chemin AD complet** (`OU=...,DC=...`), jamais un simple nom de classe.
+> Si votre fichier n'a qu'une colonne `classe` (le cas le plus courant),
+> associez-la au champ **`classe`**, et laissez **`ou`** sur
+> **« (non utilisé) »**. Si vous associez `ou` à votre colonne `classe` par
+> erreur, la création échouera avec `noSuchObject` — l'appli détecte
+> maintenant ce cas et l'indique clairement dans le tableau plutôt que
+> d'échouer sans explication.
 
 Si vos en-têtes sont différents, utilisez les menus déroulants de mapping
 pour associer chaque colonne.
