@@ -19,7 +19,7 @@ from platformdirs import user_cache_dir
 logger = logging.getLogger("edusync_ad.updater")
 
 RELEASES_API_URL = "https://api.github.com/repos/estemobs/EduSync-AD/releases/latest"
-CURRENT_VERSION = "1.5.2"
+CURRENT_VERSION = "1.5.3"
 APP_NAME = "EduSyncAD"
 APP_AUTHOR = "EduSyncAD"
 
