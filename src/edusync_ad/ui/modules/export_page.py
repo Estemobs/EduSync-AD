@@ -39,6 +39,7 @@ from edusync_ad.core.export import (
     export_users_csv,
     generate_labels_pdf,
 )
+from edusync_ad.core.password_vault import PasswordVault
 
 COL_SAM, COL_CN, COL_CLASSE, COL_ETAT = range(4)
 PREVIEW_COLUMNS = ["Identifiant", "Nom complet", "Classe / OU", "État"]
@@ -52,6 +53,7 @@ class ExportPage(QWidget):
         ad_connection: ADConnection,
         config: AppConfig,
         audit_log: AuditLog,
+        password_vault: PasswordVault,
         session_id: str,
         parent=None,
     ) -> None:
@@ -59,6 +61,7 @@ class ExportPage(QWidget):
         self.ad_connection = ad_connection
         self.config = config
         self.audit_log = audit_log
+        self.password_vault = password_vault
         self.session_id = session_id
 
         self._loaded_users: list[dict] = []  # dicts bruts list_users_in_ou/list_ou_contents
@@ -101,13 +104,25 @@ class ExportPage(QWidget):
         self.load_info = QLabel("")
 
         fields_group = QGroupBox("3. Champs à inclure")
-        fields_layout = QHBoxLayout(fields_group)
+        fields_outer_layout = QVBoxLayout(fields_group)
+        fields_layout = QHBoxLayout()
         for key, label in EXPORT_FIELDS.items():
             chk = QCheckBox(label)
             chk.setChecked(key in DEFAULT_CHECKED_FIELDS)
             self._field_checkboxes[key] = chk
             fields_layout.addWidget(chk)
         fields_layout.addStretch()
+        fields_outer_layout.addLayout(fields_layout)
+
+        self.pwd_warning_label = QLabel(
+            "⚠ Le mot de passe sera visible en clair dans le fichier exporté — à distribuer avec précaution. "
+            "Seuls les mots de passe positionnés par EduSync AD (création, réinitialisation) sont disponibles."
+        )
+        self.pwd_warning_label.setWordWrap(True)
+        self.pwd_warning_label.setStyleSheet("color: #b23a2e; font-weight: 600;")
+        self.pwd_warning_label.setVisible("mot_de_passe" in DEFAULT_CHECKED_FIELDS)
+        self._field_checkboxes["mot_de_passe"].toggled.connect(self.pwd_warning_label.setVisible)
+        fields_outer_layout.addWidget(self.pwd_warning_label)
 
         format_group = QGroupBox("4. Format d'export")
         format_layout = QVBoxLayout(format_group)
@@ -229,6 +244,7 @@ class ExportPage(QWidget):
         # nécessitent une lecture complète par compte, faite ici une seule
         # fois au moment de l'export plutôt qu'à chaque prévisualisation.
         needs_full_attrs = bool(set(fields) - {"identifiant", "nom_complet", "classe", "etat"})
+        want_password = "mot_de_passe" in fields
         rows = []
         if needs_full_attrs:
             for u in self._loaded_users:
@@ -236,7 +252,13 @@ class ExportPage(QWidget):
                     attrs = self.ad_connection.get_user_attributes(u["dn"])
                 except ADError:
                     attrs = {**u, "sAMAccountName": u.get("sam", "")}
-                rows.append(build_export_row(attrs))
+                row = build_export_row(attrs)
+                if want_password:
+                    # Uniquement les mots de passe qu'EduSync AD a lui-même
+                    # positionnés (voir core/password_vault.py) — vide sinon,
+                    # jamais d'erreur bloquante pour un compte non enregistré.
+                    row["mot_de_passe"] = self.password_vault.get(u.get("sam", "")) or ""
+                rows.append(row)
         else:
             rows = [build_export_row({**u, "sAMAccountName": u.get("sam", "")}) for u in self._loaded_users]
 

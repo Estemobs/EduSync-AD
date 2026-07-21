@@ -43,6 +43,7 @@ from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import DepartRow
+from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.ui.progress_panel import BatchProgressPanel
 
 DEPART_COLUMNS = ["identifiant"]
@@ -85,6 +86,7 @@ class DepartPage(QWidget):
         ad_connection: ADConnection,
         config: AppConfig,
         audit_log: AuditLog,
+        password_vault: PasswordVault,
         session_id: str,
         parent=None,
     ) -> None:
@@ -92,6 +94,7 @@ class DepartPage(QWidget):
         self.ad_connection = ad_connection
         self.config = config
         self.audit_log = audit_log
+        self.password_vault = password_vault
         self.session_id = session_id
 
         self._csv_path: Path | None = None
@@ -557,6 +560,10 @@ class DepartPage(QWidget):
                 self.audit_log.record(
                     "suppression_compte", sam, "succes", self.session_id, simulation=simulation,
                 )
+                if not simulation:
+                    # Hygiène : pas de mot de passe recouvrable pour un compte
+                    # qui n'existe plus.
+                    self.password_vault.delete(sam)
             else:
                 self.audit_log.record(
                     "suppression_compte", sam, "echec", self.session_id,

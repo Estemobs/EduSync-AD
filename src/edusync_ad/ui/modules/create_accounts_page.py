@@ -56,6 +56,7 @@ from edusync_ad.core.identifiers import (
     render_template,
 )
 from edusync_ad.core.models import AccountType, GeneratedUser, RawUserRow
+from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.passwords import generate_passwords_for_batch
 from edusync_ad.ui.progress_panel import BatchProgressPanel
 
@@ -78,6 +79,7 @@ class CreateAccountsPage(QWidget):
         ad_connection: ADConnection,
         config: AppConfig,
         audit_log: AuditLog,
+        password_vault: PasswordVault,
         session_id: str,
         parent=None,
     ) -> None:
@@ -85,6 +87,7 @@ class CreateAccountsPage(QWidget):
         self.ad_connection = ad_connection
         self.config = config
         self.audit_log = audit_log
+        self.password_vault = password_vault
         self.session_id = session_id
 
         self._csv_path: Path | None = None
@@ -607,6 +610,8 @@ class CreateAccountsPage(QWidget):
                     "creation_compte", user.identifiant, "succes", self.session_id,
                     ou_destination=user.ou_cible, simulation=simulation,
                 )
+                if not simulation:
+                    self.password_vault.store(user.identifiant, user.mot_de_passe)
             else:
                 user.erreur = message
                 self.audit_log.record(

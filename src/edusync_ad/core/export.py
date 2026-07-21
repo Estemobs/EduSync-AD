@@ -100,7 +100,11 @@ EXPORT_FIELDS: dict[str, str] = {
     "classe": "Classe / OU",
     "mail": "Adresse mail",
     "etat": "État (actif/désactivé)",
+    "mot_de_passe": "Mot de passe",
 }
+
+# Jamais coché par défaut : contrairement aux autres champs, celui-ci imprime
+# un secret en clair — l'inclure doit rester un choix explicite à chaque export.
 
 
 def export_users_csv(path: Path, users: list[dict], fields: list[str]) -> None:
@@ -204,4 +208,7 @@ def build_export_row(attrs: dict) -> dict:
         "classe": classe,
         "mail": attrs.get("mail", ""),
         "etat": "Désactivé" if attrs.get("disabled") else "Actif",
+        # Jamais dans les attributs AD bruts — rempli séparément par l'appelant
+        # depuis le coffre local (core/password_vault.py) si demandé et connu.
+        "mot_de_passe": "",
     }

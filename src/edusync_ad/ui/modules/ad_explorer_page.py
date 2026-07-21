@@ -18,6 +18,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -54,6 +55,7 @@ from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.identifiers import clean_token
 from edusync_ad.core.models import PasswordPolicy
+from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.passwords import generate_random_password
 
 EDITABLE_ATTRS = [
@@ -106,6 +108,7 @@ class ADExplorerPage(QWidget):
         ad_connection: ADConnection,
         config: AppConfig,
         audit_log: AuditLog,
+        password_vault: PasswordVault,
         session_id: str,
         parent=None,
     ) -> None:
@@ -113,6 +116,7 @@ class ADExplorerPage(QWidget):
         self.ad_connection = ad_connection
         self.config = config
         self.audit_log = audit_log
+        self.password_vault = password_vault
         self.session_id = session_id
 
         self._current_user: dict | None = None
@@ -227,6 +231,41 @@ class ADExplorerPage(QWidget):
         self.lbl_pwd_last_set = QLabel("—")
         self.lbl_pwd_last_set.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.attrs_form.addRow("Dernier changement mdp :", self.lbl_pwd_last_set)
+
+        # Mot de passe — uniquement affichable s'il a été positionné par
+        # EduSync AD lui-même (voir core/password_vault.py) ; sinon un
+        # raccourci direct vers la réinitialisation.
+        self.pwd_row_widget = QWidget()
+        pwd_row_layout = QHBoxLayout(self.pwd_row_widget)
+        pwd_row_layout.setContentsMargins(0, 0, 0, 0)
+        self.pwd_value_edit = QLineEdit()
+        self.pwd_value_edit.setReadOnly(True)
+        self.pwd_value_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.btn_pwd_toggle = QPushButton("👁")
+        self.btn_pwd_toggle.setFixedWidth(28)
+        self.btn_pwd_toggle.clicked.connect(self._on_toggle_pwd_visibility)
+        self.btn_pwd_copy = QPushButton("Copier")
+        self.btn_pwd_copy.clicked.connect(self._on_copy_pwd)
+        pwd_row_layout.addWidget(self.pwd_value_edit)
+        pwd_row_layout.addWidget(self.btn_pwd_toggle)
+        pwd_row_layout.addWidget(self.btn_pwd_copy)
+
+        self.pwd_unknown_widget = QWidget()
+        pwd_unknown_layout = QHBoxLayout(self.pwd_unknown_widget)
+        pwd_unknown_layout.setContentsMargins(0, 0, 0, 0)
+        pwd_unknown_label = QLabel("Non enregistré par le logiciel.")
+        pwd_unknown_label.setWordWrap(True)
+        btn_pwd_reset_shortcut = QPushButton("Réinitialiser…")
+        btn_pwd_reset_shortcut.clicked.connect(self._on_reset_password)
+        pwd_unknown_layout.addWidget(pwd_unknown_label)
+        pwd_unknown_layout.addWidget(btn_pwd_reset_shortcut)
+
+        pwd_container = QWidget()
+        pwd_container_layout = QVBoxLayout(pwd_container)
+        pwd_container_layout.setContentsMargins(0, 0, 0, 0)
+        pwd_container_layout.addWidget(self.pwd_row_widget)
+        pwd_container_layout.addWidget(self.pwd_unknown_widget)
+        self.attrs_form.addRow("Mot de passe :", pwd_container)
 
         actions_group = QGroupBox("Actions")
         actions_layout = QVBoxLayout(actions_group)
@@ -844,6 +883,8 @@ class ADExplorerPage(QWidget):
                     self.ad_connection.delete_group(t["dn"])
                 else:
                     self.ad_connection.delete_user(t["dn"])
+                    if not simulation:
+                        self.password_vault.delete(t.get("sam", ""))
                 self.audit_log.record(action_type, label, "succes", self.session_id, simulation=simulation)
                 success += 1
             except ADError as exc:
@@ -877,12 +918,33 @@ class ADExplorerPage(QWidget):
         ou_part = dn.split(",", 1)[1] if "," in dn else dn
         self.lbl_ou.setText(ou_part or "—")
         self.lbl_pwd_last_set.setText(attrs.get("dernier_changement_mdp") or "—")
+        self._refresh_pwd_row(attrs.get("sAMAccountName", ""))
+
+    def _refresh_pwd_row(self, sam: str) -> None:
+        stored = self.password_vault.get(sam) if sam else None
+        known = stored is not None
+        self.pwd_value_edit.setText(stored or "")
+        self.pwd_value_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.btn_pwd_toggle.setText("👁")
+        self.pwd_row_widget.setVisible(known)
+        self.pwd_unknown_widget.setVisible(not known)
+
+    def _on_toggle_pwd_visibility(self) -> None:
+        reveal = self.pwd_value_edit.echoMode() == QLineEdit.EchoMode.Password
+        self.pwd_value_edit.setEchoMode(
+            QLineEdit.EchoMode.Normal if reveal else QLineEdit.EchoMode.Password
+        )
+        self.btn_pwd_toggle.setText("🙈" if reveal else "👁")
+
+    def _on_copy_pwd(self) -> None:
+        QApplication.clipboard().setText(self.pwd_value_edit.text())
 
     def _clear_detail_panel(self) -> None:
         for lbl in self._attr_labels.values():
             lbl.setText("—")
         self.lbl_ou.setText("—")
         self.lbl_pwd_last_set.setText("—")
+        self._refresh_pwd_row("")
         for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
                     self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(False)
@@ -907,7 +969,8 @@ class ADExplorerPage(QWidget):
                     self.btn_toggle_account, self.btn_manage_groups):
             btn.setEnabled(True)
 
-        dialog = UserPropertiesDialog(attrs, EDITABLE_ATTRS, parent=self)
+        stored_password = self.password_vault.get(attrs.get("sAMAccountName", ""))
+        dialog = UserPropertiesDialog(attrs, EDITABLE_ATTRS, stored_password=stored_password, parent=self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
@@ -1034,6 +1097,9 @@ class ADExplorerPage(QWidget):
                 "reinitialisation_mdp", sam, "succes", self.session_id, simulation=simulation,
                 detail="force_change=1" if force_change else "",
             )
+            if not simulation:
+                self.password_vault.store(sam, new_pwd)
+                self._refresh_pwd_row(sam)
             QMessageBox.information(self, "Succès", f"Mot de passe réinitialisé{'  (simulé)' if simulation else ''}.")
         except ADError as exc:
             self.audit_log.record("reinitialisation_mdp", sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
@@ -1112,6 +1178,8 @@ class ADExplorerPage(QWidget):
                 "creation_utilisateur_manuel", sam, "succes", self.session_id,
                 ou_destination=ou_dn, simulation=simulation,
             )
+            if not simulation:
+                self.password_vault.store(sam, dialog.result_password)
             QMessageBox.information(
                 self, "Succès",
                 f"Utilisateur créé : {sam}{'  (simulé)' if simulation else ''}.\n\n"
@@ -1371,7 +1439,14 @@ class UserPropertiesDialog(QDialog):
     réutiliser les flux existants (changement d'OU, mot de passe, groupes)
     plutôt que de les dupliquer ici."""
 
-    def __init__(self, user_attrs: dict, editable_attrs: list[tuple[str, str]], parent=None) -> None:
+    def __init__(
+        self,
+        user_attrs: dict,
+        editable_attrs: list[tuple[str, str]],
+        *,
+        stored_password: str | None = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(f"Propriétés de {user_attrs.get('cn', '')}")
         self.setMinimumWidth(460)
@@ -1399,6 +1474,23 @@ class UserPropertiesDialog(QDialog):
         form.addRow("OU :", ou_label)
         form.addRow("Dernier changement mdp :", QLabel(user_attrs.get("dernier_changement_mdp") or "—"))
 
+        if stored_password is not None:
+            pwd_row = QHBoxLayout()
+            self._pwd_edit = QLineEdit(stored_password)
+            self._pwd_edit.setReadOnly(True)
+            self._pwd_edit.setEchoMode(QLineEdit.EchoMode.Password)
+            btn_toggle = QPushButton("👁")
+            btn_toggle.setFixedWidth(28)
+            btn_toggle.clicked.connect(self._on_toggle_pwd_visibility)
+            btn_copy = QPushButton("Copier")
+            btn_copy.clicked.connect(lambda: QApplication.clipboard().setText(self._pwd_edit.text()))
+            pwd_row.addWidget(self._pwd_edit)
+            pwd_row.addWidget(btn_toggle)
+            pwd_row.addWidget(btn_copy)
+            form.addRow("Mot de passe :", pwd_row)
+        else:
+            form.addRow("Mot de passe :", QLabel("Non enregistré par le logiciel."))
+
         self.chk_active = QCheckBox("Compte activé")
         self.chk_active.setChecked(self._initial_active)
         form.addRow("", self.chk_active)
@@ -1422,6 +1514,10 @@ class UserPropertiesDialog(QDialog):
         layout.addLayout(form)
         layout.addLayout(actions_row)
         layout.addWidget(buttons)
+
+    def _on_toggle_pwd_visibility(self) -> None:
+        reveal = self._pwd_edit.echoMode() == QLineEdit.EchoMode.Password
+        self._pwd_edit.setEchoMode(QLineEdit.EchoMode.Normal if reveal else QLineEdit.EchoMode.Password)
 
     def _on_request_change_ou(self) -> None:
         self.request_change_ou = True

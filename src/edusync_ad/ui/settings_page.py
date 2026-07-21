@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -24,6 +25,7 @@ from PyQt6.QtWidgets import (
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.identifiers import CAMEL_PRESETS, PRESETS, render_template
 from edusync_ad.core.models import DoublonRule, PasswordPolicy, PrenomComposeRule
+from edusync_ad.core.password_vault import PasswordVault
 
 MAIL_FORMAT_PRESET_KEYS = [
     "{P}.{N}",
@@ -95,12 +97,14 @@ class SettingsPage(QWidget):
         self,
         config: AppConfig,
         on_save: Callable[[AppConfig], None],
+        password_vault: PasswordVault,
         ad_domain: str | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._on_save = on_save
         self._ad_domain = ad_domain
+        self.password_vault = password_vault
         # Conservé pour préserver au moment d'enregistrer les champs que ce
         # formulaire ne gère pas (ex. réglages LDAPS de l'écran de connexion) —
         # voir _save().
@@ -229,6 +233,21 @@ class SettingsPage(QWidget):
         personnel_layout = QVBoxLayout(personnel_group)
         personnel_layout.addWidget(self.personnel_policy_form)
 
+        security_group = QGroupBox("Sécurité — coffre des mots de passe")
+        security_layout = QVBoxLayout(security_group)
+        security_layout.addWidget(QLabel(
+            "EduSync AD retient, chiffrés, les mots de passe qu'il positionne lui-même "
+            "(création de compte, réinitialisation) pour pouvoir les réafficher ensuite "
+            "(fiche utilisateur, export). Un mot de passe changé par un autre outil "
+            "n'y figure jamais."
+        ))
+        self.pwd_vault_count_label = QLabel("")
+        security_layout.addWidget(self.pwd_vault_count_label)
+        self.pwd_vault_clear_button = QPushButton("Vider le coffre des mots de passe…")
+        self.pwd_vault_clear_button.clicked.connect(self._on_clear_password_vault)
+        security_layout.addWidget(self.pwd_vault_clear_button)
+        self._refresh_pwd_vault_count()
+
         content = QWidget()
         content_layout = QVBoxLayout(content)
         for group in (
@@ -239,6 +258,7 @@ class SettingsPage(QWidget):
             appearance_group,
             eleve_group,
             personnel_group,
+            security_group,
         ):
             content_layout.addWidget(group)
         content_layout.addWidget(save_button)
@@ -259,6 +279,27 @@ class SettingsPage(QWidget):
         combo.addItems(IDENTIFIER_PRESET_KEYS)
         combo.setCurrentText(current_value)
         return combo
+
+    def _refresh_pwd_vault_count(self) -> None:
+        count = self.password_vault.count()
+        self.pwd_vault_count_label.setText(
+            f"{count} mot(s) de passe actuellement enregistré(s)."
+        )
+        self.pwd_vault_clear_button.setEnabled(count > 0)
+
+    def _on_clear_password_vault(self) -> None:
+        reply = QMessageBox.question(
+            self, "Vider le coffre",
+            "Supprimer définitivement tous les mots de passe enregistrés par EduSync AD ? "
+            "Cette action est irréversible — les comptes concernés resteront fonctionnels, "
+            "seule la possibilité de reconsulter leur mot de passe ici sera perdue.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        removed = self.password_vault.clear_all()
+        self._refresh_pwd_vault_count()
+        QMessageBox.information(self, "Coffre vidé", f"{removed} mot(s) de passe supprimé(s).")
 
     def _use_ad_domain(self) -> None:
         if self._ad_domain:

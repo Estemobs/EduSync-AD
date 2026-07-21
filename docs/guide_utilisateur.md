@@ -355,6 +355,25 @@ Toutes ces actions respectent le mode simulation et sont journalisées.
 centrale (Ctrl/Shift-clic), puis clic droit → **Supprimer les comptes
 sélectionnés…** — une seule confirmation pour tout le lot.
 
+### Voir le mot de passe d'un compte
+
+Quand vous sélectionnez un compte (clic simple, panneau de droite) ou que
+vous ouvrez sa fiche **Propriétés** (double-clic), une ligne **Mot de
+passe** apparaît :
+
+- **S'il a été positionné par EduSync AD** (création de compte,
+  réinitialisation) : affiché masqué par défaut, avec un bouton 👁 pour le
+  révéler et un bouton **Copier**.
+- **Sinon** (compte existant avant l'usage du logiciel, ou mot de passe
+  changé par un autre outil comme ADUC/PowerShell) : « Non enregistré par le
+  logiciel. » avec un bouton **Réinitialiser…** pour en définir un nouveau
+  (qui sera alors, lui, mémorisé).
+
+Les mots de passe sont chiffrés (AES-256) dans un fichier local à
+l'administrateur, jamais sur le serveur AD. Voir aussi [Export](#9-export-csv--étiquettes)
+pour les inclure dans un CSV/étiquettes, et [Paramètres](#11-paramètres-globaux)
+pour vider ce coffre.
+
 ### Groupes
 
 Le panneau **Groupes** (et le dialogue "Gérer les groupes", et la source
@@ -387,8 +406,15 @@ une liste à un autre service.
 ### Champs disponibles
 
 Identifiant, nom complet, prénom, nom, classe/OU, adresse mail, état
-(actif/désactivé) — cochez ceux à inclure. Pour les étiquettes, les champs
-cochés s'empilent verticalement sur chaque étiquette.
+(actif/désactivé), **mot de passe** — cochez ceux à inclure. Pour les
+étiquettes, les champs cochés s'empilent verticalement sur chaque étiquette.
+
+Le champ **Mot de passe** n'est jamais coché par défaut et affiche un
+avertissement dès qu'il est activé : il ne remonte que les mots de passe
+qu'EduSync AD a lui-même positionnés (voir [Explorateur AD](#8-module-6--explorateur-ad))
+— vide pour un compte non enregistré, jamais d'erreur. Un fichier ou une
+planche d'étiquettes contenant des mots de passe en clair est à distribuer
+avec précaution.
 
 ### Formats d'export
 
@@ -503,9 +529,19 @@ Configurées séparément pour les élèves et les personnels :
 - **Thème** : Clair / Sombre
 - **Langue** : Français / English
 
+### Sécurité — coffre des mots de passe
+
+EduSync AD retient, chiffrés (AES-256), les mots de passe qu'il positionne
+lui-même (création, réinitialisation) — voir [Explorateur AD](#8-module-6--explorateur-ad).
+Cette page affiche le nombre de mots de passe actuellement enregistrés et
+propose **Vider le coffre des mots de passe…** : les supprime tous
+définitivement (confirmation requise). Les comptes concernés restent
+fonctionnels — seule la possibilité de reconsulter leur mot de passe ici est
+perdue ; une réinitialisation le remémorisera.
+
 ---
 
-## 11. Dépannage — Erreur de certificat LDAPS
+## 12. Dépannage — Erreur de certificat LDAPS
 
 ### Pourquoi cette erreur apparaît
 

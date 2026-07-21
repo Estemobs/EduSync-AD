@@ -1,8 +1,15 @@
 """Chiffrement AES-256 des identifiants de connexion (§2, §3, §12).
 
 Seuls le domaine et le nom d'utilisateur sont éventuellement persistés
-(option "Mémoriser la connexion"). Le mot de passe n'est **jamais** écrit
-sur disque, ici ou ailleurs dans l'application.
+(option "Mémoriser la connexion"). Le mot de passe de connexion à l'AD
+(compte administrateur) n'est **jamais** écrit sur disque, ici ou ailleurs
+dans l'application.
+
+Exception distincte et volontaire à ne pas confondre avec ce qui précède :
+core/password_vault.py réutilise la même clé/le même chiffrement pour
+retenir, sur demande explicite de l'utilisateur, les mots de passe *de
+comptes élèves/personnels* qu'EduSync AD positionne lui-même — voir ce
+module pour le détail et la justification.
 """
 
 from __future__ import annotations

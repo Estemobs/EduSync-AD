@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
+from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
 from edusync_ad.ui.audit_page import AuditPage
 from edusync_ad.ui.log_view_widget import LogViewWidget
@@ -52,6 +53,7 @@ class MainWindow(QMainWindow):
         self.ad_connection = ad_connection
         self.config = config
         self.audit_log = audit_log
+        self.password_vault = PasswordVault()
         self.session_id = new_session_id()
 
         self.setWindowTitle(f"EduSync AD — v{CURRENT_VERSION}")
@@ -148,30 +150,30 @@ class MainWindow(QMainWindow):
 
         self.pages = QStackedWidget()
         self.create_accounts_page = CreateAccountsPage(
-            self.ad_connection, self.config, self.audit_log, self.session_id
+            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id
         )
         self.migration_page = MigrationPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
         self.inscription_page = InscriptionPage(
-            self.ad_connection, self.config, self.audit_log, self.session_id
+            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id
         )
         self.depart_page = DepartPage(
-            self.ad_connection, self.config, self.audit_log, self.session_id
+            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id
         )
         self.password_reset_page = PasswordResetPage(
-            self.ad_connection, self.config, self.audit_log, self.session_id
+            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id
         )
         self.ad_explorer_page = ADExplorerPage(
-            self.ad_connection, self.config, self.audit_log, self.session_id
+            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id
         )
         self.export_page = ExportPage(
-            self.ad_connection, self.config, self.audit_log, self.session_id
+            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id
         )
         self.audit_page = AuditPage(self.audit_log)
         self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
-            self.config, self._on_config_saved, ad_domain=self.ad_connection.domain
+            self.config, self._on_config_saved, self.password_vault, ad_domain=self.ad_connection.domain
         )
 
         self.pages.addWidget(self.create_accounts_page)   # index 0

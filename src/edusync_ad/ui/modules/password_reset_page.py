@@ -43,6 +43,7 @@ from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.csv_io import has_identifier_column, load_identifiers_csv, load_names_csv
 from edusync_ad.core.models import PasswordPolicy
+from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.passwords import generate_password
 from edusync_ad.ui.progress_panel import BatchProgressPanel
 
@@ -60,6 +61,7 @@ class PasswordResetPage(QWidget):
         ad_connection: ADConnection,
         config: AppConfig,
         audit_log: AuditLog,
+        password_vault: PasswordVault,
         session_id: str,
         parent=None,
     ) -> None:
@@ -67,6 +69,7 @@ class PasswordResetPage(QWidget):
         self.ad_connection = ad_connection
         self.config = config
         self.audit_log = audit_log
+        self.password_vault = password_vault
         self.session_id = session_id
 
         self._users: list[dict] = []
@@ -552,12 +555,14 @@ class PasswordResetPage(QWidget):
                 self.ad_connection.enable_account(user["dn"], force_password_change=True)
 
         def on_result(position: int, success: bool, message: str) -> None:
-            user, _ = items[position]
+            user, pwd = items[position]
             if success:
                 self.audit_log.record(
                     "reinitialisation_mdp", user["sam"], "succes", self.session_id,
                     simulation=simulation, detail="force_change=1" if force_change else "",
                 )
+                if not simulation:
+                    self.password_vault.store(user["sam"], pwd)
                 etat = "Réinitialisé" + (" (sim.)" if simulation else "")
             else:
                 self.audit_log.record(

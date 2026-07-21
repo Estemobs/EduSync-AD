@@ -13,6 +13,7 @@ from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import RawUserRow
+from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.ui.modules.create_accounts_page import CreateAccountsPage
 
 
@@ -24,10 +25,11 @@ class InscriptionPage(CreateAccountsPage):
         ad_connection: ADConnection,
         config: AppConfig,
         audit_log: AuditLog,
+        password_vault: PasswordVault,
         session_id: str,
         parent=None,
     ) -> None:
-        super().__init__(ad_connection, config, audit_log, session_id, parent)
+        super().__init__(ad_connection, config, audit_log, password_vault, session_id, parent)
         self.generate_button.setText("3. Générer la prévisualisation (avec vérification AD)")
 
     def _ad_duplicate_check(self, row: RawUserRow) -> str | None:
