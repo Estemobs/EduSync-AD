@@ -109,11 +109,3 @@ def test_list_users_in_group_requires_connected():
     ad = ADConnection(connection_factory=make_factory())
     with pytest.raises(ADError):
         ad.list_users_in_group(GROUP_DN, BASE_DN)
-
-
-# -- set_password dry_run ------------------------------------------------------
-
-def test_set_password_dry_run_does_not_raise(ad):
-    ad.dry_run = True
-    # MOCK_SYNC ne supporte pas extend.microsoft, mais dry_run court-circuite l'appel
-    ad.set_password(USER1_DN, "NouveauMdP123!")  # ne doit pas lever

@@ -50,23 +50,10 @@ def test_disable_account(ad):
     assert result is not None
 
 
-def test_disable_account_dry_run(ad):
-    ad.dry_run = True
-    ad.disable_account(USER_DN)
-    # Aucune exception ne doit être levée
-
-
 def test_delete_user(ad):
     ad.delete_user(USER_DN)
     result = ad.search_user_by_sam(USER_SAM, BASE_DN)
     assert result is None
-
-
-def test_delete_user_dry_run(ad):
-    ad.dry_run = True
-    ad.delete_user(USER_DN)
-    result = ad.search_user_by_sam(USER_SAM, BASE_DN)
-    assert result is not None
 
 
 def test_search_user_groups(ad):

@@ -52,7 +52,6 @@ _ETAT_EN_ATTENTE = "En attente de résolution"
 _ETAT_TROUVE = "Trouvé"
 _ETAT_NON_TROUVE = "⚠ Non trouvé"
 _ETAT_MIGRE = "Migré"
-_ETAT_SIMULE = "Simulé"
 
 
 def _ou_leaf_name(ou_dn: str) -> str:
@@ -436,10 +435,7 @@ class MigrationPage(QWidget):
             QMessageBox.warning(self, "Rien à migrer", "Aucun utilisateur résolu à déplacer.")
             return
 
-        simulation = self.ad_connection.dry_run
-        suffix_sim = " (mode simulation)" if simulation else ""
-
-        msg = f"{len(to_migrate)} utilisateur(s) vont être déplacés{suffix_sim}."
+        msg = f"{len(to_migrate)} utilisateur(s) vont être déplacés."
         if skipped:
             msg += f"\n{len(skipped)} utilisateur(s) non trouvé(s) seront ignorés."
         reply = QMessageBox.question(
@@ -464,16 +460,14 @@ class MigrationPage(QWidget):
             if success:
                 self.audit_log.record(
                     "migration_compte", row.identifiant, "succes", self.session_id,
-                    ou_source=row.ou_source, ou_destination=row.ou_destination, simulation=simulation,
+                    ou_source=row.ou_source, ou_destination=row.ou_destination,
                 )
-                etat = _ETAT_SIMULE if simulation else _ETAT_MIGRE
-                self._set_table_row(i, row, etat=etat)
+                self._set_table_row(i, row, etat=_ETAT_MIGRE)
             else:
                 row.erreur = message
                 self.audit_log.record(
                     "migration_compte", row.identifiant, "echec", self.session_id,
-                    ou_source=row.ou_source, ou_destination=row.ou_destination,
-                    simulation=simulation, detail=message,
+                    ou_source=row.ou_source, ou_destination=row.ou_destination, detail=message,
                 )
                 self._set_table_row(i, row)
 

@@ -19,6 +19,7 @@ QPushButton#SidebarButton {
     padding: 10px 16px;
 }
 QPushButton#SidebarButton:checked { background-color: #e8edfb; color: #2f6fed; font-weight: 600; }
+QFrame#SidebarSeparator { background-color: #dfe3ea; max-height: 1px; border: none; margin: 0 16px; }
 QTableWidget, QTableView { background-color: white; gridline-color: #e2e6ee; }
 QLineEdit, QComboBox, QSpinBox { padding: 4px 6px; border: 1px solid #c7cedb; border-radius: 4px; }
 """
@@ -40,6 +41,7 @@ QPushButton#SidebarButton {
     padding: 10px 16px;
 }
 QPushButton#SidebarButton:checked { background-color: #2a3142; color: #7da2ff; font-weight: 600; }
+QFrame#SidebarSeparator { background-color: #2c313d; max-height: 1px; border: none; margin: 0 16px; }
 QTableWidget, QTableView { background-color: #20242e; gridline-color: #2c313d; }
 QLineEdit, QComboBox, QSpinBox {
     padding: 4px 6px; border: 1px solid #3a3f4c; border-radius: 4px; background-color: #20242e;

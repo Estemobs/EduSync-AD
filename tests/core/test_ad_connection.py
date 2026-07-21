@@ -233,27 +233,6 @@ def test_delete_group(ad):
     assert ad.group_exists(GROUP_3EMEA_DN) is False
 
 
-def test_dry_run_does_not_write_to_ad(ad):
-    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
-    ad.dry_run = True
-
-    new_dn = f"cn=Simulated User,{OU_3EMEA_DN}"
-    ad.create_user(new_dn, {"sAMAccountName": "simulated.user"})
-    ad.create_group(GROUP_3EMEA_DN, "3emeA")
-    ad.add_user_to_group(new_dn, GROUP_3EMEA_DN)
-
-    identifiers = ad.search_existing_identifiers(OU_3EMEA_DN)
-    assert "simulated.user" not in identifiers
-    assert ad.group_exists(GROUP_3EMEA_DN) is False
-
-
-def test_dry_run_still_allows_reads(ad):
-    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
-    ad.dry_run = True
-    identifiers = ad.search_existing_identifiers(OU_3EMEA_DN)
-    assert identifiers == {"existing.user"}
-
-
 def test_create_user_with_password_sets_password_and_enables_account(ad):
     ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
     new_dn = f"cn=Thomas Martin,{OU_3EMEA_DN}"
@@ -266,15 +245,6 @@ def test_domain_to_base_dn():
     assert ADConnection.domain_to_base_dn("lycee-victor-hugo.local") == (
         "DC=lycee-victor-hugo,DC=local"
     )
-
-
-def test_create_user_with_password_dry_run_does_not_call_ad(ad):
-    ad.connect(DOMAIN, "10.0.0.1", ADMIN_BIND_DN, ADMIN_PASSWORD)
-    ad.dry_run = True
-    new_dn = f"cn=Simulated User,{OU_3EMEA_DN}"
-    ad.create_user(new_dn, {"sAMAccountName": "simulated.user"}, password="NewPass123!")
-    identifiers = ad.search_existing_identifiers(OU_3EMEA_DN)
-    assert "simulated.user" not in identifiers
 
 
 class _FakeConn:

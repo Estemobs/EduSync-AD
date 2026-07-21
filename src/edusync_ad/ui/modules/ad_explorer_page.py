@@ -235,24 +235,33 @@ class ADExplorerPage(QWidget):
         # Mot de passe — uniquement affichable s'il a été positionné par
         # EduSync AD lui-même (voir core/password_vault.py) ; sinon un
         # raccourci direct vers la réinitialisation.
+        # Champ sur sa propre ligne, boutons sur la ligne suivante : les 3
+        # widgets côte à côte ne tenaient pas dans l'étroit panneau de droite
+        # (bouton "Copier" tronqué, glyphe œil coupé).
         self.pwd_row_widget = QWidget()
-        pwd_row_layout = QHBoxLayout(self.pwd_row_widget)
+        pwd_row_layout = QVBoxLayout(self.pwd_row_widget)
         pwd_row_layout.setContentsMargins(0, 0, 0, 0)
+        pwd_row_layout.setSpacing(4)
         self.pwd_value_edit = QLineEdit()
         self.pwd_value_edit.setReadOnly(True)
         self.pwd_value_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.btn_pwd_toggle = QPushButton("👁")
-        self.btn_pwd_toggle.setFixedWidth(28)
+        pwd_buttons_row = QHBoxLayout()
+        self.btn_pwd_toggle = QPushButton("👁 Afficher")
         self.btn_pwd_toggle.clicked.connect(self._on_toggle_pwd_visibility)
         self.btn_pwd_copy = QPushButton("Copier")
         self.btn_pwd_copy.clicked.connect(self._on_copy_pwd)
+        pwd_buttons_row.addWidget(self.btn_pwd_toggle)
+        pwd_buttons_row.addWidget(self.btn_pwd_copy)
         pwd_row_layout.addWidget(self.pwd_value_edit)
-        pwd_row_layout.addWidget(self.btn_pwd_toggle)
-        pwd_row_layout.addWidget(self.btn_pwd_copy)
+        pwd_row_layout.addLayout(pwd_buttons_row)
 
+        # Layout vertical plutôt qu'horizontal : le panneau de droite est
+        # étroit, et le label + le bouton côte à côte se marchaient dessus
+        # (label sur 3 lignes, texte du bouton tronqué).
         self.pwd_unknown_widget = QWidget()
-        pwd_unknown_layout = QHBoxLayout(self.pwd_unknown_widget)
+        pwd_unknown_layout = QVBoxLayout(self.pwd_unknown_widget)
         pwd_unknown_layout.setContentsMargins(0, 0, 0, 0)
+        pwd_unknown_layout.setSpacing(4)
         pwd_unknown_label = QLabel("Non enregistré par le logiciel.")
         pwd_unknown_label.setWordWrap(True)
         btn_pwd_reset_shortcut = QPushButton("Réinitialiser…")
@@ -443,19 +452,18 @@ class ADExplorerPage(QWidget):
             return
 
         new_dn = f"OU={escape_rdn(name)},{parent_dn}"
-        simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.create_ou(new_dn, name)
             self.audit_log.record(
                 "creation_ou", name, "succes", self.session_id,
-                ou_destination=new_dn, simulation=simulation,
+                ou_destination=new_dn,
             )
-            QMessageBox.information(self, "Succès", f"OU créée : {new_dn}{'  (simulé)' if simulation else ''}.")
+            QMessageBox.information(self, "Succès", f"OU créée : {new_dn}.")
             self._load_ou_tree()
         except ADError as exc:
             self.audit_log.record(
                 "creation_ou", name, "echec", self.session_id,
-                ou_destination=new_dn, simulation=simulation, detail=str(exc),
+                ou_destination=new_dn, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -466,21 +474,20 @@ class ADExplorerPage(QWidget):
         if not ok or not new_name or new_name == current_name:
             return
 
-        simulation = self.ad_connection.dry_run
         parent_dn = ou_dn.split(",", 1)[1] if "," in ou_dn else ""
         new_dn = f"OU={escape_rdn(new_name)},{parent_dn}"
         try:
             self.ad_connection.rename_ou(ou_dn, new_name)
             self.audit_log.record(
                 "renommage_ou", current_name, "succes", self.session_id,
-                ou_source=ou_dn, ou_destination=new_dn, simulation=simulation,
+                ou_source=ou_dn, ou_destination=new_dn,
             )
-            QMessageBox.information(self, "Succès", f"OU renommée : {new_dn}{'  (simulé)' if simulation else ''}.")
+            QMessageBox.information(self, "Succès", f"OU renommée : {new_dn}.")
             self._load_ou_tree()
         except ADError as exc:
             self.audit_log.record(
                 "renommage_ou", current_name, "echec", self.session_id,
-                ou_source=ou_dn, simulation=simulation, detail=str(exc),
+                ou_source=ou_dn, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -518,19 +525,18 @@ class ADExplorerPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.delete_ou(ou_dn)
             self.audit_log.record(
                 "suppression_ou", name, "succes", self.session_id,
-                ou_source=ou_dn, simulation=simulation,
+                ou_source=ou_dn,
             )
-            QMessageBox.information(self, "Succès", f"OU supprimée{'  (simulé)' if simulation else ''}.")
+            QMessageBox.information(self, "Succès", "OU supprimée.")
             self._load_ou_tree()
         except ADError as exc:
             self.audit_log.record(
                 "suppression_ou", name, "echec", self.session_id,
-                ou_source=ou_dn, simulation=simulation, detail=str(exc),
+                ou_source=ou_dn, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -566,17 +572,16 @@ class ADExplorerPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.delete_group(group_dn)
             self.audit_log.record(
-                "suppression_groupe", group_name, "succes", self.session_id, simulation=simulation,
+                "suppression_groupe", group_name, "succes", self.session_id,
             )
-            QMessageBox.information(self, "Succès", f"Groupe supprimé{'  (simulé)' if simulation else ''}.")
+            QMessageBox.information(self, "Succès", "Groupe supprimé.")
             self._load_group_list()
         except ADError as exc:
             self.audit_log.record(
-                "suppression_groupe", group_name, "echec", self.session_id, simulation=simulation, detail=str(exc),
+                "suppression_groupe", group_name, "echec", self.session_id, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -599,19 +604,18 @@ class ADExplorerPage(QWidget):
             return
 
         dn = f"CN={escape_rdn(name)},{dialog.selected_dn}"
-        simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.create_group(dn, name)
             self.audit_log.record(
                 "creation_groupe", name, "succes", self.session_id,
-                ou_destination=dialog.selected_dn, simulation=simulation,
+                ou_destination=dialog.selected_dn,
             )
-            QMessageBox.information(self, "Succès", f"Groupe créé : {dn}{'  (simulé)' if simulation else ''}.")
+            QMessageBox.information(self, "Succès", f"Groupe créé : {dn}.")
             self._load_group_list()
         except ADError as exc:
             self.audit_log.record(
                 "creation_groupe", name, "echec", self.session_id,
-                ou_destination=dialog.selected_dn, simulation=simulation, detail=str(exc),
+                ou_destination=dialog.selected_dn, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -629,18 +633,17 @@ class ADExplorerPage(QWidget):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
-        simulation = self.ad_connection.dry_run
         for user_dn in dialog.to_add:
             try:
                 self.ad_connection.add_user_to_group(user_dn, group_dn)
                 self.audit_log.record(
                     "ajout_groupe", user_dn, "succes", self.session_id,
-                    ou_destination=group_dn, simulation=simulation,
+                    ou_destination=group_dn,
                 )
             except ADError as exc:
                 self.audit_log.record(
                     "ajout_groupe", user_dn, "echec", self.session_id,
-                    ou_destination=group_dn, simulation=simulation, detail=str(exc),
+                    ou_destination=group_dn, detail=str(exc),
                 )
                 QMessageBox.warning(self, "Erreur", f"Ajout échoué pour {user_dn} : {exc}")
 
@@ -649,12 +652,12 @@ class ADExplorerPage(QWidget):
                 self.ad_connection.remove_user_from_group(user_dn, group_dn)
                 self.audit_log.record(
                     "retrait_groupe", user_dn, "succes", self.session_id,
-                    ou_destination=group_dn, simulation=simulation,
+                    ou_destination=group_dn,
                 )
             except ADError as exc:
                 self.audit_log.record(
                     "retrait_groupe", user_dn, "echec", self.session_id,
-                    ou_destination=group_dn, simulation=simulation, detail=str(exc),
+                    ou_destination=group_dn, detail=str(exc),
                 )
                 QMessageBox.warning(self, "Erreur", f"Retrait échoué pour {user_dn} : {exc}")
 
@@ -872,7 +875,6 @@ class ADExplorerPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        simulation = self.ad_connection.dry_run
         success = 0
         failed: list[str] = []
         for t in targets:
@@ -883,25 +885,23 @@ class ADExplorerPage(QWidget):
                     self.ad_connection.delete_group(t["dn"])
                 else:
                     self.ad_connection.delete_user(t["dn"])
-                    if not simulation:
-                        self.password_vault.delete(t.get("sam", ""))
-                self.audit_log.record(action_type, label, "succes", self.session_id, simulation=simulation)
+                    self.password_vault.delete(t.get("sam", ""))
+                self.audit_log.record(action_type, label, "succes", self.session_id)
                 success += 1
             except ADError as exc:
                 self.audit_log.record(
-                    action_type, label, "echec", self.session_id, simulation=simulation, detail=str(exc),
+                    action_type, label, "echec", self.session_id, detail=str(exc),
                 )
                 failed.append(f"{t['cn']} : {exc}")
 
         if failed:
             QMessageBox.warning(
                 self, "Suppression partielle",
-                f"{success}/{len(targets)} élément(s) supprimé(s)"
-                f"{'  (simulé)' if simulation else ''}.\n\nÉchecs :\n" + "\n".join(failed[:10]),
+                f"{success}/{len(targets)} élément(s) supprimé(s).\n\nÉchecs :\n" + "\n".join(failed[:10]),
             )
         else:
             QMessageBox.information(
-                self, "Succès", f"{success} élément(s) supprimé(s){'  (simulé)' if simulation else ''}.",
+                self, "Succès", f"{success} élément(s) supprimé(s).",
             )
 
         if self._current_ou_dn:
@@ -925,7 +925,7 @@ class ADExplorerPage(QWidget):
         known = stored is not None
         self.pwd_value_edit.setText(stored or "")
         self.pwd_value_edit.setEchoMode(QLineEdit.EchoMode.Password)
-        self.btn_pwd_toggle.setText("👁")
+        self.btn_pwd_toggle.setText("👁 Afficher")
         self.pwd_row_widget.setVisible(known)
         self.pwd_unknown_widget.setVisible(not known)
 
@@ -934,7 +934,7 @@ class ADExplorerPage(QWidget):
         self.pwd_value_edit.setEchoMode(
             QLineEdit.EchoMode.Normal if reveal else QLineEdit.EchoMode.Password
         )
-        self.btn_pwd_toggle.setText("🙈" if reveal else "👁")
+        self.btn_pwd_toggle.setText("🙈 Masquer" if reveal else "👁 Afficher")
 
     def _on_copy_pwd(self) -> None:
         QApplication.clipboard().setText(self.pwd_value_edit.text())
@@ -985,7 +985,6 @@ class ADExplorerPage(QWidget):
             return
 
         sam = attrs.get("sAMAccountName", "")
-        simulation = self.ad_connection.dry_run
         changed = {
             key: value for key, value in dialog.result_values.items()
             if value != (attrs.get(key) or "")
@@ -996,12 +995,12 @@ class ADExplorerPage(QWidget):
                 self._current_user[attr_key] = new_value
                 self.audit_log.record(
                     "modification_attribut", sam, "succes", self.session_id,
-                    simulation=simulation, detail=f"{attr_key}={new_value}",
+                    detail=f"{attr_key}={new_value}",
                 )
             except ADError as exc:
                 self.audit_log.record(
                     "modification_attribut", sam, "echec", self.session_id,
-                    simulation=simulation, detail=str(exc),
+                    detail=str(exc),
                 )
                 QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -1017,19 +1016,18 @@ class ADExplorerPage(QWidget):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         attr_key, new_value = dialog.result_attr, dialog.result_value
-        simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.update_user_attribute(self._current_user["dn"], attr_key, new_value)
             self._current_user[attr_key] = new_value
             self._refresh_detail_panel(self._current_user)
             self.audit_log.record(
                 "modification_attribut", self._current_user.get("sAMAccountName", ""),
-                "succes", self.session_id, simulation=simulation, detail=f"{attr_key}={new_value}",
+                "succes", self.session_id, detail=f"{attr_key}={new_value}",
             )
         except ADError as exc:
             self.audit_log.record(
                 "modification_attribut", self._current_user.get("sAMAccountName", ""),
-                "echec", self.session_id, simulation=simulation, detail=str(exc),
+                "echec", self.session_id, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -1049,13 +1047,12 @@ class ADExplorerPage(QWidget):
 
         sam = self._current_user.get("sAMAccountName", "")
         new_ou_dn = dialog.selected_dn
-        simulation = self.ad_connection.dry_run
         old_ou = self._current_user["dn"].split(",", 1)[1] if "," in self._current_user["dn"] else ""
         try:
             self.ad_connection.move_user(self._current_user["dn"], new_ou_dn)
             self.audit_log.record(
                 "deplacement_compte", sam, "succes", self.session_id,
-                ou_source=old_ou, ou_destination=new_ou_dn, simulation=simulation,
+                ou_source=old_ou, ou_destination=new_ou_dn,
             )
             # Mettre à jour le DN en mémoire
             rdn = self._current_user["dn"].split(",")[0]
@@ -1069,11 +1066,11 @@ class ADExplorerPage(QWidget):
                 label = leaf.split("=", 1)[-1] if "=" in leaf else leaf
                 self._load_users_for_ou(self._current_ou_dn, label)
                 self._clear_detail_panel()
-            QMessageBox.information(self, "Succès", f"Compte déplacé vers {new_ou_dn}{'  (simulé)' if simulation else ''}.")
+            QMessageBox.information(self, "Succès", f"Compte déplacé vers {new_ou_dn}.")
         except ADError as exc:
             self.audit_log.record(
                 "deplacement_compte", sam, "echec", self.session_id,
-                ou_source=old_ou, ou_destination=new_ou_dn, simulation=simulation, detail=str(exc),
+                ou_source=old_ou, ou_destination=new_ou_dn, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -1088,21 +1085,19 @@ class ADExplorerPage(QWidget):
         new_pwd = dialog.result_password
         force_change = dialog.result_force_change
 
-        simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.set_password(self._current_user["dn"], new_pwd)
             if force_change:
                 self.ad_connection.enable_account(self._current_user["dn"], force_password_change=True)
             self.audit_log.record(
-                "reinitialisation_mdp", sam, "succes", self.session_id, simulation=simulation,
+                "reinitialisation_mdp", sam, "succes", self.session_id,
                 detail="force_change=1" if force_change else "",
             )
-            if not simulation:
-                self.password_vault.store(sam, new_pwd)
-                self._refresh_pwd_row(sam)
-            QMessageBox.information(self, "Succès", f"Mot de passe réinitialisé{'  (simulé)' if simulation else ''}.")
+            self.password_vault.store(sam, new_pwd)
+            self._refresh_pwd_row(sam)
+            QMessageBox.information(self, "Succès", "Mot de passe réinitialisé.")
         except ADError as exc:
-            self.audit_log.record("reinitialisation_mdp", sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
+            self.audit_log.record("reinitialisation_mdp", sam, "echec", self.session_id, detail=str(exc))
             QMessageBox.critical(self, "Erreur", str(exc))
 
     def _on_toggle_account(self) -> None:
@@ -1119,7 +1114,6 @@ class ADExplorerPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        simulation = self.ad_connection.dry_run
         try:
             if is_disabled:
                 self.ad_connection.enable_account(self._current_user["dn"])
@@ -1128,12 +1122,12 @@ class ADExplorerPage(QWidget):
                 self.ad_connection.disable_account(self._current_user["dn"])
                 action_type = "desactivation_compte"
             self._current_user["disabled"] = not is_disabled
-            self.audit_log.record(action_type, sam, "succes", self.session_id, simulation=simulation)
-            QMessageBox.information(self, "Succès", f"Compte {action_label}{'  (simulé)' if simulation else ''}.")
+            self.audit_log.record(action_type, sam, "succes", self.session_id)
+            QMessageBox.information(self, "Succès", f"Compte {action_label}.")
             self._reload_current_row()
         except ADError as exc:
             action_type = "activation_compte" if is_disabled else "desactivation_compte"
-            self.audit_log.record(action_type, sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
+            self.audit_log.record(action_type, sam, "echec", self.session_id, detail=str(exc))
             QMessageBox.critical(self, "Erreur", str(exc))
 
     def _on_create_user_clicked(self) -> None:
@@ -1168,7 +1162,6 @@ class ADExplorerPage(QWidget):
         if dialog.result_email:
             attributes["mail"] = dialog.result_email
 
-        simulation = self.ad_connection.dry_run
         try:
             self.ad_connection.create_user(
                 dn, attributes, password=dialog.result_password,
@@ -1176,13 +1169,12 @@ class ADExplorerPage(QWidget):
             )
             self.audit_log.record(
                 "creation_utilisateur_manuel", sam, "succes", self.session_id,
-                ou_destination=ou_dn, simulation=simulation,
+                ou_destination=ou_dn,
             )
-            if not simulation:
-                self.password_vault.store(sam, dialog.result_password)
+            self.password_vault.store(sam, dialog.result_password)
             QMessageBox.information(
                 self, "Succès",
-                f"Utilisateur créé : {sam}{'  (simulé)' if simulation else ''}.\n\n"
+                f"Utilisateur créé : {sam}.\n\n"
                 f"Mot de passe : {dialog.result_password}",
             )
             if self._current_ou_dn == ou_dn:
@@ -1192,7 +1184,7 @@ class ADExplorerPage(QWidget):
         except ADError as exc:
             self.audit_log.record(
                 "creation_utilisateur_manuel", sam, "echec", self.session_id,
-                ou_destination=ou_dn, simulation=simulation, detail=str(exc),
+                ou_destination=ou_dn, detail=str(exc),
             )
             QMessageBox.critical(self, "Erreur", str(exc))
 
@@ -1216,23 +1208,22 @@ class ADExplorerPage(QWidget):
             return
 
         sam = self._current_user.get("sAMAccountName", "")
-        simulation = self.ad_connection.dry_run
         user_dn = self._current_user["dn"]
 
         for dn in dialog.to_add:
             try:
                 self.ad_connection.add_user_to_group(user_dn, dn)
-                self.audit_log.record("ajout_groupe", sam, "succes", self.session_id, simulation=simulation, detail=dn)
+                self.audit_log.record("ajout_groupe", sam, "succes", self.session_id, detail=dn)
             except ADError as exc:
-                self.audit_log.record("ajout_groupe", sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
+                self.audit_log.record("ajout_groupe", sam, "echec", self.session_id, detail=str(exc))
                 QMessageBox.warning(self, "Erreur", f"Ajout au groupe échoué : {exc}")
 
         for dn in dialog.to_remove:
             try:
                 self.ad_connection.remove_user_from_group(user_dn, dn)
-                self.audit_log.record("retrait_groupe", sam, "succes", self.session_id, simulation=simulation, detail=dn)
+                self.audit_log.record("retrait_groupe", sam, "succes", self.session_id, detail=dn)
             except ADError as exc:
-                self.audit_log.record("retrait_groupe", sam, "echec", self.session_id, simulation=simulation, detail=str(exc))
+                self.audit_log.record("retrait_groupe", sam, "echec", self.session_id, detail=str(exc))
                 QMessageBox.warning(self, "Erreur", f"Retrait du groupe échoué : {exc}")
 
         try:

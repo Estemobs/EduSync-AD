@@ -239,7 +239,6 @@ class ADConnection:
         self.controller: str | None = None
         self.username: str | None = None
         self.used_ldaps: bool = False
-        self.dry_run: bool = False
         # Validation du certificat LDAPS — voir default_connection_factory.
         # Sans effet si une connection_factory personnalisée est injectée
         # (tests, notamment), qui reçoit toujours les 4 arguments historiques.
@@ -357,7 +356,7 @@ class ADConnection:
             raise ADError("Non connecté à l'Active Directory.")
         return self._conn
 
-    # -- Lecture (toujours réelle, même en mode simulation) -----------------
+    # -- Lecture -----------------------------------------------------------
 
     @_locked
     def search_existing_identifiers(self, base_dn: str) -> set[str]:
@@ -382,7 +381,7 @@ class ADConnection:
         conn = self._require_connected()
         return bool(conn.search(group_dn, "(objectClass=group)", search_scope=BASE))
 
-    # -- Écriture (court-circuitée en mode simulation) -----------------------
+    # -- Écriture --------------------------------------------------------------
 
     @_logged_write("Création du compte")
     def create_user(
@@ -394,8 +393,6 @@ class ADConnection:
         force_password_change: bool = False,
     ) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.add(dn, ["top", "person", "organizationalPerson", "user"], attributes):
             _raise_ad_error(conn, "Échec de création du compte.")
         if password is not None:
@@ -424,8 +421,6 @@ class ADConnection:
         """Définit le mot de passe AD via l'opération étendue Microsoft dédiée
         (nécessite une connexion chiffrée — LDAPS — sur un AD réel)."""
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.extend.microsoft.modify_password(dn, password):
             if not self.used_ldaps:
                 # AD refuse quasi systématiquement de modifier un mot de passe
@@ -442,8 +437,6 @@ class ADConnection:
     @_logged_write("Activation du compte")
     def enable_account(self, dn: str, *, force_password_change: bool = False) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         changes = {"userAccountControl": [(MODIFY_REPLACE, [UAC_NORMAL_ACCOUNT_ENABLED])]}
         if force_password_change:
             changes["pwdLastSet"] = [(MODIFY_REPLACE, [0])]
@@ -463,8 +456,6 @@ class ADConnection:
     @_logged_write("Création de l'OU")
     def create_ou(self, dn: str, name: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.add(dn, ["top", "organizationalUnit"], {"ou": name}):
             _raise_ad_error(conn, "Échec de création de l'OU.")
 
@@ -539,24 +530,18 @@ class ADConnection:
     @_logged_write("Suppression de l'OU")
     def delete_ou(self, dn: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.delete(dn):
             _raise_ad_error(conn, "Échec de suppression de l'OU.")
 
     @_logged_write("Renommage de l'OU")
     def rename_ou(self, dn: str, new_name: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.modify_dn(dn, f"OU={escape_rdn(new_name)}"):
             _raise_ad_error(conn, "Échec du renommage de l'OU.")
 
     @_logged_write("Création du groupe")
     def create_group(self, dn: str, sam_account_name: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         attributes = {"sAMAccountName": sam_account_name, "groupType": -2147483646}
         if not conn.add(dn, ["top", "group"], attributes):
             _raise_ad_error(conn, "Échec de création du groupe.")
@@ -564,24 +549,18 @@ class ADConnection:
     @_logged_write("Suppression du groupe")
     def delete_group(self, dn: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.delete(dn):
             _raise_ad_error(conn, "Échec de suppression du groupe.")
 
     @_logged_write("Ajout au groupe")
     def add_user_to_group(self, user_dn: str, group_dn: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.modify(group_dn, {"member": [(MODIFY_ADD, [user_dn])]}):
             _raise_ad_error(conn, "Échec d'ajout au groupe.")
 
     @_logged_write("Retrait du groupe")
     def remove_user_from_group(self, user_dn: str, group_dn: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.modify(group_dn, {"member": [(MODIFY_DELETE, [user_dn])]}):
             _raise_ad_error(conn, "Échec de suppression du groupe.")
 
@@ -617,8 +596,6 @@ class ADConnection:
     def move_user(self, user_dn: str, new_ou_dn: str) -> None:
         """Déplace un utilisateur vers une autre OU (modify_dn LDAP)."""
         conn = self._require_connected()
-        if self.dry_run:
-            return
         new_rdn = user_dn.split(",")[0]
         if not conn.modify_dn(user_dn, new_rdn, new_superior=new_ou_dn):
             _raise_ad_error(conn, "Échec du déplacement du compte.")
@@ -626,8 +603,6 @@ class ADConnection:
     @_logged_write("Désactivation du compte")
     def disable_account(self, dn: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         changes = {"userAccountControl": [(MODIFY_REPLACE, [UAC_NORMAL_ACCOUNT_DISABLED])]}
         if not conn.modify(dn, changes):
             _raise_ad_error(conn, "Échec de désactivation du compte.")
@@ -635,8 +610,6 @@ class ADConnection:
     @_logged_write("Suppression du compte")
     def delete_user(self, dn: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.delete(dn):
             _raise_ad_error(conn, "Échec de suppression du compte.")
 
@@ -754,8 +727,6 @@ class ADConnection:
     @_logged_write("Modification d'attribut")
     def update_user_attribute(self, user_dn: str, attribute: str, value: str) -> None:
         conn = self._require_connected()
-        if self.dry_run:
-            return
         if not conn.modify(user_dn, {attribute: [(MODIFY_REPLACE, [value])]}):
             _raise_ad_error(conn, f"Échec de modification de {attribute}.")
 
@@ -763,8 +734,6 @@ class ADConnection:
     def rename_user(self, user_dn: str, new_cn: str) -> None:
         """Renomme un utilisateur (modifie le CN/RDN)."""
         conn = self._require_connected()
-        if self.dry_run:
-            return
         new_rdn = f"CN={escape_rdn(new_cn)}"
         if not conn.modify_dn(user_dn, new_rdn):
             _raise_ad_error(conn, "Échec du renommage.")

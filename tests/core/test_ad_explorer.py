@@ -131,14 +131,6 @@ def test_update_user_attribute_modifies_value(ad):
     assert attrs.get("description") == "Classe 3ème A"
 
 
-def test_update_user_attribute_dry_run_does_not_write(ad):
-    ad.dry_run = True
-    ad.update_user_attribute(USER_DN, "description", "Ne doit pas être écrit")
-    # En dry_run l'appel ne lève pas et n'écrit rien
-    attrs = ad.get_user_attributes(USER_DN)
-    assert attrs.get("description", "") != "Ne doit pas être écrit"
-
-
 def test_update_user_attribute_requires_connected():
     ad = ADConnection(connection_factory=make_factory())
     with pytest.raises(ADError):
@@ -156,9 +148,3 @@ def test_toggle_account_disable_then_enable(ad):
     ad.enable_account(USER_DN)
     result = ad.search_user_by_sam(USER_SAM, BASE_DN)
     assert result is not None
-
-
-def test_toggle_account_dry_run_no_raise(ad):
-    ad.dry_run = True
-    ad.disable_account(USER_DN)
-    ad.enable_account(USER_DN)

@@ -262,7 +262,6 @@ class ExportPage(QWidget):
         else:
             rows = [build_export_row({**u, "sAMAccountName": u.get("sam", "")}) for u in self._loaded_users]
 
-        simulation_label = ""  # l'export est une lecture seule, pas concerné par le mode simulation
         if self.radio_csv.isChecked():
             path_str, _ = QFileDialog.getSaveFileName(self, "Exporter en CSV", "export.csv", "CSV (*.csv)")
             if not path_str:
@@ -276,7 +275,7 @@ class ExportPage(QWidget):
                 "export_csv", f"{len(rows)} compte(s)", "succes", self.session_id,
                 detail=f"champs={','.join(fields)}",
             )
-            QMessageBox.information(self, "Export terminé", f"Fichier enregistré : {path_str}{simulation_label}")
+            QMessageBox.information(self, "Export terminé", f"Fichier enregistré : {path_str}")
         else:
             path_str, _ = QFileDialog.getSaveFileName(
                 self, "Exporter les étiquettes", "etiquettes.pdf", "PDF (*.pdf)"

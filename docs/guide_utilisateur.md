@@ -11,17 +11,15 @@ dans un Active Directory, conçu pour les administrateurs réseau des
 ## Sommaire
 
 1. [Première connexion](#1-première-connexion)
-2. [Mode simulation](#2-mode-simulation)
-3. [Module 1 — Création de comptes](#3-module-1--création-de-comptes)
-4. [Module 2 — Migration de classe](#4-module-2--migration-de-classe)
-5. [Module 3 — Gestion des départs](#5-module-3--gestion-des-départs)
-6. [Module 4 — Arrivées en cours d'année](#6-module-4--arrivées-en-cours-dannée)
-7. [Module 5 — Réinitialisation de mot de passe](#7-module-5--réinitialisation-de-mot-de-passe)
-8. [Module 6 — Explorateur AD](#8-module-6--explorateur-ad)
-9. [Export (CSV / étiquettes)](#9-export-csv--étiquettes)
-10. [Journal d'actions](#10-journal-dactions)
-11. [Paramètres globaux](#11-paramètres-globaux)
-12. [Dépannage — Erreur de certificat LDAPS](#12-dépannage--erreur-de-certificat-ldaps)
+2. [Module 1 — Création de comptes / Arrivées en cours d'année](#2-module-1--création-de-comptes--arrivées-en-cours-dannée)
+3. [Module 2 — Migration de classe](#3-module-2--migration-de-classe)
+4. [Module 3 — Gestion des départs](#4-module-3--gestion-des-départs)
+5. [Module 4 — Réinitialisation de mot de passe](#5-module-4--réinitialisation-de-mot-de-passe)
+6. [Module 5 — Explorateur AD](#6-module-5--explorateur-ad)
+7. [Export (CSV / étiquettes)](#7-export-csv--étiquettes)
+8. [Journal d'actions](#8-journal-dactions)
+9. [Paramètres globaux](#9-paramètres-globaux)
+10. [Dépannage — Erreur de certificat LDAPS](#10-dépannage--erreur-de-certificat-ldaps)
 
 ---
 
@@ -60,31 +58,28 @@ par le contrôleur de domaine en LDAPS :
 
 Si la connexion échoue avec un message du type *« Le certificat présenté par
 le contrôleur de domaine en LDAPS n'a pas pu être validé »*, voir la section
-[11. Dépannage — Erreur de certificat LDAPS](#11-dépannage--erreur-de-certificat-ldaps).
+[10. Dépannage — Erreur de certificat LDAPS](#10-dépannage--erreur-de-certificat-ldaps).
+
+### Bandeau supérieur
+
+Une fois connecté, le bandeau du haut reste visible sur toutes les pages :
+
+- **Indicateur de connexion** (domaine, protocole LDAPS/LDAP)
+- **🐞 Signaler un problème** : ouvre votre navigateur sur un ticket GitHub
+  prérempli (version, système, dernières lignes du journal applicatif) —
+  rien n'est envoyé automatiquement, vous relisez et cliquez "Submit"
+  vous-même.
+- **⟳ Mises à jour** : vérifie et installe une nouvelle version
+- **Numéro de version** — suffixé `-win` ou `-lin` selon que vous utilisez
+  la version Windows ou Linux, pour les distinguer d'un coup d'œil.
 
 ---
 
-## 2. Mode simulation
+## 2. Module 1 — Création de comptes / Arrivées en cours d'année
 
-Le bouton **Mode simulation** dans le bandeau supérieur permet de tester
-toutes les opérations sans aucune écriture réelle dans l'AD.
-
-- En mode actif, le bandeau devient orange et toutes les actions affichent
-  **(simulé)** dans leur résultat.
-- Les lectures AD (résolution des utilisateurs, vérification des doublons)
-  restent réelles même en simulation.
-- Le journal d'actions enregistre les opérations simulées avec l'indicateur
-  « Simulation : Oui ».
-
-> **Conseil** : activez toujours le mode simulation avant la rentrée pour
-> vérifier vos imports sans risque.
-
----
-
-## 3. Module 1 — Création de comptes
-
-**Usage typique** : créer les comptes élèves ou personnels en début d'année
-à partir d'un export de votre logiciel de gestion scolaire (PRONOTE, etc.).
+**Usage typique** : créer les comptes élèves ou personnels, en début d'année
+à partir d'un export de votre logiciel de gestion scolaire (PRONOTE, etc.),
+ou ponctuellement pour une arrivée en cours d'année.
 
 ### Flux de travail
 
@@ -156,6 +151,10 @@ groupe de classe, état.
 
 - Les **doublons résolus** sont signalés (⚠ Doublon résolu) — la règle de
   résolution configurée dans les Paramètres a été appliquée automatiquement.
+- Une vérification automatique dans l'AD détecte si un compte du même
+  prénom+nom existe déjà dans l'OU cible (⚠ Doublon AD) — utile aussi bien
+  en début d'année que pour une arrivée en cours d'année dans une classe qui
+  compte déjà des élèves. La ligne est alors ignorée à la validation.
 - Vous pouvez **modifier individuellement** identifiant et mot de passe en
   double-cliquant sur la cellule.
 
@@ -168,7 +167,7 @@ distribution.
 
 ---
 
-## 4. Module 2 — Migration de classe
+## 3. Module 2 — Migration de classe
 
 **Usage typique** : passage de 4ème A vers 3ème A en fin d'année scolaire.
 
@@ -186,7 +185,7 @@ Thomas;Martin;4emeA;3emeA
 `classe_source` et `classe_destination` sont résolues automatiquement en OU
 complète : réglage **"OU parente pour les classes"** des Paramètres si
 configuré, sinon racine du domaine connecté (voir
-[10. Paramètres globaux](#10-paramètres-globaux)). L'élève est ensuite
+[9. Paramètres globaux](#9-paramètres-globaux)). L'élève est ensuite
 retrouvé par prénom+nom dans l'OU source résolue — aucun identifiant AD à
 connaître.
 
@@ -221,7 +220,7 @@ pour lister tous les comptes de l'OU, et **Valider la migration**.
 
 ---
 
-## 5. Module 3 — Gestion des départs
+## 4. Module 3 — Gestion des départs
 
 **Usage typique** : traitement des élèves ou personnels quittant
 l'établissement.
@@ -259,19 +258,7 @@ avec leur date d'archivage et leur date d'échéance.
 
 ---
 
-## 6. Module 4 — Arrivées en cours d'année
-
-Identique au Module 1 — Création de comptes, avec une vérification
-préalable dans l'AD : si un utilisateur avec le même prénom et nom existe
-déjà dans l'OU cible, la ligne est marquée **⚠ Doublon AD** et ignorée lors
-de la validation.
-
-Cette vérification permet d'éviter les doublons lors d'inscriptions tardives
-ou de retours d'élèves.
-
----
-
-## 7. Module 5 — Réinitialisation de mot de passe
+## 5. Module 4 — Réinitialisation de mot de passe
 
 **Usage typique** : réinitialiser les mots de passe de toute une classe ou
 d'un groupe en début d'année.
@@ -297,7 +284,7 @@ d'un groupe en début d'année.
 
 ---
 
-## 8. Module 6 — Explorateur AD
+## 6. Module 5 — Explorateur AD
 
 L'Explorateur AD permet de naviguer dans l'annuaire et d'agir directement
 sur les comptes sans passer par un import CSV.
@@ -349,7 +336,7 @@ menu d'actions :
 | **Gérer les groupes** | Liste tous les groupes avec cases à cocher pour ajouter/retirer |
 | **Supprimer l'utilisateur** (clic droit) | Suppression définitive — irréversible, confirmation Oui/Non |
 
-Toutes ces actions respectent le mode simulation et sont journalisées.
+Toutes ces actions sont journalisées.
 
 **Suppression multiple** : sélectionnez plusieurs comptes dans la liste
 centrale (Ctrl/Shift-clic), puis clic droit → **Supprimer les comptes
@@ -370,14 +357,14 @@ passe** apparaît :
   (qui sera alors, lui, mémorisé).
 
 Les mots de passe sont chiffrés (AES-256) dans un fichier local à
-l'administrateur, jamais sur le serveur AD. Voir aussi [Export](#9-export-csv--étiquettes)
-pour les inclure dans un CSV/étiquettes, et [Paramètres](#11-paramètres-globaux)
+l'administrateur, jamais sur le serveur AD. Voir aussi [Export](#7-export-csv--étiquettes)
+pour les inclure dans un CSV/étiquettes, et [Paramètres](#9-paramètres-globaux)
 pour vider ce coffre.
 
 ### Groupes
 
 Le panneau **Groupes** (et le dialogue "Gérer les groupes", et la source
-"Groupe AD" du Module 5) n'affichent que les groupes créés par
+"Groupe AD" du Module 4) n'affichent que les groupes créés par
 l'établissement — les groupes système d'Active Directory (Administrateurs,
 Opérateurs de sauvegarde…) sont automatiquement masqués.
 
@@ -388,7 +375,7 @@ perdent simplement cette appartenance).
 
 ---
 
-## 9. Export (CSV / étiquettes)
+## 7. Export (CSV / étiquettes)
 
 Un module dédié pour extraire des données de l'AD, sans passer par
 l'Explorateur — pratique pour imprimer des étiquettes de rentrée ou fournir
@@ -411,7 +398,7 @@ Identifiant, nom complet, prénom, nom, classe/OU, adresse mail, état
 
 Le champ **Mot de passe** n'est jamais coché par défaut et affiche un
 avertissement dès qu'il est activé : il ne remonte que les mots de passe
-qu'EduSync AD a lui-même positionnés (voir [Explorateur AD](#8-module-6--explorateur-ad))
+qu'EduSync AD a lui-même positionnés (voir [Explorateur AD](#6-module-5--explorateur-ad))
 — vide pour un compte non enregistré, jamais d'erreur. Un fichier ou une
 planche d'étiquettes contenant des mots de passe en clair est à distribuer
 avec précaution.
@@ -437,11 +424,10 @@ Cliquez **Exporter…** et choisissez où enregistrer le fichier.
 
 ---
 
-## 10. Journal d'actions
+## 8. Journal d'actions
 
 Le journal enregistre chaque opération : type d'action, compte concerné,
-OU source et destination, résultat (succès/échec), identifiant de session,
-indicateur simulation.
+OU source et destination, résultat (succès/échec), identifiant de session.
 
 ### Filtres
 
@@ -457,16 +443,18 @@ revenir aux 30 derniers jours.
 ### Export
 
 Cliquez **Exporter en CSV** pour télécharger toutes les entrées filtrées.
-Le fichier contient : horodatage, type, compte, OUs, résultat, simulation, détail.
+Le fichier contient : horodatage, type, compte, OUs, résultat, détail.
 
 Le journal est stocké localement sur la machine de l'administrateur
 (base SQLite dans le répertoire de données utilisateur).
 
 ---
 
-## 11. Paramètres globaux
+## 9. Paramètres globaux
 
-Accessibles via **Paramètres** dans la sidebar.
+Accessibles via **Paramètres** dans la sidebar, regroupés en 3 onglets :
+**Comptes** (identifiants, mail, groupes de classe, départs), **Mots de
+passe** (politiques élèves/personnels, coffre) et **Apparence**.
 
 ### Nomenclature des identifiants
 
@@ -496,7 +484,7 @@ portant le nom de l'OU soit créé automatiquement et que les utilisateurs y
 soient ajoutés lors de la création ou de la migration.
 
 **OU parente pour les classes** : l'OU sous laquelle les OU de classe
-(colonne `classe` d'un import Module 1/4) sont recherchées ou créées, ex.
+(colonne `classe` d'un import Module 1) sont recherchées ou créées, ex.
 `OU=eleves,DC=lycee,DC=local`. Ce réglage est mémorisé une fois pour toutes
 — inutile de le ressaisir à chaque import (il peut toujours être remplacé
 ponctuellement via "OU parente pour les classes" dans le Module 1).
@@ -532,7 +520,7 @@ Configurées séparément pour les élèves et les personnels :
 ### Sécurité — coffre des mots de passe
 
 EduSync AD retient, chiffrés (AES-256), les mots de passe qu'il positionne
-lui-même (création, réinitialisation) — voir [Explorateur AD](#8-module-6--explorateur-ad).
+lui-même (création, réinitialisation) — voir [Explorateur AD](#6-module-5--explorateur-ad).
 Cette page affiche le nombre de mots de passe actuellement enregistrés et
 propose **Vider le coffre des mots de passe…** : les supprime tous
 définitivement (confirmation requise). Les comptes concernés restent
@@ -541,7 +529,7 @@ perdue ; une réinitialisation le remémorisera.
 
 ---
 
-## 12. Dépannage — Erreur de certificat LDAPS
+## 10. Dépannage — Erreur de certificat LDAPS
 
 ### Pourquoi cette erreur apparaît
 

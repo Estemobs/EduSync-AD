@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -248,29 +249,34 @@ class SettingsPage(QWidget):
         security_layout.addWidget(self.pwd_vault_clear_button)
         self._refresh_pwd_vault_count()
 
+        tabs = QTabWidget()
+        tabs.addTab(
+            self._build_tab((identifiers_group, mail_group, groupes_group, departs_group)),
+            "Comptes",
+        )
+        tabs.addTab(
+            self._build_tab((eleve_group, personnel_group, security_group)),
+            "Mots de passe",
+        )
+        tabs.addTab(self._build_tab((appearance_group,)), "Apparence")
+
+        outer = QVBoxLayout(self)
+        outer.addWidget(tabs)
+        outer.addWidget(save_button)
+        outer.addWidget(self.save_confirmation_label)
+
+    @staticmethod
+    def _build_tab(groups: tuple[QGroupBox, ...]) -> QScrollArea:
         content = QWidget()
         content_layout = QVBoxLayout(content)
-        for group in (
-            identifiers_group,
-            mail_group,
-            groupes_group,
-            departs_group,
-            appearance_group,
-            eleve_group,
-            personnel_group,
-            security_group,
-        ):
+        for group in groups:
             content_layout.addWidget(group)
-        content_layout.addWidget(save_button)
-        content_layout.addWidget(self.save_confirmation_label)
         content_layout.addStretch()
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(content)
-
-        outer = QVBoxLayout(self)
-        outer.addWidget(scroll)
+        return scroll
 
     @staticmethod
     def _build_identifier_combo(current_value: str) -> QComboBox:

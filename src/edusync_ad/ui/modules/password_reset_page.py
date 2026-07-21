@@ -531,14 +531,12 @@ class PasswordResetPage(QWidget):
             return
         self._sync_passwords_from_table()
 
-        simulation = self.ad_connection.dry_run
         force_change = self.chk_force_change.isChecked()
-        suffix_sim = " (mode simulation)" if simulation else ""
         suffix_force = " + forcer changement" if force_change else ""
         reply = QMessageBox.question(
             self,
             "Confirmer",
-            f"Réinitialiser les mots de passe de {len(self._users)} compte(s){suffix_force}{suffix_sim} ?",
+            f"Réinitialiser les mots de passe de {len(self._users)} compte(s){suffix_force} ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -559,15 +557,13 @@ class PasswordResetPage(QWidget):
             if success:
                 self.audit_log.record(
                     "reinitialisation_mdp", user["sam"], "succes", self.session_id,
-                    simulation=simulation, detail="force_change=1" if force_change else "",
+                    detail="force_change=1" if force_change else "",
                 )
-                if not simulation:
-                    self.password_vault.store(user["sam"], pwd)
-                etat = "Réinitialisé" + (" (sim.)" if simulation else "")
+                self.password_vault.store(user["sam"], pwd)
+                etat = "Réinitialisé"
             else:
                 self.audit_log.record(
-                    "reinitialisation_mdp", user["sam"], "echec", self.session_id,
-                    simulation=simulation, detail=message,
+                    "reinitialisation_mdp", user["sam"], "echec", self.session_id, detail=message,
                 )
                 etat = f"Erreur : {message}"
             self.preview_table.setItem(position, COL_ETAT, QTableWidgetItem(etat))
@@ -576,7 +572,7 @@ class PasswordResetPage(QWidget):
             self.validate_btn.setEnabled(True)
             QMessageBox.information(
                 self, "Terminé",
-                f"{self.progress_panel.success_count}/{len(self._users)} réinitialisation(s){suffix_sim}.",
+                f"{self.progress_panel.success_count}/{len(self._users)} réinitialisation(s).",
             )
 
         self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)

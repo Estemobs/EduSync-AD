@@ -406,8 +406,6 @@ class DepartPage(QWidget):
             return
 
         mode = self._current_mode()
-        simulation = self.ad_connection.dry_run
-        suffix_sim = " (mode simulation)" if simulation else ""
 
         if mode == MODE_ARCHIVAGE and not self.config.ou_archive:
             QMessageBox.critical(
@@ -420,7 +418,7 @@ class DepartPage(QWidget):
         reply = QMessageBox.question(
             self,
             "Confirmer",
-            f"{len(to_process)} compte(s) vont être {mode_label}{suffix_sim}.",
+            f"{len(to_process)} compte(s) vont être {mode_label}.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
@@ -428,7 +426,7 @@ class DepartPage(QWidget):
 
         base_dn = ADConnection.domain_to_base_dn(self.ad_connection.domain)
         action_type = "desactivation_compte" if mode == MODE_DESACTIVATION else "archivage_compte"
-        etat_succes = f"{'Simulé' if simulation else ('Désactivé' if mode == MODE_DESACTIVATION else 'Archivé')}"
+        etat_succes = "Désactivé" if mode == MODE_DESACTIVATION else "Archivé"
 
         indexed_rows = [(i, row) for i, row in enumerate(self._rows) if row.user_dn is not None]
         labels = [row.identifiant for _, row in indexed_rows]
@@ -445,14 +443,13 @@ class DepartPage(QWidget):
             i, row = indexed_rows[position]
             if success:
                 self.audit_log.record(
-                    action_type, row.identifiant, "succes", self.session_id, simulation=simulation,
+                    action_type, row.identifiant, "succes", self.session_id,
                 )
                 self._set_table_row(i, row, etat=etat_succes)
             else:
                 row.erreur = message
                 self.audit_log.record(
-                    action_type, row.identifiant, "echec", self.session_id,
-                    simulation=simulation, detail=message,
+                    action_type, row.identifiant, "echec", self.session_id, detail=message,
                 )
                 self._set_table_row(i, row)
 
@@ -462,7 +459,7 @@ class DepartPage(QWidget):
             QMessageBox.information(
                 self,
                 "Traitement terminé",
-                f"{self.progress_panel.success_count}/{len(to_process)} compte(s) traité(s){suffix_sim}.",
+                f"{self.progress_panel.success_count}/{len(to_process)} compte(s) traité(s).",
             )
 
         self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
@@ -487,14 +484,13 @@ class DepartPage(QWidget):
             except ADError:
                 pass
         self.ad_connection.move_user(row.user_dn, self.config.ou_archive)
-        if not self.ad_connection.dry_run:
-            self.audit_log.add_pending_deletion(
-                user_dn=row.user_dn.split(",")[0] + "," + self.config.ou_archive,
-                sam_account_name=row.identifiant,
-                nom_complet=row.nom_complet or row.identifiant,
-                session_id=self.session_id,
-                delai_jours=self.delai_spin.value(),
-            )
+        self.audit_log.add_pending_deletion(
+            user_dn=row.user_dn.split(",")[0] + "," + self.config.ou_archive,
+            sam_account_name=row.identifiant,
+            nom_complet=row.nom_complet or row.identifiant,
+            session_id=self.session_id,
+            delai_jours=self.delai_spin.value(),
+        )
 
     # -- Suppressions en attente ----------------------------------------------
 
@@ -545,7 +541,6 @@ class DepartPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
-        simulation = self.ad_connection.dry_run
         labels = [entry["sam_account_name"] for entry in due]
         self.process_pending_button.setEnabled(False)
 
@@ -558,16 +553,14 @@ class DepartPage(QWidget):
             if success:
                 self.audit_log.remove_pending_deletion(entry["user_dn"])
                 self.audit_log.record(
-                    "suppression_compte", sam, "succes", self.session_id, simulation=simulation,
+                    "suppression_compte", sam, "succes", self.session_id,
                 )
-                if not simulation:
-                    # Hygiène : pas de mot de passe recouvrable pour un compte
-                    # qui n'existe plus.
-                    self.password_vault.delete(sam)
+                # Hygiène : pas de mot de passe recouvrable pour un compte
+                # qui n'existe plus.
+                self.password_vault.delete(sam)
             else:
                 self.audit_log.record(
-                    "suppression_compte", sam, "echec", self.session_id,
-                    simulation=simulation, detail=message,
+                    "suppression_compte", sam, "echec", self.session_id, detail=message,
                 )
 
         def on_finished() -> None:
@@ -605,10 +598,7 @@ class DepartPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         self.audit_log.remove_pending_deletion(entry["user_dn"])
-        self.audit_log.record(
-            "annulation_suppression", sam, "succes", self.session_id,
-            simulation=self.ad_connection.dry_run,
-        )
+        self.audit_log.record("annulation_suppression", sam, "succes", self.session_id)
         self._refresh_pending_panel()
 
     # -- Annulation -----------------------------------------------------------

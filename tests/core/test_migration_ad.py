@@ -60,12 +60,6 @@ def test_remove_user_from_group(ad):
     assert ad.group_exists(GROUP_4EMEA_DN)
 
 
-def test_remove_user_from_group_dry_run(ad):
-    ad.dry_run = True
-    ad.remove_user_from_group(USER_DN, GROUP_4EMEA_DN)
-    # En mode dry_run, aucune opération réelle : pas d'exception levée
-
-
 def test_move_user(ad):
     ad.move_user(USER_DN, OU_3EMEA_DN)
     new_dn = f"cn=Thomas Martin,{OU_3EMEA_DN}"
@@ -73,15 +67,6 @@ def test_move_user(ad):
     assert result is not None
     dn, cn = result
     assert OU_3EMEA_DN.lower() in dn.lower()
-
-
-def test_move_user_dry_run(ad):
-    ad.dry_run = True
-    ad.move_user(USER_DN, OU_3EMEA_DN)
-    result = ad.search_user_by_sam(USER_SAM, BASE_DN)
-    assert result is not None
-    dn, cn = result
-    assert OU_4EMEA_DN.lower() in dn.lower()
 
 
 def test_operations_require_connected_state_migration():

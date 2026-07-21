@@ -1,9 +1,12 @@
-"""Module 1 — Création de comptes (§4 du cahier des charges).
+"""Module 1 — Création de comptes, couvre aussi les arrivées en cours
+d'année (§4 et §8 du cahier des charges — fusionnés : la seule différence
+entre les deux était la vérification de doublon AD ci-dessous, désormais
+systématique).
 
 Import CSV -> sélection du type de compte -> sélection du format
 d'identifiant -> génération de la prévisualisation (identifiants, mots de
-passe, emails, groupe de classe, doublons résolus) -> validation (écriture
-dans l'AD ou simulation) -> export CSV des comptes créés.
+passe, emails, groupe de classe, doublons résolus, doublons AD existants)
+-> validation (écriture dans l'AD) -> export CSV des comptes créés.
 """
 
 from __future__ import annotations
@@ -183,7 +186,7 @@ class CreateAccountsPage(QWidget):
         ou_layout.addWidget(self.auto_create_ou_checkbox)
 
         generate_row = QHBoxLayout()
-        self.generate_button = QPushButton("4. Générer la prévisualisation")
+        self.generate_button = QPushButton("4. Générer la prévisualisation (avec vérification AD)")
         self.generate_button.clicked.connect(self._on_generate_clicked)
         generate_row.addWidget(self.generate_button)
         generate_row.addStretch()
@@ -364,7 +367,6 @@ class CreateAccountsPage(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return set()
 
-        simulation = self.ad_connection.dry_run
         created: set[str] = set()
         for ou_dn in missing:
             name = ou_dn.split(",", 1)[0].split("=", 1)[-1]
@@ -373,12 +375,12 @@ class CreateAccountsPage(QWidget):
                 created.add(ou_dn)
                 self.audit_log.record(
                     "creation_ou", name, "succes", self.session_id,
-                    ou_destination=ou_dn, simulation=simulation,
+                    ou_destination=ou_dn,
                 )
             except ADError as exc:
                 self.audit_log.record(
                     "creation_ou", name, "echec", self.session_id,
-                    ou_destination=ou_dn, simulation=simulation, detail=str(exc),
+                    ou_destination=ou_dn, detail=str(exc),
                 )
         return created
 
@@ -504,7 +506,7 @@ class CreateAccountsPage(QWidget):
                 )
                 continue
 
-            ad_dup = self._ad_duplicate_check(row)
+            ad_dup = self._ad_duplicate_check(row, ou_dn)
             if ad_dup:
                 generated.append(
                     GeneratedUser(
@@ -595,7 +597,6 @@ class CreateAccountsPage(QWidget):
             QMessageBox.warning(self, "Rien à créer", "Aucune ligne valide à créer.")
             return
 
-        simulation = self.ad_connection.dry_run
         labels = [u.identifiant or u.nom_complet for _, u in to_process]
         self.validate_button.setEnabled(False)
 
@@ -608,25 +609,23 @@ class CreateAccountsPage(QWidget):
             if success:
                 self.audit_log.record(
                     "creation_compte", user.identifiant, "succes", self.session_id,
-                    ou_destination=user.ou_cible, simulation=simulation,
+                    ou_destination=user.ou_cible,
                 )
-                if not simulation:
-                    self.password_vault.store(user.identifiant, user.mot_de_passe)
+                self.password_vault.store(user.identifiant, user.mot_de_passe)
             else:
                 user.erreur = message
                 self.audit_log.record(
                     "creation_compte", user.identifiant, "echec", self.session_id,
-                    ou_destination=user.ou_cible, simulation=simulation, detail=message,
+                    ou_destination=user.ou_cible, detail=message,
                 )
             self._set_preview_row(row_index, user)
 
         def on_finished() -> None:
             self.validate_button.setEnabled(True)
-            suffix = " (mode simulation, aucune écriture réelle)" if simulation else ""
             QMessageBox.information(
                 self,
                 "Création terminée",
-                f"{self.progress_panel.success_count}/{len(to_process)} compte(s) créé(s) avec succès{suffix}.",
+                f"{self.progress_panel.success_count}/{len(to_process)} compte(s) créé(s) avec succès.",
             )
             if self.progress_panel.success_count:
                 self._propose_export()
@@ -700,9 +699,24 @@ class CreateAccountsPage(QWidget):
         self.validate_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
 
-    # -- Hook pour sous-classes -----------------------------------------------
+    # -- Vérification de doublon AD --------------------------------------------
 
-    def _ad_duplicate_check(self, row: "RawUserRow") -> str | None:
-        """Retourne un message si un doublon AD est détecté, sinon None.
-        Surchargé par InscriptionPage (Module 4)."""
+    def _ad_duplicate_check(self, row: "RawUserRow", ou_dn: str) -> str | None:
+        """Retourne un message si un compte du même prénom+nom existe déjà
+        dans l'OU cible (résolue — `row.ou` seul serait vide dès que l'import
+        ne fournit qu'une colonne `classe`, le cas le plus courant), sinon
+        None. Utile aussi bien en début d'année (import en masse sur des OU
+        normalement vides) qu'en cours d'année (ajout dans une classe qui
+        contient déjà des élèves) — coût négligeable (une recherche par OU
+        touchée), donc toujours activé plutôt que de distinguer deux modules
+        pour ça."""
+        if not ou_dn:
+            return None
+        cn = f"{row.prenom} {row.nom}"
+        try:
+            existing_dn = self.ad_connection.search_user_by_cn(cn, ou_dn)
+        except ADError:
+            return None
+        if existing_dn:
+            return f"Compte existant : {existing_dn}"
         return None
