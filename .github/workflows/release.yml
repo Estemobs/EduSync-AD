@@ -44,7 +44,7 @@ jobs:
         run: |
           (Get-FileHash EduSyncAD-Setup.exe -Algorithm SHA256).Hash.ToLower() | Set-Content -NoNewline EduSyncAD-Setup.exe.sha256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-build
           path: |
@@ -79,7 +79,7 @@ jobs:
       - name: Calculer le hash SHA-256
         run: sha256sum EduSyncAD-linux.flatpak | cut -d ' ' -f1 > EduSyncAD-linux.flatpak.sha256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-build
           path: |
