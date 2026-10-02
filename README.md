@@ -4,134 +4,109 @@
 
 # EduSync AD
 
-**La gestion des comptes Active Directory de votre établissement, sans jamais ouvrir une console Microsoft.**
+**La gestion du cycle de vie Active Directory — Sans jamais ouvrir une console Microsoft.**
 
-Import CSV → comptes créés. Fin d'année → classes migrées. Départ d'un élève → compte archivé. En quelques clics, pas en PowerShell.
+Import CSV → comptes créés. Restructuration → comptes migrés. Départ → compte archivé.
+En quelques clics, pas en PowerShell.
 
-📖 [Guide utilisateur](docs/guide_utilisateur.md) · 📥 [Télécharger la dernière version](../../releases/latest)
+📖 [Guide utilisateur](docs/guide_utilisateur.md) · 📥 [Télécharger la dernière version](../../releases/latest) · 🗺️ [Feuille de route](ROADMAP.md)
 
 </div>
 
 ---
 
-## En un coup d'œil
+## Pour qui ?
 
-<table>
-<tr>
-<td width="50%">
+| Profil | Cas d'usage typiques |
+|--------|---------------------|
+| **Admin réseau établissement** | Rentrée 1 500 élèves, mutations fin d'année, départs ponctuels, réinitialisation MDP classe complète |
+| **Admin PME / Collectivité** | Onboarding/offboarding collaborateurs, gestion OU par service/équipe, délégation helpdesk, conformité RGPD |
+| **MSSP / Intégrateur** | Multi-clients (multisite), déploiement standardisé, audit centralisé, modèles réutilisables |
 
-<img src="docs/screenshots/module1_creation_comptes.png" alt="Création de comptes en masse depuis un CSV">
-
-*Un CSV d'export scolaire (prénom, nom, classe) → identifiants, mots de passe et adresses mail générés automatiquement, doublons résolus tout seuls.*
-
-</td>
-<td width="50%">
-
-<img src="docs/screenshots/module6_explorateur_ad.png" alt="Explorateur AD façon RSAT">
-
-*Explorateur AD façon RSAT : OUs, groupes, sous-OUs et comptes dans une seule vue — clic droit pour tout modifier, déplacer ou supprimer.*
-
-</td>
-</tr>
-</table>
-
-<div align="center">
-<img src="docs/screenshots/login.png" alt="Écran de connexion" width="420">
-
-<sub>Connexion LDAPS chiffrée par défaut, avec repli assumé sur LDAP et validation de certificat configurable.</sub>
-</div>
+> **Pas seulement éducation** : la logique « prénom/nom/équipe » s'applique à toute structure
+> hiérarchique (service, équipe, projet, site) — il suffit de renommer « classe » en « équipe » dans l'UI.
 
 ---
 
-## Pourquoi EduSync AD
+## Fonctionnalités clés
 
-La rentrée, les mutations de fin d'année, les départs d'élèves ou de personnel : ce sont des opérations répétitives, à fort volume, et à fort risque d'erreur quand elles se font à la main dans ADUC. EduSync AD prend en charge le cycle de vie complet d'un compte, du CSV d'inscription à l'archivage, avec :
-
-- **Zéro connaissance AD requise pour l'utiliser au quotidien** — vos fichiers contiennent des prénoms, des noms, des classes. Jamais de `OU=...,DC=...` à taper.
-- **Un mode simulation** pour vérifier un import avant d'écrire quoi que ce soit dans l'annuaire.
-- **Un journal complet** de chaque action, exportable, pour la traçabilité.
-- **Une mise à jour intégrée**, vérifiée par somme de contrôle, qui redémarre l'application toute seule.
-
----
-
-## Fonctionnalités
+### Cycle de vie complet (v1.x — Déployé)
 
 | Module | Description |
 |--------|-------------|
-| **Création de comptes** | Import CSV, génération d'identifiants et mots de passe, gestion des doublons |
-| **Migration de classe** | Déplacement en masse entre OUs en fin d'année (via CSV ou interface) |
-| **Arrivées en cours d'année** | Création avec vérification des doublons AD existants |
-| **Gestion des départs** | Désactivation immédiate ou suppression différée avec archivage |
-| **Réinitialisation MDP** | Par OU, par groupe AD ou par fichier CSV |
-| **Explorateur AD** | Navigation OUs/groupes/comptes dans une vue unique, actions au clic droit |
-| **Journal d'actions** | Historique filtrable et exportable de toutes les opérations |
-| **Mode simulation** | Testez tout sans écrire dans l'AD |
-| **Mise à jour intégrée** | Vérification, téléchargement et installation depuis l'application, redémarrage automatique |
+| **Création de comptes / Arrivées** | Import CSV, génération identifiants/MDP/mail auto, résolution doublons, vérification AD existants, export CSV étiquettes prêt à imprimer |
+| **Migration (restructuration)** | Via CSV (prénom/nom/équipe) ou interface (sélection OU), déplacement AD + groupes auto, résolution par prénom/nom |
+| **Gestion des départs** | Désactivation immédiate ou archivage + purge planifiée (délai configurable, 30j par défaut) |
+| **Réinitialisation MDP** | Par OU, groupe AD ou CSV, politiques différées (élèves/personnels), forçage changement à la prochaine connexion |
+| **Explorateur AD** | Arborescence OUs/groupes, panneau central unifié (utilisateurs + groupes + sous-OU), clic droit complet (modif, move, MDP, groupes, suppr), recherche temps réel |
+| **Export (CSV / Étiquettes PDF)** | Sélection OU ± sous-OU, champs cochables (incl. MDP mémorisés), PDF Avery L7160/L7163, QR codes, couleurs pastel |
+| **Journal d'actions** | Filtres date/type/résultat, export CSV, stockage local SQLite (append-only) |
+| **Mode simulation** | Toute écriture AD = prévisualisation modifiable avant validation |
 
----
+### Sécurité & Exploitation
 
-## Téléchargement
+- **LDAPS par défaut** (port 636), fallback LDAP explicite avec avertissement, certificat CA custom
+- **Coffre MDP AES-256** local (machines admin), jamais sur l'AD
+- **Mise à jour intégrée** : vérification, téléchargement, installation, redémarrage auto, vérification somme de contrôle
+- **Configuration chiffrée** (domaine, utilisateur) via `platformdirs` + AES
 
-Les binaires prêts à l'emploi sont disponibles dans les [**Releases**](../../releases/latest) :
+### En développement (v2.x — Prochainement)
 
-| Plateforme | Fichier | Instructions |
-|---|---|---|
-| **Windows 10/11** | `EduSyncAD-Setup.exe` | Lancez l'installateur — raccourcis menu Démarrer/Bureau et désinstallation depuis les Paramètres Windows |
-| **Linux** | `EduSyncAD-linux.flatpak` | `flatpak install EduSyncAD-linux.flatpak` |
+Photos d'identité, profils itinérants, quotas FSRM, scripts logon/logoff, heures de connexion,
+dossiers personnels (Home Directory), espaces partagés par équipe/groupe.
 
-Aucun Python nécessaire.
+### Vision (v3+)
 
----
-
-## Connexion
-
-Au lancement, renseignez :
-- Nom de domaine (ex. `lycee-victor-hugo.local`)
-- Adresse du contrôleur de domaine
-- Compte administrateur du domaine
-
-La connexion LDAPS (chiffrée, port 636) est tentée en priorité. Repli automatique sur LDAP (port 389) si indisponible. Si le contrôleur utilise un certificat émis par une autorité interne (cas courant), voir la [section dépannage du guide utilisateur](docs/guide_utilisateur.md#11-dépannage--erreur-de-certificat-ldaps).
+Office 365 / Entra ID, Exchange, RDS, modèles de groupes (templates), éditeur étiquettes WYSIWYG,
+multisite/multi-domaine, RBAC/délégation, API REST + webhooks, IA/Assistant, conformité RGPD.
 
 ---
 
 ## Prérequis
 
-- Active Directory accessible sur le réseau
-- Compte avec droits de création/modification de comptes utilisateurs
+- Active Directory accessible (Windows Server 2012 → 2025)
+- Compte avec droits création/modification utilisateurs (Délégation OU ciblée recommandée)
+- **Pas de Python requis** sur le poste admin (binaires Windows/Linux fournis)
 
 ---
 
-## Format des fichiers CSV
+## Installation rapide
 
-Le personnel administratif ne fournit jamais de chemin AD ni d'identifiant de connexion — seulement des prénoms, des noms, et parfois une classe. C'est tout ce qu'EduSync AD demande aussi.
+```bash
+# Windows 10/11
+EduSyncAD-Setup.exe
+# → Raccourcis Menu Démarrer/Bureau, désinstallation standard via Paramètres Windows
 
-### Création de comptes / Arrivées
-```
-prenom;nom;classe
-Thomas;Martin;3emeA
-Léa;Petit;4emeB
-```
-Seuls `prenom` et `nom` sont obligatoires. La classe est résolue automatiquement vers la bonne OU (réglage "OU parente pour les classes" dans les Paramètres, ou racine du domaine par défaut). Un chemin AD complet (`ou`) reste accepté pour les cas avancés — voir le [guide utilisateur](docs/guide_utilisateur.md).
-
-### Migration (fin d'année)
-```
-prenom;nom;classe_source;classe_destination
-Thomas;Martin;4emeA;3emeA
+# Linux
+flatpak install EduSyncAD-linux.flatpak
 ```
 
-### Départs
-```
-prenom;nom
-Thomas;Martin
-```
-Un identifiant AD direct reste accepté (colonne `identifiant`), prioritaire s'il est présent.
+---
 
-### Réinitialisation de mot de passe
+## Connexion
+
+| Champ | Exemple |
+|-------|---------|
+| Domaine | `entreprise.local` ou `lycee-victor-hugo.fr` |
+| Contrôleur | `dc01.entreprise.local` ou `10.0.0.5` |
+| Utilisateur | `admin` (ou `ENTREPRISE\admin`) |
+| Mot de passe | *Jamais stocké* |
+
+La connexion **LDAPS chiffrée** est tentée en priorité. Repli automatique sur LDAP (port 389) si indisponible.
+Si le contrôleur utilise un certificat émis par une autorité interne (cas courant), voir la [section dépannage du guide](docs/guide_utilisateur.md#10-dépannage--erreur-de-certificat-ldaps).
+
+---
+
+## Format CSV (exemple universel)
+
+```csv
+prenom;nom;equipe
+Thomas;Martin;Comptabilité
+Léa;Petit;IT
 ```
-prenom;nom
-Thomas;Martin
-```
-Colonne `identifiant`/`login`/`sam` également acceptée.
+
+Seuls `prenom` et `nom` sont obligatoires. `equipe` (ex `classe`, `service`, `projet`, `site`) → OU auto-résolue.
+Colonne `ou` (DN complet) acceptée pour cas avancés — voir [guide utilisateur](docs/guide_utilisateur.md).
 
 Des exemples sont disponibles dans le dossier [`exemples/`](exemples/).
 
@@ -164,4 +139,4 @@ pytest
 
 ## Licence
 
-MIT
+MIT — Usage libre, modification, distribution, usage commercial autorisé.

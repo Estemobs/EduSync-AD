@@ -1,14 +1,14 @@
 # EduSync AD — Feuille de route & Vision Produit
 
-**Version 1.0** — Document de référence pour le développement futur
+**Version 2.0** — Document de référence pour le développement futur
 
 ---
 
 ## 🎯 Vision
 
-Devenir l'outil de référence pour la gestion du cycle de vie des comptes Active Directory dans les établissements scolaires (et PME/collectivités), **sans jamais nécessiter d'ouvrir une console Microsoft (ADUC, RSAT, PowerShell)**.
+Devenir l'outil de référence pour la gestion du cycle de vie des comptes Active Directory dans les établissements scolaires, PME et collectivités, **sans jamais nécessiter d'ouvrir une console Microsoft (ADUC, RSAT, PowerShell)**.
 
-> « Import CSV → comptes créés. Fin d'année → classes migrées. Départ d'un élève → compte archivé. En quelques clics, pas en PowerShell. »
+> « Import CSV → comptes créés. Fin d'année → classes migrées. Départ → compte archivé. En quelques clics, pas en PowerShell. »
 
 ---
 
@@ -27,6 +27,16 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 | **M9 — Connexion LDAPS/LDAP** | ✅ Fait | LDAPS prioritaire, repli LDAP, validation certif configurable, CA custom, mémorisation chiffrée AES-256 |
 | **M10 — Mise à jour intégrée** | ✅ Fait | Vérification, téléchargement, installation, redémarrage auto, somme de contrôle |
 | **M11 — Mode simulation** | ✅ Fait | Test import sans écriture AD |
+
+---
+
+## 🏗️ Fondations techniques v2.0 (Critique — Sprint 1-3)
+
+| Module | Description | Pourquoi maintenant |
+|--------|-------------|---------------------|
+| **T0 — Couche LDAP Asynchrone** | Remplacer `RLock` + threads manuels par queue de jobs (`Job(id, coro, progress_cb, done_cb)`), `QThreadPool` worker, signaux Qt `progress`, `finished`, `error`, `cancelled` | Débloque tous les modules masse (M12-M21) : UI responsive, progression réelle, annulation, pas de "Not Responding" |
+| **T1 — Système de plugins** | Chargeur de modules via `entry_points`, interface `IModule {id, name, version, widget, requires_ad, permissions, on_load, on_unload}` | Permet M19-M32 sans toucher au core, distribution modulaire, activation/désactivation runtime |
+| **T2 — Cache AD Local (SQLite)** | Cache OU/groupes/users synchronisé en background, invalidation TTL + `uSNChanged` polling, recherche offline | Explorateur instantané, navigation fluide sur gros domaines (>5k objets) |
 
 ---
 
@@ -72,7 +82,7 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 ---
 
-## 📈 Modules planifiés (v3.x — Moyen terme)
+## 📈 Modules planifiés (v2.5 — Moyen terme)
 
 ### M19 — Office 365 / Entra ID (Hybride)
 - Connexion Microsoft Graph (app registration, certificat/secret)
@@ -99,6 +109,10 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 - **Publipostage HTML** : chartes, conventions, docs personnalisés
 - **Import GEP / Base Education Nationale** : via outil tiers fourni
 
+---
+
+## 🔮 Modules vision (v3.x+ — Long terme / Différenciation)
+
 ### M23 — Modèles de groupes (Templates)
 - Modèle "Classe élève", "Classe prof", "Personnel admin", "Service technique"…
 - Chaque modèle définit : OU parente, groupes auto, scripts, quotas, dossier personnel, partage, profil, heures connexion, politiques MDP, licences O365
@@ -113,24 +127,20 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 ### M25 — Multisite / Multi-domaine
 - Un EduSync AD gère plusieurs domaines/forêts AD
-- Assistant configuration multisite
-- Modèle multisite : préfixes identifiants, séparation OU, GPO distinctes
-- Migration mono-site → multisite
-
----
-
-## 🔮 Modules vision (v4.x+ — Long terme / Différenciation)
+- Fichier `domaines.json` chiffré (liste domaines gérés)
+- Sélecteur domaine dans la barre supérieure
+- Connexion un seul domaine à la fois
+- Journal d'audit séparé par domaine
 
 ### M26 — Délégation d'administration (RBAC)
 - Rôles : Super-admin, Admin site, Admin classe, Helpdesk, Lecture seule
 - Délégation par OU/groupe : qui peut créer/migrer/supprimer/réinitialiser où
-- Journal d'audit par opérateur (déjà dans M7, enrichir)
+- Journal d'audit par opérateur (enrichir M7)
 
-### M27 — Auto-service élève/parent (Portail Web)
+### M27 — Auto-service élève/parent (Portail Web) — *Optionnel, backend léger requis*
 - Réinitialisation MDP self-service (code SMS/mail, questions secrètes, Microsoft Authenticator)
 - Consultation identifiant/mail
 - Demande création compte (pré-inscription) → validation admin
-- **Différenciation** : pas de portail web chez les concurrents
 
 ### M28 — API REST + Webhooks
 - API documentée (OpenAPI/Swagger) pour intégration SIS (PRONOTE, EcoleDirecte, etc.)
@@ -171,7 +181,6 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 | **Internationalisation** | Français (complet), Anglais (complet), Espagnol/Allemand/Italien (communautaire) |
 | **Documentation** | Guide utilisateur (✅), Guide admin déploiement, API doc, Tutoriels vidéo |
 | **Télémétrie opt-in** | Usage modules, erreurs, performances — anonymisé, local-first |
-| **Plugins/Extensions** | Architecture modulaire pour modules tiers (ex: intégration spécifique SIS régional) |
 
 ---
 
@@ -179,10 +188,10 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 | Version | Cible | Modules clés |
 |---------|-------|--------------|
-| **v2.0** | Q1 2026 | M12, M13, M14, M15, M16, M17, M18 |
+| **v2.0** | Q1 2026 | T0 Async LDAP, T1 Plugin System, T2 AD Cache, M12, M13, M14, M15, M16, M17, M18 |
 | **v2.5** | Q3 2026 | M19, M20, M21, M22 |
 | **v3.0** | Q1 2027 | M23, M24, M25 |
-| **v3.5** | Q3 2027 | M26, M27 |
+| **v3.5** | Q3 2027 | M26, M27 (optionnel) |
 | **v4.0** | 2028 | M28, M29, M30, M31, M32 |
 
 > *Les dates sont indicatives. Priorité = valeur utilisateur / effort / rétroaction terrain.*
@@ -191,13 +200,14 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 ## 📌 Principes directeurs
 
-1. **Zéro connaissance AD** — L'admin saisit prénoms/noms/classes. Jamais de DN, OU, GUID, SID.
+1. **Zéro connaissance AD** — L'admin saisit prénoms/noms/équipes. Jamais de DN, OU, GUID, SID.
 2. **Simulation par défaut** — Toute écriture AD passe par prévisualisation modifiable.
 3. **Traçabilité totale** — Chaque action journalisée, exportable, non effaçable (append-only).
 4. **Sécurité par défaut** — LDAPS obligatoire, coffre MDP chiffré, pas de secret en clair, MFA admin.
 5. **Hors-ligne first** — Aucune donnée ne sort du poste admin sans action explicite (pas de cloud forcé).
-6. **Modulaire** — Chaque module activable/désactivable. Installation minimale = M1+M9+M10.
+6. **Modulaire** — Chaque module activable/désactivable via plugin system. Installation minimale = M1+M9+M10.
 7. **Standards ouverts** — CSV (`;` UTF-8), LDIF, vCard, JSON, OpenAPI, SQLite, AES-256, Flatpak/MSIX.
+8. **100% Desktop** — Pas de backend web requis. PyQt6 natif, binaires autonomes.
 
 ---
 
