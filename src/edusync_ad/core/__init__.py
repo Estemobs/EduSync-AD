@@ -15,6 +15,10 @@ from edusync_ad.core.ad import (
     ADUnreachableError,
     ADInsufficientRightsError,
     ADCertificateError,
+    # Cache (T2)
+    ADCache,
+    CacheStats,
+    create_ad_cache,
 )
 
 from edusync_ad.plugins import (
@@ -85,6 +89,10 @@ __all__ = [
     "ADUnreachableError",
     "ADInsufficientRightsError",
     "ADCertificateError",
+    # Cache (T2)
+    "ADCache",
+    "CacheStats",
+    "create_ad_cache",
     # Plugins (T1)
     "IModule",
     "ModuleMetadata",

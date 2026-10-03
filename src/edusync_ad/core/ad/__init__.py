@@ -1,5 +1,6 @@
 """Package AD - Connexion et opérations Active Directory."""
 
+from edusync_ad.core.ad.cache import ADCache, CacheStats, create_ad_cache
 from edusync_ad.core.ad.connection import (
     ADConnection,
     ConnectResult,
@@ -24,13 +25,17 @@ from edusync_ad.core.ad.exceptions import (
 )
 
 __all__ = [
+    # Cache (T2 - nouveau)
+    "ADCache",
+    "CacheStats",
+    "create_ad_cache",
     # Connexion synchrone (existant)
     "ADConnection",
     "ConnectResult",
     "ConnectionState",
     "default_connection_factory",
     "is_builtin_group_dn",
-    # Connexion asynchrone (T0 - nouveau)
+    # Connexion asynchrone (T0)
     "AsyncADConnection",
     "Job",
     "JobStatus",
