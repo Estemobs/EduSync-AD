@@ -43,6 +43,7 @@ quotas = "edusync_ad.plugins.builtin:QuotasModule"
 logon_hours = "edusync_ad.plugins.builtin:LogonHoursModule"
 logon_scripts = "edusync_ad.plugins.builtin:LogonScriptsModule"
 class_spaces = "edusync_ad.plugins.builtin:ClassSpacesModule"
+m365 = "edusync_ad.plugins.builtin:M365Module"
 
 [tool.setuptools.packages.find]
 where = ["src"]

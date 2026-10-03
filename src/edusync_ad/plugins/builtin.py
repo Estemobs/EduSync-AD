@@ -523,3 +523,37 @@ class ClassSpacesModule(_BaseModule):
         )
         self._widget = widget
         return widget
+
+
+class M365Module(_BaseModule):
+    @property
+    def metadata(self) -> ModuleMetadata:
+        return ModuleMetadata(
+            id="m365",
+            name="Microsoft 365",
+            version="1.0.0",
+            description="Entra ID hybride : comptes cloud + licences éducation, groupes AD → Teams, photos → cloud, check-list PHS/ADFS/PTA",
+            requires_ad=True,
+            permissions=["modify_user"],
+        )
+
+    def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
+        from edusync_ad.ui.modules.m365_page import M365Page
+
+        ad_connection = context.get("ad_connection")
+        config = context.get("config")
+        audit_log = context.get("audit_log")
+        session_id = context.get("session_id")
+
+        if not all([ad_connection, config, audit_log, session_id]):
+            raise ValueError("Contexte incomplet pour M365Module")
+
+        widget = M365Page(
+            ad_connection=ad_connection,
+            config=config,
+            audit_log=audit_log,
+            session_id=session_id,
+            parent=parent,
+        )
+        self._widget = widget
+        return widget

@@ -146,6 +146,30 @@ from edusync_ad.core.class_spaces import (
     save_class_space_config,
     sync_script,
 )
+from edusync_ad.core.graph import (
+    GraphClient,
+    GraphConfig,
+    GraphError,
+    load_m365_config,
+    save_m365_config,
+)
+from edusync_ad.core.m365 import (
+    DEFAULT_LICENSE,
+    EDUCATION_LICENSES,
+    GROUP_KINDS,
+    CloudUserPlan,
+    GroupPlan,
+    M365Manager,
+    SyncResult,
+    build_group_plans,
+    build_photo_mapping,
+    build_user_plans,
+    cloud_password_policy,
+    hybrid_checklist,
+    hybrid_checklist_markdown,
+    mail_nickname,
+    split_display_name,
+)
 
 __all__ = [
     # AD
@@ -289,4 +313,25 @@ __all__ = [
     "plan_sync",
     "save_class_space_config",
     "sync_script",
+    # Office 365 / Entra ID (M19)
+    "GraphClient",
+    "GraphConfig",
+    "GraphError",
+    "load_m365_config",
+    "save_m365_config",
+    "DEFAULT_LICENSE",
+    "EDUCATION_LICENSES",
+    "GROUP_KINDS",
+    "CloudUserPlan",
+    "GroupPlan",
+    "M365Manager",
+    "SyncResult",
+    "build_group_plans",
+    "build_photo_mapping",
+    "build_user_plans",
+    "cloud_password_policy",
+    "hybrid_checklist",
+    "hybrid_checklist_markdown",
+    "mail_nickname",
+    "split_display_name",
 ]
