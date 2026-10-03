@@ -26,6 +26,17 @@ dev = [
 [project.scripts]
 edusync-ad = "edusync_ad.app:main"
 
+[project.entry-points."edusync_ad.modules"]
+# Modules intégrés (chargés par défaut)
+create_accounts = "edusync_ad.plugins.builtin:CreateAccountsModule"
+migration = "edusync_ad.plugins.builtin:MigrationModule"
+depart = "edusync_ad.plugins.builtin:DepartModule"
+password_reset = "edusync_ad.plugins.builtin:PasswordResetModule"
+ad_explorer = "edusync_ad.plugins.builtin:ADExplorerModule"
+export = "edusync_ad.plugins.builtin:ExportModule"
+audit = "edusync_ad.plugins.builtin:AuditModule"
+settings = "edusync_ad.plugins.builtin:SettingsModule"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

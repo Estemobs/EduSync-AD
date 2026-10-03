@@ -1,0 +1,144 @@
+"""Core package - Modules cœur d'EduSync AD."""
+
+from edusync_ad.core.ad import (
+    ADConnection,
+    AsyncADConnection,
+    ConnectResult,
+    ConnectionState,
+    Job,
+    JobSignals,
+    JobStatus,
+    default_connection_factory,
+    is_builtin_group_dn,
+    ADError,
+    ADAuthError,
+    ADUnreachableError,
+    ADInsufficientRightsError,
+    ADCertificateError,
+)
+
+from edusync_ad.core.plugins import (
+    IModule,
+    ModuleMetadata,
+    PluginManager,
+    ModuleLoadError,
+    get_plugin_manager,
+    reset_plugin_manager,
+)
+
+from edusync_ad.core.audit import AuditLog, new_session_id
+from edusync_ad.core.config import AppConfig, load_config, save_config
+from edusync_ad.core.csv_io import (
+    CsvPreview,
+    EXPECTED_COLUMNS,
+    REQUIRED_COLUMNS,
+    export_created_accounts,
+    export_failed_rows,
+    load_preview,
+    load_rows,
+)
+from edusync_ad.core.identifiers import (
+    CAMEL_PRESETS,
+    PRESETS,
+    IdentifierEngine,
+    apply_prenom_compose_rule,
+    clean_token,
+    render_template,
+)
+from edusync_ad.core.models import (
+    AccountType,
+    GeneratedUser,
+    MigrationRow,
+    PasswordPolicy,
+    RawUserRow,
+)
+from edusync_ad.core.password_vault import PasswordVault
+from edusync_ad.core.passwords import (
+    generate_password,
+    generate_passwords_for_batch,
+    PasswordPolicy,  # type: ignore[attr-defined]
+)
+from edusync_ad.core.crypto import (
+    decrypt_str as decrypt,
+    encrypt_str as encrypt,
+    get_or_create_key,
+    load_remembered_connection,
+    save_remembered_connection,
+    clear_remembered_connection,
+)
+from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
+from edusync_ad.core.export import build_export_row, export_users_csv, generate_labels_pdf
+
+__all__ = [
+    # AD
+    "ADConnection",
+    "AsyncADConnection",
+    "ConnectResult",
+    "ConnectionState",
+    "Job",
+    "JobSignals",
+    "JobStatus",
+    "default_connection_factory",
+    "is_builtin_group_dn",
+    "ADError",
+    "ADAuthError",
+    "ADUnreachableError",
+    "ADInsufficientRightsError",
+    "ADCertificateError",
+    # Plugins (T1)
+    "IModule",
+    "ModuleMetadata",
+    "PluginManager",
+    "ModuleLoadError",
+    "get_plugin_manager",
+    "reset_plugin_manager",
+    # Audit
+    "AuditLog",
+    "new_session_id",
+    # Config
+    "AppConfig",
+    "load_config",
+    "save_config",
+    # CSV
+    "CsvPreview",
+    "EXPECTED_COLUMNS",
+    "REQUIRED_COLUMNS",
+    "export_created_accounts",
+    "export_failed_rows",
+    "load_preview",
+    "load_rows",
+    # Identifiers
+    "CAMEL_PRESETS",
+    "PRESETS",
+    "IdentifierEngine",
+    "apply_prenom_compose_rule",
+    "clean_token",
+    "render_template",
+    # Models
+    "AccountType",
+    "GeneratedUser",
+    "MigrationRow",
+    "PasswordPolicy",
+    "RawUserRow",
+    # Password vault
+    "PasswordVault",
+    # Passwords
+    "generate_password",
+    "generate_passwords_for_batch",
+    "PasswordPolicy",
+    # Crypto
+    "decrypt",
+    "encrypt",
+    "generate_key",
+    "get_or_create_key",
+    "load_remembered_connection",
+    "save_remembered_connection",
+    "clear_remembered_connection",
+    # Updater
+    "CURRENT_VERSION",
+    "check_for_update",
+    # Export
+    "build_export_row",
+    "export_users_csv",
+    "generate_labels_pdf",
+]
