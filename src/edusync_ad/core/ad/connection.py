@@ -15,7 +15,7 @@ import ssl
 import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
+from typing import Callable, Sequence
 
 from ldap3 import ALL, LEVEL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPException
@@ -672,6 +672,48 @@ class ADConnection:
         ]
 
     # -- Module 6 : explorateur AD -------------------------------------------
+
+    @_locked
+    def search_entries(
+        self,
+        base_dn: str,
+        ldap_filter: str,
+        attributes: Sequence[str] = ("cn",),
+        size_limit: int = 0,
+    ) -> list[dict]:
+        """Recherche LDAP générique à filtre libre (M22 — import avancé).
+
+        Retourne des dicts ``{"dn": ..., attribut: valeur}`` : valeur simple
+        si l'attribut est mono-valué, liste sinon ; les attributs binaires
+        (``jpegPhoto``…) conservent leurs ``bytes`` ; ``""`` si absent ou
+        vide. ``size_limit`` borne la recherche (0 = limite serveur)."""
+        conn = self._require_connected()
+        attrs = list(attributes) or ["cn"]
+        if not conn.search(
+            base_dn,
+            ldap_filter,
+            search_scope=SUBTREE,
+            attributes=attrs,
+            size_limit=size_limit,
+        ):
+            return []
+        results: list[dict] = []
+        for entry in conn.entries:
+            item: dict = {"dn": str(entry.entry_dn)}
+            for attr in attrs:
+                try:
+                    values = entry[attr].values
+                except Exception:
+                    item[attr] = ""
+                    continue
+                if not values:
+                    item[attr] = ""
+                elif len(values) == 1:
+                    item[attr] = values[0]
+                else:
+                    item[attr] = list(values)
+            results.append(item)
+        return results
 
     @_locked
     def list_ous(self, base_dn: str) -> list[tuple[str, str]]:

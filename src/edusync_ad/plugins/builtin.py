@@ -623,3 +623,37 @@ class RDSModule(_BaseModule):
         )
         self._widget = widget
         return widget
+
+
+class AdvancedIOModule(_BaseModule):
+    @property
+    def metadata(self) -> ModuleMetadata:
+        return ModuleMetadata(
+            id="advanced_io",
+            name="Import / Export avancés",
+            version="1.0.0",
+            description="Import LDAP (OU / groupe / filtre), exports LDIF + vCard, publipostage HTML, import GEP",
+            requires_ad=True,
+            permissions=["read_user"],
+        )
+
+    def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
+        from edusync_ad.ui.modules.advanced_io_page import AdvancedIOPage
+
+        ad_connection = context.get("ad_connection")
+        config = context.get("config")
+        audit_log = context.get("audit_log")
+        session_id = context.get("session_id")
+
+        if not all([ad_connection, config, audit_log, session_id]):
+            raise ValueError("Contexte incomplet pour AdvancedIOModule")
+
+        widget = AdvancedIOPage(
+            ad_connection=ad_connection,
+            config=config,
+            audit_log=audit_log,
+            session_id=session_id,
+            parent=parent,
+        )
+        self._widget = widget
+        return widget

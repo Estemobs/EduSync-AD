@@ -46,6 +46,7 @@ class_spaces = "edusync_ad.plugins.builtin:ClassSpacesModule"
 m365 = "edusync_ad.plugins.builtin:M365Module"
 exchange = "edusync_ad.plugins.builtin:ExchangeModule"
 rds = "edusync_ad.plugins.builtin:RDSModule"
+advanced_io = "edusync_ad.plugins.builtin:AdvancedIOModule"
 
 [tool.setuptools.packages.find]
 where = ["src"]
