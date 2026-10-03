@@ -17,7 +17,7 @@ from edusync_ad.core.ad import (
     ADCertificateError,
 )
 
-from edusync_ad.core.plugins import (
+from edusync_ad.plugins import (
     IModule,
     ModuleMetadata,
     PluginManager,
