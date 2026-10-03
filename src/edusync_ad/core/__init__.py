@@ -170,6 +170,24 @@ from edusync_ad.core.m365 import (
     mail_nickname,
     split_display_name,
 )
+from edusync_ad.core.exchange import (
+    ALIAS_PATTERNS,
+    MODES,
+    AliasResult,
+    ExchangeConfig,
+    ExchangeManager,
+    MailboxPlan,
+    address_report_csv,
+    build_group_address_plans,
+    build_mailbox_plans,
+    email_policy_script,
+    load_exchange_config,
+    normalize_local_part,
+    onprem_script,
+    online_script,
+    save_exchange_config,
+    warning_quota,
+)
 
 __all__ = [
     # AD
@@ -334,4 +352,21 @@ __all__ = [
     "hybrid_checklist_markdown",
     "mail_nickname",
     "split_display_name",
+    # Exchange (M20)
+    "ALIAS_PATTERNS",
+    "MODES",
+    "AliasResult",
+    "ExchangeConfig",
+    "ExchangeManager",
+    "MailboxPlan",
+    "address_report_csv",
+    "build_group_address_plans",
+    "build_mailbox_plans",
+    "email_policy_script",
+    "load_exchange_config",
+    "normalize_local_part",
+    "onprem_script",
+    "online_script",
+    "save_exchange_config",
+    "warning_quota",
 ]

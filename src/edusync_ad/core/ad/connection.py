@@ -757,9 +757,15 @@ class ADConnection:
             _raise_ad_error(conn, "Échec de suppression de la photo.")
 
     @_logged_write("Modification d'attribut")
-    def update_user_attribute(self, user_dn: str, attribute: str, value: str) -> None:
+    def update_user_attribute(
+        self, user_dn: str, attribute: str, value: str | list[str]
+    ) -> None:
+        """Écrit un attribut. ``value`` accepte une liste pour les attributs
+        multi-valués (``proxyAddresses``, ``memberOf``…) — un liste vide
+        supprime l'attribut (MODIFY_REPLACE avec rien = effacement)."""
         conn = self._require_connected()
-        if not conn.modify(user_dn, {attribute: [(MODIFY_REPLACE, [value])]}):
+        values = value if isinstance(value, list) else [value]
+        if not conn.modify(user_dn, {attribute: [(MODIFY_REPLACE, values)]}):
             _raise_ad_error(conn, f"Échec de modification de {attribute}.")
 
     # -- Heures de connexion (M16) ----------------------------------------------

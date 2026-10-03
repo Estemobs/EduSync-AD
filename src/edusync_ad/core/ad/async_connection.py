@@ -341,7 +341,7 @@ class AsyncADConnection:
         )
         return self._submit_job(job)
 
-    def update_user_attribute(self, user_dn: str, attribute: str, value: str) -> str:
+    def update_user_attribute(self, user_dn: str, attribute: str, value: str | list[str]) -> str:
         job = Job(
             coro=self._wrap_operation("update_user_attribute",
                 lambda: self._ad.update_user_attribute(user_dn, attribute, value)),

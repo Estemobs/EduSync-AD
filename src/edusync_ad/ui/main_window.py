@@ -42,6 +42,7 @@ from edusync_ad.ui.modules.logon_hours_page import LogonHoursPage
 from edusync_ad.ui.modules.logon_scripts_page import LogonScriptsPage
 from edusync_ad.ui.modules.class_spaces_page import ClassSpacesPage
 from edusync_ad.ui.modules.m365_page import M365Page
+from edusync_ad.ui.modules.exchange_page import ExchangePage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
@@ -227,6 +228,9 @@ class MainWindow(QMainWindow):
         self.m365_page = M365Page(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.exchange_page = ExchangePage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
@@ -246,9 +250,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.logon_scripts_page)       # index 10
         self.pages.addWidget(self.class_spaces_page)        # index 11
         self.pages.addWidget(self.m365_page)                # index 12
-        self.pages.addWidget(self.audit_page)              # index 13
-        self.pages.addWidget(self.logs_page)               # index 14
-        self.pages.addWidget(self.settings_page)           # index 15
+        self.pages.addWidget(self.exchange_page)            # index 13
+        self.pages.addWidget(self.audit_page)              # index 14
+        self.pages.addWidget(self.logs_page)               # index 15
+        self.pages.addWidget(self.settings_page)           # index 16
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -267,10 +272,11 @@ class MainWindow(QMainWindow):
             ("Scripts de session", 10),
             ("Espaces de classe", 11),
             ("Microsoft 365", 12),
+            ("Microsoft Exchange", 13),
             None,
-            ("Journal d'actions", 13),
-            ("Journal de l'application", 14),
-            ("Paramètres", 15),
+            ("Journal d'actions", 14),
+            ("Journal de l'application", 15),
+            ("Paramètres", 16),
         ]
         for item in nav_items:
             if item is None:
@@ -312,6 +318,7 @@ class MainWindow(QMainWindow):
         self.logon_scripts_page.update_config(config)
         self.class_spaces_page.update_config(config)
         self.m365_page.update_config(config)
+        self.exchange_page.update_config(config)
         self.apply_theme()
 
     def _on_check_update(self) -> None:
