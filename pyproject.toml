@@ -39,6 +39,7 @@ audit = "edusync_ad.plugins.builtin:AuditModule"
 settings = "edusync_ad.plugins.builtin:SettingsModule"
 profiles = "edusync_ad.plugins.builtin:ProfilesModule"
 homedirs = "edusync_ad.plugins.builtin:HomeDirsModule"
+quotas = "edusync_ad.plugins.builtin:QuotasModule"
 
 [tool.setuptools.packages.find]
 where = ["src"]

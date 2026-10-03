@@ -314,13 +314,29 @@ class HomeDirsPage(QWidget):
         except OSError as exc:
             QMessageBox.critical(self, "Erreur", f"Impossible d'écrire le script : {exc}")
             return
+        # M14 — application automatique des quotas FSRM liés aux dossiers
+        extra_lines = ""
+        try:
+            from edusync_ad.core.quotas import QuotaManager, load_all_quota_configs
+
+            ou_configs, group_configs, default_cfg = load_all_quota_configs()
+            qmgr = QuotaManager(ou_configs, group_configs, default_cfg)
+            qplans = qmgr.plans_for_homes(
+                self._plans, self.ou_combo.currentData() or ""
+            )
+            if qplans:
+                with path.open("a", encoding="utf-8") as fh:
+                    fh.write("\n" + qmgr.powershell_script(qplans))
+                extra_lines = f"\n+ quotas FSRM ({len(qplans)})."
+        except Exception:  # noqa: BLE001 — les quotas sont un ajout optionnel
+            pass
         self.audit_log.record(
             "generation_script_homedirs", "-", "succes", self.session_id,
-            detail=f"{len(self._plans)} compte(s) → {path}",
+            detail=f"{len(self._plans)} compte(s) → {path}{extra_lines}",
         )
         QMessageBox.information(
             self, "Script généré",
-            f"{len(self._plans)} dossier(s) dans « {path} ».\n\n"
+            f"{len(self._plans)} dossier(s) dans « {path} »{extra_lines}\n\n"
             "Exécutez-le en admin sur le serveur de fichiers pour créer les "
             "dossiers et appliquer les droits NTFS "
             "(utilisateur : Modification ; Administrateurs et SYSTEM : Contrôle total).",

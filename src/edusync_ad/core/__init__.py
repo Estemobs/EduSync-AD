@@ -98,6 +98,13 @@ from edusync_ad.core.homedirs import (
     load_home_dir_config,
     save_home_dir_config,
 )
+from edusync_ad.core.quotas import (
+    QuotaSettings,
+    QuotaPlan,
+    QuotaManager,
+    load_all_quota_configs,
+    save_all_quota_configs,
+)
 
 __all__ = [
     # AD
@@ -198,4 +205,10 @@ __all__ = [
     "HomeDirPlan",
     "load_home_dir_config",
     "save_home_dir_config",
+    # Quotas FSRM (M14)
+    "QuotaSettings",
+    "QuotaPlan",
+    "QuotaManager",
+    "load_all_quota_configs",
+    "save_all_quota_configs",
 ]
