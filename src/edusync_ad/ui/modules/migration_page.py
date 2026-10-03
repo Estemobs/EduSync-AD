@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
+from edusync_ad.core.class_spaces import notify_group_created
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.models import MigrationRow
 from edusync_ad.ui.progress_panel import BatchProgressPanel
@@ -504,6 +505,11 @@ class MigrationPage(QWidget):
 
         if not self.ad_connection.group_exists(dst_group_dn):
             self.ad_connection.create_group(dst_group_dn, dst_leaf)
+            try:
+                # M18 — enregistre l'espace partagé de la classe de destination
+                notify_group_created(dst_group_dn, dst_leaf)
+            except Exception:  # noqa: BLE001 — ne jamais casser la migration
+                pass
         self.ad_connection.add_user_to_group(new_user_dn, dst_group_dn)
 
     # -- Annulation -----------------------------------------------------------

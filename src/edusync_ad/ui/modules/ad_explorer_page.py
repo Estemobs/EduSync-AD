@@ -53,6 +53,7 @@ from ldap3.utils.dn import escape_rdn
 from edusync_ad.core.ad.connection import ADConnection, is_builtin_group_dn
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
+from edusync_ad.core.class_spaces import notify_group_created
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.identifiers import clean_token
 from edusync_ad.core.models import PasswordPolicy
@@ -648,6 +649,11 @@ class ADExplorerPage(QWidget):
                 "creation_groupe", name, "succes", self.session_id,
                 ou_destination=dialog.selected_dn,
             )
+            try:
+                # M18 — enregistre l'espace partagé si option active
+                notify_group_created(dn, name)
+            except Exception:  # noqa: BLE001 — ne jamais casser la création
+                pass
             QMessageBox.information(self, "Succès", f"Groupe créé : {dn}.")
             self._load_group_list()
         except ADError as exc:

@@ -132,6 +132,20 @@ from edusync_ad.core.logon_scripts import (
     save_logon_scripts,
     unknown_variables,
 )
+from edusync_ad.core.class_spaces import (
+    ClassSpaceConfig,
+    ClassSpaceManager,
+    ClassSpacePlan,
+    classify_member,
+    creation_script,
+    load_class_space_config,
+    load_class_space_state,
+    mark_synchronized,
+    notify_group_created,
+    plan_sync,
+    save_class_space_config,
+    sync_script,
+)
 
 __all__ = [
     # AD
@@ -197,7 +211,6 @@ __all__ = [
     # Crypto
     "decrypt",
     "encrypt",
-    "generate_key",
     "get_or_create_key",
     "load_remembered_connection",
     "save_remembered_connection",
@@ -263,4 +276,17 @@ __all__ = [
     "render_script",
     "save_logon_scripts",
     "unknown_variables",
+    # Espaces partagés par classe (M18)
+    "ClassSpaceConfig",
+    "ClassSpaceManager",
+    "ClassSpacePlan",
+    "classify_member",
+    "creation_script",
+    "load_class_space_config",
+    "load_class_space_state",
+    "mark_synchronized",
+    "notify_group_created",
+    "plan_sync",
+    "save_class_space_config",
+    "sync_script",
 ]

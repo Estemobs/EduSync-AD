@@ -10,6 +10,7 @@ de fichiers (générés ici, exécutables à distance ou localement sous Windows
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -248,11 +249,11 @@ class HomeDirManager:
     def create_folder(self, home_path: str) -> bool:
         """Crée le dossier si le chemin est accessible (UNC ou local).
 
-        Retourne False si le chemin n'est pas créable depuis cette machine
-        (cas typique : l'application tourne hors serveur de fichiers) — le
-        script PowerShell généré reste alors la voie recommandée.
+        Retourne False hors Windows : sous Linux/macOS un chemin UNC serait
+        interprété comme un nom de fichier relatif. Le script PowerShell
+        généré reste alors la voie recommandée.
         """
-        if shutil.which("icacls") is None and not home_path.startswith("\\\\"):
+        if os.name != "nt":
             return False
         try:
             Path(home_path).mkdir(parents=True, exist_ok=True)

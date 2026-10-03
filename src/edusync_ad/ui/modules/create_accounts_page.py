@@ -41,6 +41,7 @@ from edusync_ad.core.ad.async_connection import AsyncADConnection
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
+from edusync_ad.core.class_spaces import notify_group_created
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.csv_io import (
     CsvPreview,
@@ -725,6 +726,11 @@ class CreateAccountsPage(QWidget):
             group_dn = f"CN={escape_rdn(user.groupe)},{user.ou_cible}"
             if not self.ad_connection.group_exists(group_dn):
                 self.ad_connection.create_group(group_dn, user.groupe)
+                try:
+                    # M18 — enregistre l'espace partagé de la nouvelle classe
+                    notify_group_created(group_dn, user.groupe)
+                except Exception:  # noqa: BLE001 — ne jamais casser la création
+                    pass
             self.ad_connection.add_user_to_group(dn, group_dn)
 
     def _on_async_job_done(self, position: int, row_index: int, user: GeneratedUser, success: bool, message: str) -> None:
@@ -767,6 +773,11 @@ class CreateAccountsPage(QWidget):
             group_dn = f"CN={escape_rdn(user.groupe)},{user.ou_cible}"
             if not self.ad_connection.group_exists(group_dn):
                 self.ad_connection.create_group(group_dn, user.groupe)
+                try:
+                    # M18 — enregistre l'espace partagé de la nouvelle classe
+                    notify_group_created(group_dn, user.groupe)
+                except Exception:  # noqa: BLE001 — ne jamais casser la création
+                    pass
             self.ad_connection.add_user_to_group(dn, group_dn)
 
     def _propose_export(self) -> None:
