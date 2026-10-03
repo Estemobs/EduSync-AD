@@ -703,6 +703,7 @@ class ADConnection:
             "sAMAccountName", "cn", "givenName", "sn", "displayName",
             "mail", "userAccountControl", "memberOf", "description",
             "telephoneNumber", "department", "title", "pwdLastSet",
+            "jpegPhoto", "thumbnailPhoto",
         ]
         if not conn.search(user_dn, "(objectClass=user)", search_scope=BASE, attributes=attrs):
             return {}
@@ -715,7 +716,14 @@ class ADConnection:
                 continue
             try:
                 val = e[attr].value
-                result[attr] = str(val) if val is not None else ""
+                if attr in ("jpegPhoto", "thumbnailPhoto"):
+                    # Données binaires : retourner les bytes bruts
+                    if val is not None:
+                        result[attr] = val if isinstance(val, bytes) else bytes(val)
+                    else:
+                        result[attr] = None
+                else:
+                    result[attr] = str(val) if val is not None else ""
             except Exception:
                 result[attr] = ""
         uac = int(e["userAccountControl"].value or 0)
@@ -723,6 +731,30 @@ class ADConnection:
         result["memberOf"] = e["memberOf"].values or []
         result["dernier_changement_mdp"] = _format_pwd_last_set(e["pwdLastSet"].value)
         return result
+
+    @_logged_write("Mise à jour photo")
+    def set_user_photo(self, user_dn: str, photo_data: bytes, *, is_thumbnail: bool = False) -> None:
+        """Définit la photo d'un utilisateur (jpegPhoto ou thumbnailPhoto).
+        
+        Args:
+            user_dn: DN de l'utilisateur
+            photo_data: Données JPEG de la photo
+            is_thumbnail: Si True, écrit dans thumbnailPhoto, sinon jpegPhoto
+        """
+        conn = self._require_connected()
+        attr = "thumbnailPhoto" if is_thumbnail else "jpegPhoto"
+        if not conn.modify(user_dn, {attr: [(MODIFY_REPLACE, [photo_data])]}):
+            _raise_ad_error(conn, f"Échec de mise à jour de {attr}.")
+
+    @_logged_write("Suppression photo")
+    def delete_user_photo(self, user_dn: str, *, delete_thumbnail: bool = True) -> None:
+        """Supprime la photo d'un utilisateur."""
+        conn = self._require_connected()
+        changes = {"jpegPhoto": [(MODIFY_DELETE, [])]}
+        if delete_thumbnail:
+            changes["thumbnailPhoto"] = [(MODIFY_DELETE, [])]
+        if not conn.modify(user_dn, changes):
+            _raise_ad_error(conn, "Échec de suppression de la photo.")
 
     @_logged_write("Modification d'attribut")
     def update_user_attribute(self, user_dn: str, attribute: str, value: str) -> None:

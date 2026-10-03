@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -57,6 +58,7 @@ from edusync_ad.core.identifiers import clean_token
 from edusync_ad.core.models import PasswordPolicy
 from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.passwords import generate_random_password
+from edusync_ad.core.photos import create_photo_preview_pixmap, process_photo_from_path, PhotoError
 
 EDITABLE_ATTRS = [
     ("displayName", "Nom d'affichage"),
@@ -212,6 +214,36 @@ class ADExplorerPage(QWidget):
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(4, 0, 0, 0)
 
+        # Photo d'identité (M12)
+        photo_group = QGroupBox("Photo d'identité")
+        photo_layout = QVBoxLayout(photo_group)
+        self.photo_label = QLabel()
+        self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.photo_label.setMinimumSize(100, 133)  # Ratio 3:4
+        self.photo_label.setMaximumSize(150, 200)
+        self.photo_label.setStyleSheet("""
+            QLabel {
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                background-color: #f5f5f5;
+            }
+        """)
+        self.photo_label.setText("Aucune photo")
+        photo_layout.addWidget(self.photo_label)
+        
+        photo_btn_layout = QHBoxLayout()
+        self.btn_set_photo = QPushButton("Importer photo…")
+        self.btn_set_photo.clicked.connect(self._on_set_photo)
+        self.btn_set_photo.setEnabled(False)
+        self.btn_clear_photo = QPushButton("Supprimer photo")
+        self.btn_clear_photo.clicked.connect(self._on_clear_photo)
+        self.btn_clear_photo.setEnabled(False)
+        photo_btn_layout.addWidget(self.btn_set_photo)
+        photo_btn_layout.addWidget(self.btn_clear_photo)
+        photo_layout.addLayout(photo_btn_layout)
+        
+        right_layout.addWidget(photo_group)
+
         attrs_group = QGroupBox("Attributs du compte")
         self.attrs_form = QFormLayout(attrs_group)
         self._attr_labels: dict[str, QLabel] = {}
@@ -288,8 +320,14 @@ class ADExplorerPage(QWidget):
         self.btn_toggle_account.clicked.connect(self._on_toggle_account)
         self.btn_manage_groups = QPushButton("Gérer les groupes…")
         self.btn_manage_groups.clicked.connect(self._on_manage_groups)
+        # Actions photo (M12)
+        self.btn_set_photo = QPushButton("Importer photo…")
+        self.btn_set_photo.clicked.connect(self._on_set_photo)
+        self.btn_clear_photo = QPushButton("Supprimer photo")
+        self.btn_clear_photo.clicked.connect(self._on_clear_photo)
         for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
-                    self.btn_toggle_account, self.btn_manage_groups):
+                    self.btn_toggle_account, self.btn_manage_groups,
+                    self.btn_set_photo, self.btn_clear_photo):
             btn.setEnabled(False)
             actions_layout.addWidget(btn)
         actions_layout.addStretch()
@@ -919,6 +957,35 @@ class ADExplorerPage(QWidget):
         self.lbl_ou.setText(ou_part or "—")
         self.lbl_pwd_last_set.setText(attrs.get("dernier_changement_mdp") or "—")
         self._refresh_pwd_row(attrs.get("sAMAccountName", ""))
+        
+        # Photo (M12)
+        self._load_user_photo(attrs)
+
+    def _load_user_photo(self, attrs: dict) -> None:
+        """Charge et affiche la photo de l'utilisateur."""
+        user_dn = attrs.get("dn", "")
+        if not user_dn:
+            self.photo_label.setText("Aucune photo")
+            self.photo_label.setPixmap(QPixmap())
+            self.btn_set_photo.setEnabled(False)
+            self.btn_clear_photo.setEnabled(False)
+            return
+        
+        # Activer les boutons photo
+        self.btn_set_photo.setEnabled(True)
+        self.btn_clear_photo.setEnabled(True)
+        
+        # Essayer d'abord thumbnailPhoto (plus petit), puis jpegPhoto
+        photo_data = attrs.get("thumbnailPhoto") or attrs.get("jpegPhoto")
+        if photo_data:
+            pixmap = create_photo_preview_pixmap(photo_data, size=130)
+            if pixmap:
+                self.photo_label.setPixmap(pixmap)
+                self.photo_label.setText("")
+                return
+        
+        self.photo_label.setText("Aucune photo")
+        self.photo_label.setPixmap(QPixmap())
 
     def _refresh_pwd_row(self, sam: str) -> None:
         stored = self.password_vault.get(sam) if sam else None
@@ -945,8 +1012,12 @@ class ADExplorerPage(QWidget):
         self.lbl_ou.setText("—")
         self.lbl_pwd_last_set.setText("—")
         self._refresh_pwd_row("")
+        # Photo
+        self.photo_label.setText("Aucune photo")
+        self.photo_label.setPixmap(QPixmap())
         for btn in (self.btn_edit_attr, self.btn_change_ou, self.btn_reset_pwd,
-                    self.btn_toggle_account, self.btn_manage_groups):
+                    self.btn_toggle_account, self.btn_manage_groups,
+                    self.btn_set_photo, self.btn_clear_photo):
             btn.setEnabled(False)
 
     # -- Actions ---------------------------------------------------------------
@@ -1128,6 +1199,71 @@ class ADExplorerPage(QWidget):
         except ADError as exc:
             action_type = "activation_compte" if is_disabled else "desactivation_compte"
             self.audit_log.record(action_type, sam, "echec", self.session_id, detail=str(exc))
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    # -- Actions photo (M12) ----------------------------------------------------
+    
+    def _on_set_photo(self) -> None:
+        if not self._current_user:
+            return
+        sam = self._current_user.get("sAMAccountName", "")
+        user_dn = self._current_user.get("dn", "")
+        
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Choisir une photo d'identité", "",
+            "Images (*.jpg *.jpeg *.png *.bmp *.tiff *.webp)"
+        )
+        if not file_path:
+            return
+        
+        try:
+            photo_info = process_photo_from_path(Path(file_path))
+        except PhotoError as exc:
+            QMessageBox.critical(self, "Erreur", str(exc))
+            return
+        
+        try:
+            # Écrire jpegPhoto (photo principale)
+            self.ad_connection.set_user_photo(user_dn, photo_info.data, is_thumbnail=False)
+            # Écrire thumbnailPhoto (vignette < 100 Ko)
+            self.ad_connection.set_user_photo(user_dn, photo_info.data, is_thumbnail=True)
+            
+            self.audit_log.record(
+                "modification_photo", sam, "succes", self.session_id,
+                detail=f"photo: {photo_info.width}x{photo_info.height}, {photo_info.size_kb:.1f} KB",
+            )
+            
+            # Rafraîchir l'affichage
+            self._load_user_photo(self._current_user)
+            QMessageBox.information(self, "Succès", 
+                f"Photo importée avec succès.\n"
+                f"Dimensions: {photo_info.width}x{photo_info.height}\n"
+                f"Taille: {photo_info.size_kb:.1f} KB")
+        except ADError as exc:
+            self.audit_log.record("modification_photo", sam, "echec", self.session_id, detail=str(exc))
+            QMessageBox.critical(self, "Erreur", str(exc))
+
+    def _on_clear_photo(self) -> None:
+        if not self._current_user:
+            return
+        sam = self._current_user.get("sAMAccountName", "")
+        user_dn = self._current_user.get("dn", "")
+        
+        reply = QMessageBox.question(
+            self, "Confirmer",
+            f"Supprimer la photo d'identité de {sam} ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        try:
+            self.ad_connection.delete_user_photo(user_dn, delete_thumbnail=True)
+            self.audit_log.record("suppression_photo", sam, "succes", self.session_id)
+            self._load_user_photo(self._current_user)
+            QMessageBox.information(self, "Succès", "Photo supprimée.")
+        except ADError as exc:
+            self.audit_log.record("suppression_photo", sam, "echec", self.session_id, detail=str(exc))
             QMessageBox.critical(self, "Erreur", str(exc))
 
     def _on_create_user_clicked(self) -> None:

@@ -355,6 +355,36 @@ class AsyncADConnection:
         )
         return self._submit_job(job)
 
+    # -- Photos (M12) -----------------------------------------------------------
+    
+    def get_user_photo(self, user_dn: str, *, thumbnail: bool = False) -> str:
+        """Récupère la photo d'un utilisateur.
+        
+        Args:
+            user_dn: DN de l'utilisateur
+            thumbnail: Si True, récupère thumbnailPhoto, sinon jpegPhoto
+        """
+        attr = "thumbnailPhoto" if thumbnail else "jpegPhoto"
+        job = Job(
+            coro=self._wrap_operation(f"get_user_{attr}",
+                lambda: self._ad.get_user_attributes(user_dn).get(attr)),
+        )
+        return self._submit_job(job)
+
+    def set_user_photo(self, user_dn: str, photo_data: bytes, *, is_thumbnail: bool = False) -> str:
+        job = Job(
+            coro=self._wrap_operation("set_user_photo",
+                lambda: self._ad.set_user_photo(user_dn, photo_data, is_thumbnail=is_thumbnail)),
+        )
+        return self._submit_job(job)
+
+    def delete_user_photo(self, user_dn: str, *, delete_thumbnail: bool = True) -> str:
+        job = Job(
+            coro=self._wrap_operation("delete_user_photo",
+                lambda: self._ad.delete_user_photo(user_dn, delete_thumbnail=delete_thumbnail)),
+        )
+        return self._submit_job(job)
+
     # -- Gestion des jobs ------------------------------------------------------
     
     def cancel_job(self, job_id: str) -> bool:

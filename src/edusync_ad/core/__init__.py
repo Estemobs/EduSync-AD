@@ -72,6 +72,17 @@ from edusync_ad.core.crypto import (
 )
 from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
 from edusync_ad.core.export import build_export_row, export_users_csv, generate_labels_pdf
+from edusync_ad.core.photos import (
+    PhotoInfo,
+    PhotoError,
+    process_photo,
+    process_photo_from_path,
+    PhotoMapping,
+    map_photos_convention,
+    map_photos_from_csv,
+    create_photo_preview_pixmap,
+    photo_to_qicon,
+)
 
 __all__ = [
     # AD
@@ -149,4 +160,14 @@ __all__ = [
     "build_export_row",
     "export_users_csv",
     "generate_labels_pdf",
+    # Photos (M12)
+    "PhotoInfo",
+    "PhotoError",
+    "process_photo",
+    "process_photo_from_path",
+    "PhotoMapping",
+    "map_photos_convention",
+    "map_photos_from_csv",
+    "create_photo_preview_pixmap",
+    "photo_to_qicon",
 ]
