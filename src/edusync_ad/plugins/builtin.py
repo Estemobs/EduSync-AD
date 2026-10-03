@@ -591,3 +591,35 @@ class ExchangeModule(_BaseModule):
         )
         self._widget = widget
         return widget
+
+
+class RDSModule(_BaseModule):
+    @property
+    def metadata(self) -> ModuleMetadata:
+        return ModuleMetadata(
+            id="rds",
+            name="RDS / Bureau à distance",
+            version="1.0.0",
+            description="Collections RDS, RemoteApp publiés par groupe AD, profils UPD / FSLogix",
+            requires_ad=False,
+            permissions=[],
+        )
+
+    def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
+        from edusync_ad.ui.modules.rds_page import RDSPage
+
+        config = context.get("config")
+        audit_log = context.get("audit_log")
+        session_id = context.get("session_id")
+
+        if not all([config, audit_log, session_id]):
+            raise ValueError("Contexte incomplet pour RDSModule")
+
+        widget = RDSPage(
+            config=config,
+            audit_log=audit_log,
+            session_id=session_id,
+            parent=parent,
+        )
+        self._widget = widget
+        return widget

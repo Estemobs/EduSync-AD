@@ -188,6 +188,25 @@ from edusync_ad.core.exchange import (
     save_exchange_config,
     warning_quota,
 )
+from edusync_ad.core.rds import (
+    PROFILE_MODES,
+    CollectionPlan,
+    RDSConfig,
+    RemoteAppPlan,
+    build_collection_plan,
+    collection_script,
+    fslogix_script,
+    load_rds_config,
+    load_rds_plans,
+    make_alias,
+    normalize_group_ref,
+    remoteapp_script,
+    save_rds_config,
+    save_rds_plans,
+    split_multi,
+    validate_collection,
+    validate_remoteapp,
+)
 
 __all__ = [
     # AD
@@ -369,4 +388,22 @@ __all__ = [
     "online_script",
     "save_exchange_config",
     "warning_quota",
+    # RDS (M21)
+    "PROFILE_MODES",
+    "CollectionPlan",
+    "RDSConfig",
+    "RemoteAppPlan",
+    "build_collection_plan",
+    "collection_script",
+    "fslogix_script",
+    "load_rds_config",
+    "load_rds_plans",
+    "make_alias",
+    "normalize_group_ref",
+    "remoteapp_script",
+    "save_rds_config",
+    "save_rds_plans",
+    "split_multi",
+    "validate_collection",
+    "validate_remoteapp",
 ]
