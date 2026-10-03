@@ -83,6 +83,14 @@ from edusync_ad.core.photos import (
     create_photo_preview_pixmap,
     photo_to_qicon,
 )
+from edusync_ad.core.profiles import (
+    ProfileType,
+    ProfileConfig,
+    ProfileTemplate,
+    ProfileManager,
+    load_all_profile_configs,
+    save_all_profile_configs,
+)
 
 __all__ = [
     # AD
@@ -170,4 +178,11 @@ __all__ = [
     "map_photos_from_csv",
     "create_photo_preview_pixmap",
     "photo_to_qicon",
+    # Profils (M13)
+    "ProfileType",
+    "ProfileConfig",
+    "ProfileTemplate",
+    "ProfileManager",
+    "load_all_profile_configs",
+    "save_all_profile_configs",
 ]

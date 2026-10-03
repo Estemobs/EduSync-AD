@@ -298,23 +298,57 @@ class SettingsModule(_BaseModule):
             requires_ad=False,
             permissions=["admin"],
         )
-    
+
     def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
         from edusync_ad.ui.settings_page import SettingsPage
-        
+
         config = context.get("config")
         on_config_saved = context.get("on_config_saved")
         password_vault = context.get("password_vault")
         ad_domain = context.get("ad_domain")
-        
+
         if not all([config, on_config_saved]):
             raise ValueError("Contexte incomplet pour SettingsModule")
-        
+
         widget = SettingsPage(
             config=config,
             on_config_saved=on_config_saved,
             password_vault=password_vault,
             ad_domain=ad_domain,
+            parent=parent,
+        )
+        self._widget = widget
+        return widget
+
+
+class ProfilesModule(_BaseModule):
+    @property
+    def metadata(self) -> ModuleMetadata:
+        return ModuleMetadata(
+            id="profiles",
+            name="Profils utilisateurs",
+            version="1.0.0",
+            description="Profils itinérants / locaux / obligatoires (.man) par OU ou groupe",
+            requires_ad=True,
+            permissions=["modify_user"],
+        )
+
+    def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
+        from edusync_ad.ui.modules.profiles_page import ProfilesPage
+
+        ad_connection = context.get("ad_connection")
+        config = context.get("config")
+        audit_log = context.get("audit_log")
+        session_id = context.get("session_id")
+
+        if not all([ad_connection, config, audit_log, session_id]):
+            raise ValueError("Contexte incomplet pour ProfilesModule")
+
+        widget = ProfilesPage(
+            ad_connection=ad_connection,
+            config=config,
+            audit_log=audit_log,
+            session_id=session_id,
             parent=parent,
         )
         self._widget = widget

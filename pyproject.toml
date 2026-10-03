@@ -37,6 +37,7 @@ ad_explorer = "edusync_ad.plugins.builtin:ADExplorerModule"
 export = "edusync_ad.plugins.builtin:ExportModule"
 audit = "edusync_ad.plugins.builtin:AuditModule"
 settings = "edusync_ad.plugins.builtin:SettingsModule"
+profiles = "edusync_ad.plugins.builtin:ProfilesModule"
 
 [tool.setuptools.packages.find]
 where = ["src"]
