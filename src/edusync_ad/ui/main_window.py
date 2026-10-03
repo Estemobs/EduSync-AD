@@ -36,6 +36,7 @@ from edusync_ad.ui.modules.export_page import ExportPage
 from edusync_ad.ui.modules.migration_page import MigrationPage
 from edusync_ad.ui.modules.password_reset_page import PasswordResetPage
 from edusync_ad.ui.modules.profiles_page import ProfilesPage
+from edusync_ad.ui.modules.home_dirs_page import HomeDirsPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
@@ -203,6 +204,9 @@ class MainWindow(QMainWindow):
         self.profiles_page = ProfilesPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.home_dirs_page = HomeDirsPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
@@ -216,9 +220,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.ad_explorer_page)        # index 4
         self.pages.addWidget(self.export_page)             # index 5
         self.pages.addWidget(self.profiles_page)           # index 6
-        self.pages.addWidget(self.audit_page)              # index 7
-        self.pages.addWidget(self.logs_page)               # index 8
-        self.pages.addWidget(self.settings_page)           # index 9
+        self.pages.addWidget(self.home_dirs_page)           # index 7
+        self.pages.addWidget(self.audit_page)              # index 8
+        self.pages.addWidget(self.logs_page)               # index 9
+        self.pages.addWidget(self.settings_page)           # index 10
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -231,10 +236,11 @@ class MainWindow(QMainWindow):
             ("Explorateur AD", 4),
             ("Export (CSV / étiquettes)", 5),
             ("Profils utilisateurs", 6),
+            ("Dossiers personnels", 7),
             None,
-            ("Journal d'actions", 7),
-            ("Journal de l'application", 8),
-            ("Paramètres", 9),
+            ("Journal d'actions", 8),
+            ("Journal de l'application", 9),
+            ("Paramètres", 10),
         ]
         for item in nav_items:
             if item is None:
@@ -270,6 +276,7 @@ class MainWindow(QMainWindow):
         self.ad_explorer_page.update_config(config)
         self.export_page.update_config(config)
         self.profiles_page.update_config(config)
+        self.home_dirs_page.update_config(config)
         self.apply_theme()
 
     def _on_check_update(self) -> None:

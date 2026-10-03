@@ -91,6 +91,13 @@ from edusync_ad.core.profiles import (
     load_all_profile_configs,
     save_all_profile_configs,
 )
+from edusync_ad.core.homedirs import (
+    HomeDirConfig,
+    HomeDirManager,
+    HomeDirPlan,
+    load_home_dir_config,
+    save_home_dir_config,
+)
 
 __all__ = [
     # AD
@@ -185,4 +192,10 @@ __all__ = [
     "ProfileManager",
     "load_all_profile_configs",
     "save_all_profile_configs",
+    # Dossiers personnels (M17)
+    "HomeDirConfig",
+    "HomeDirManager",
+    "HomeDirPlan",
+    "load_home_dir_config",
+    "save_home_dir_config",
 ]
