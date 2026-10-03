@@ -371,6 +371,13 @@ class AsyncADConnection:
         )
         return self._submit_job(job)
 
+    def clear_script_path(self, user_dn: str) -> str:
+        job = Job(
+            coro=self._wrap_operation("clear_script_path",
+                lambda: self._ad.clear_script_path(user_dn)),
+        )
+        return self._submit_job(job)
+
     def rename_user(self, user_dn: str, new_cn: str) -> str:
         job = Job(
             coro=self._wrap_operation("rename_user",

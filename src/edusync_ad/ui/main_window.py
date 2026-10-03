@@ -39,6 +39,7 @@ from edusync_ad.ui.modules.profiles_page import ProfilesPage
 from edusync_ad.ui.modules.home_dirs_page import HomeDirsPage
 from edusync_ad.ui.modules.quotas_page import QuotasPage
 from edusync_ad.ui.modules.logon_hours_page import LogonHoursPage
+from edusync_ad.ui.modules.logon_scripts_page import LogonScriptsPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
@@ -215,6 +216,9 @@ class MainWindow(QMainWindow):
         self.logon_hours_page = LogonHoursPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.logon_scripts_page = LogonScriptsPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
@@ -231,9 +235,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.home_dirs_page)           # index 7
         self.pages.addWidget(self.quotas_page)              # index 8
         self.pages.addWidget(self.logon_hours_page)         # index 9
-        self.pages.addWidget(self.audit_page)              # index 10
-        self.pages.addWidget(self.logs_page)               # index 11
-        self.pages.addWidget(self.settings_page)           # index 12
+        self.pages.addWidget(self.logon_scripts_page)       # index 10
+        self.pages.addWidget(self.audit_page)              # index 11
+        self.pages.addWidget(self.logs_page)               # index 12
+        self.pages.addWidget(self.settings_page)           # index 13
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -249,10 +254,11 @@ class MainWindow(QMainWindow):
             ("Dossiers personnels", 7),
             ("Quotas de disque", 8),
             ("Heures de connexion", 9),
+            ("Scripts de session", 10),
             None,
-            ("Journal d'actions", 10),
-            ("Journal de l'application", 11),
-            ("Paramètres", 12),
+            ("Journal d'actions", 11),
+            ("Journal de l'application", 12),
+            ("Paramètres", 13),
         ]
         for item in nav_items:
             if item is None:
@@ -291,6 +297,7 @@ class MainWindow(QMainWindow):
         self.home_dirs_page.update_config(config)
         self.quotas_page.update_config(config)
         self.logon_hours_page.update_config(config)
+        self.logon_scripts_page.update_config(config)
         self.apply_theme()
 
     def _on_check_update(self) -> None:

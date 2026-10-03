@@ -118,6 +118,20 @@ from edusync_ad.core.logon_hours import (
     is_unrestricted,
     new_grid,
 )
+from edusync_ad.core.logon_scripts import (
+    SCRIPT_VARIABLES,
+    LogonScript,
+    LogonScriptManager,
+    LogonScriptTemplate,
+    ScriptPlan,
+    build_context,
+    deploy_scripts,
+    load_logon_scripts,
+    netlogon_path,
+    render_script,
+    save_logon_scripts,
+    unknown_variables,
+)
 
 __all__ = [
     # AD
@@ -236,4 +250,17 @@ __all__ = [
     "is_empty",
     "is_unrestricted",
     "new_grid",
+    # Scripts logon/logoff (M15)
+    "SCRIPT_VARIABLES",
+    "LogonScript",
+    "LogonScriptManager",
+    "LogonScriptTemplate",
+    "ScriptPlan",
+    "build_context",
+    "deploy_scripts",
+    "load_logon_scripts",
+    "netlogon_path",
+    "render_script",
+    "save_logon_scripts",
+    "unknown_variables",
 ]

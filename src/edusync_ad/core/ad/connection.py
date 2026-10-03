@@ -703,7 +703,7 @@ class ADConnection:
             "sAMAccountName", "cn", "givenName", "sn", "displayName",
             "mail", "userAccountControl", "memberOf", "description",
             "telephoneNumber", "department", "title", "pwdLastSet",
-            "jpegPhoto", "thumbnailPhoto",
+            "jpegPhoto", "thumbnailPhoto", "homeDirectory", "scriptPath",
         ]
         if not conn.search(user_dn, "(objectClass=user)", search_scope=BASE, attributes=attrs):
             return {}
@@ -793,6 +793,13 @@ class ADConnection:
         conn = self._require_connected()
         if not conn.modify(user_dn, {"logonHours": [(MODIFY_DELETE, [])]}):
             _raise_ad_error(conn, "Échec de suppression de logonHours.")
+
+    @_logged_write("Suppression du script de connexion")
+    def clear_script_path(self, user_dn: str) -> None:
+        """Supprime l'attribut ``scriptPath`` (plus de script de connexion)."""
+        conn = self._require_connected()
+        if not conn.modify(user_dn, {"scriptPath": [(MODIFY_DELETE, [])]}):
+            _raise_ad_error(conn, "Échec de suppression de scriptPath.")
 
     @_logged_write("Renommage du compte")
     def rename_user(self, user_dn: str, new_cn: str) -> None:

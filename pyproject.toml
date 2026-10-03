@@ -41,6 +41,7 @@ profiles = "edusync_ad.plugins.builtin:ProfilesModule"
 homedirs = "edusync_ad.plugins.builtin:HomeDirsModule"
 quotas = "edusync_ad.plugins.builtin:QuotasModule"
 logon_hours = "edusync_ad.plugins.builtin:LogonHoursModule"
+logon_scripts = "edusync_ad.plugins.builtin:LogonScriptsModule"
 
 [tool.setuptools.packages.find]
 where = ["src"]

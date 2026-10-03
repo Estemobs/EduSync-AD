@@ -455,3 +455,37 @@ class LogonHoursModule(_BaseModule):
         )
         self._widget = widget
         return widget
+
+
+class LogonScriptsModule(_BaseModule):
+    @property
+    def metadata(self) -> ModuleMetadata:
+        return ModuleMetadata(
+            id="logon_scripts",
+            name="Scripts de session",
+            version="1.0.0",
+            description="Scripts logon/logoff (bat/ps1/vbs) par OU ou groupe, déploiement NETLOGON + scriptPath",
+            requires_ad=True,
+            permissions=["modify_user"],
+        )
+
+    def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
+        from edusync_ad.ui.modules.logon_scripts_page import LogonScriptsPage
+
+        ad_connection = context.get("ad_connection")
+        config = context.get("config")
+        audit_log = context.get("audit_log")
+        session_id = context.get("session_id")
+
+        if not all([ad_connection, config, audit_log, session_id]):
+            raise ValueError("Contexte incomplet pour LogonScriptsModule")
+
+        widget = LogonScriptsPage(
+            ad_connection=ad_connection,
+            config=config,
+            audit_log=audit_log,
+            session_id=session_id,
+            parent=parent,
+        )
+        self._widget = widget
+        return widget
