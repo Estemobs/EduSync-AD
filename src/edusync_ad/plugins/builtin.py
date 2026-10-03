@@ -657,3 +657,40 @@ class AdvancedIOModule(_BaseModule):
         )
         self._widget = widget
         return widget
+
+
+class GroupTemplatesModule(_BaseModule):
+    @property
+    def metadata(self) -> ModuleMetadata:
+        return ModuleMetadata(
+            id="group_templates",
+            name="Modèles de groupes",
+            version="1.0.0",
+            description=(
+                "Modèles OU + groupes auto + politiques (quota, profil, heures, "
+                "MDP, licences), instanciation 1-clic, export JSON/XML"
+            ),
+            requires_ad=True,
+            permissions=["create_ou", "create_group", "read_ad"],
+        )
+
+    def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
+        from edusync_ad.ui.modules.templates_page import TemplatesPage
+
+        ad_connection = context.get("ad_connection")
+        config = context.get("config")
+        audit_log = context.get("audit_log")
+        session_id = context.get("session_id")
+
+        if not all([ad_connection, config, audit_log, session_id]):
+            raise ValueError("Contexte incomplet pour GroupTemplatesModule")
+
+        widget = TemplatesPage(
+            ad_connection=ad_connection,
+            config=config,
+            audit_log=audit_log,
+            session_id=session_id,
+            parent=parent,
+        )
+        self._widget = widget
+        return widget

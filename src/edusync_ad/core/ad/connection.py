@@ -540,9 +540,14 @@ class ADConnection:
             _raise_ad_error(conn, "Échec du renommage de l'OU.")
 
     @_logged_write("Création du groupe")
-    def create_group(self, dn: str, sam_account_name: str) -> None:
+    def create_group(self, dn: str, sam_account_name: str, group_type: int = -2147483646) -> None:
+        """Crée un groupe de sécurité.
+
+        ``group_type`` (0x80000000 = sécurité + portée) : -2147483646 =
+        globale (défaut), -2147483644 = locale au domaine, -2147483640 =
+        universelle — portée choisie par le modèle de groupe (M23)."""
         conn = self._require_connected()
-        attributes = {"sAMAccountName": sam_account_name, "groupType": -2147483646}
+        attributes = {"sAMAccountName": sam_account_name, "groupType": group_type}
         if not conn.add(dn, ["top", "group"], attributes):
             _raise_ad_error(conn, "Échec de création du groupe.")
 
