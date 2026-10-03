@@ -37,6 +37,7 @@ from PyQt6.QtWidgets import (
 
 from ldap3.utils.dn import escape_rdn
 
+from edusync_ad.core.ad.async_connection import AsyncADConnection
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.ad.exceptions import ADError
 from edusync_ad.core.audit import AuditLog
@@ -61,6 +62,7 @@ from edusync_ad.core.identifiers import (
 from edusync_ad.core.models import AccountType, GeneratedUser, RawUserRow
 from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.passwords import generate_passwords_for_batch
+from edusync_ad.ui.async_progress_panel import AsyncBatchProgressPanel
 from edusync_ad.ui.progress_panel import BatchProgressPanel
 
 IDENTIFIER_PRESET_KEYS = list(PRESETS.keys()) + list(CAMEL_PRESETS)
@@ -84,10 +86,13 @@ class CreateAccountsPage(QWidget):
         audit_log: AuditLog,
         password_vault: PasswordVault,
         session_id: str,
+        *,
+        async_ad: AsyncADConnection | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.ad_connection = ad_connection
+        self.async_ad = async_ad
         self.config = config
         self.audit_log = audit_log
         self.password_vault = password_vault
@@ -210,7 +215,13 @@ class CreateAccountsPage(QWidget):
         action_row.addWidget(self.cancel_button)
         action_row.addStretch()
 
-        self.progress_panel = BatchProgressPanel()
+        # Panneau de progression : async si disponible, sinon sync (compatibilité)
+        if self.async_ad is not None:
+            self.progress_panel = AsyncBatchProgressPanel(self.async_ad)
+            self._use_async = True
+        else:
+            self.progress_panel = BatchProgressPanel()
+            self._use_async = False
 
         layout = QVBoxLayout(self)
         layout.addWidget(import_group)
@@ -600,6 +611,14 @@ class CreateAccountsPage(QWidget):
         labels = [u.identifiant or u.nom_complet for _, u in to_process]
         self.validate_button.setEnabled(False)
 
+        if self._use_async and self.async_ad is not None:
+            self._run_async_validation(to_process, labels)
+        else:
+            self._run_sync_validation(to_process, labels)
+
+    def _run_sync_validation(self, to_process: list[tuple[int, GeneratedUser]], labels: list[str]) -> None:
+        """Validation synchrone (ancienne méthode) pour compatibilité."""
+
         def run_one(entry: tuple[int, GeneratedUser]) -> None:
             _, user = entry
             self._create_one_user(user)
@@ -636,6 +655,93 @@ class CreateAccountsPage(QWidget):
         self.progress_panel.start(
             "Création des comptes en cours…", to_process, labels, run_one, on_item_result=on_result,
         )
+
+    def _run_async_validation(self, to_process: list[tuple[int, GeneratedUser]], labels: list[str]) -> None:
+        """Validation asynchrone (nouvelle méthode T0) avec vrais jobs parallèles."""
+        from edusync_ad.core.ad.async_connection import Job
+
+        jobs: list[Job] = []
+        job_to_index: dict[str, int] = {}
+
+        for position, (row_index, user) in enumerate(to_process):
+            # Créer un job pour chaque utilisateur
+            job = Job(
+                coro=self._make_create_user_coro(user),
+                done_cb=lambda result, pos=position, ri=row_index, u=user: self._on_async_job_done(pos, ri, u, True, result),
+                error_cb=lambda exc, pos=position, ri=row_index, u=user: self._on_async_job_done(pos, ri, u, False, str(exc)),
+            )
+            jobs.append(job)
+            job_to_index[job.id] = position
+
+        def on_finished() -> None:
+            self.validate_button.setEnabled(True)
+            QMessageBox.information(
+                self,
+                "Création terminée",
+                f"{self.progress_panel.success_count}/{len(to_process)} compte(s) créé(s) avec succès.",
+            )
+            if self.progress_panel.success_count:
+                self._propose_export()
+            if self.progress_panel.failure_count:
+                self._propose_failed_export()
+
+        self.progress_panel.finished.connect(on_finished, type=Qt.ConnectionType.SingleShotConnection)
+        self.progress_panel.start(
+            "Création des comptes en cours…", jobs, labels,
+            on_job_result=lambda job: None,  # déjà géré par callbacks
+        )
+
+    def _make_create_user_coro(self, user: GeneratedUser):
+        """Retourne une coroutine (fonction) qui crée un utilisateur."""
+        def coro(progress_callback):
+            progress_callback(0, 3, f"Création de {user.identifiant}…")
+            self._create_one_user_async(user, progress_callback)
+            progress_callback(3, 3, f"Terminé : {user.identifiant}")
+            return user.identifiant
+        return coro
+
+    def _create_one_user_async(self, user: GeneratedUser, progress_callback) -> None:
+        """Version asynchrone de _create_one_user avec callbacks de progression."""
+        prenom, nom = user.source.prenom, user.source.nom
+        cn = f"{prenom} {nom}"
+        if user.doublon_resolu:
+            cn = f"{cn} ({user.identifiant})"
+        dn = f"CN={escape_rdn(cn)},{user.ou_cible}"
+        attributes = {
+            "sAMAccountName": user.identifiant,
+            "givenName": prenom,
+            "sn": nom,
+            "displayName": f"{prenom} {nom}",
+            "userPrincipalName": f"{user.identifiant}@{self.ad_connection.domain}",
+            "mail": user.adresse_mail,
+        }
+        # Création du compte
+        progress_callback(1, 3, f"Création compte AD…")
+        self.ad_connection.create_user(dn, attributes, password=user.mot_de_passe)
+
+        # Groupe de classe si configuré
+        if user.groupe:
+            progress_callback(2, 3, f"Ajout au groupe {user.groupe}…")
+            group_dn = f"CN={escape_rdn(user.groupe)},{user.ou_cible}"
+            if not self.ad_connection.group_exists(group_dn):
+                self.ad_connection.create_group(group_dn, user.groupe)
+            self.ad_connection.add_user_to_group(dn, group_dn)
+
+    def _on_async_job_done(self, position: int, row_index: int, user: GeneratedUser, success: bool, message: str) -> None:
+        """Callback appelé quand un job asynchrone se termine."""
+        if success:
+            self.audit_log.record(
+                "creation_compte", user.identifiant, "succes", self.session_id,
+                ou_destination=user.ou_cible,
+            )
+            self.password_vault.store(user.identifiant, user.mot_de_passe)
+        else:
+            user.erreur = message
+            self.audit_log.record(
+                "creation_compte", user.identifiant, "echec", self.session_id,
+                ou_destination=user.ou_cible, detail=message,
+            )
+        self._set_preview_row(row_index, user)
 
     def _create_one_user(self, user: GeneratedUser) -> None:
         prenom, nom = user.source.prenom, user.source.nom
@@ -694,6 +800,9 @@ class CreateAccountsPage(QWidget):
         QMessageBox.information(self, "Export terminé", f"Lignes en échec exportées vers {path}")
 
     def _on_cancel_clicked(self) -> None:
+        # Annuler les jobs asynchrones en cours si applicable
+        if self._use_async and self.async_ad is not None and hasattr(self.progress_panel, 'cancel_all_jobs'):
+            self.async_ad.cancel_all_jobs()
         self._generated = []
         self.preview_table.setRowCount(0)
         self.validate_button.setEnabled(False)

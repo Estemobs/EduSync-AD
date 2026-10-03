@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from edusync_ad.core.ad.async_connection import AsyncADConnection
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
@@ -68,6 +69,7 @@ class MainWindow(QMainWindow):
     ) -> None:
         super().__init__(parent)
         self.ad_connection = ad_connection
+        self.async_ad = AsyncADConnection(ad_connection)
         self.config = config
         self.audit_log = audit_log
         self.password_vault = PasswordVault()
@@ -179,7 +181,8 @@ class MainWindow(QMainWindow):
 
         self.pages = QStackedWidget()
         self.create_accounts_page = CreateAccountsPage(
-            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id
+            self.ad_connection, self.config, self.audit_log, self.password_vault, self.session_id,
+            async_ad=self.async_ad
         )
         self.migration_page = MigrationPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
