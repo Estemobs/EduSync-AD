@@ -105,6 +105,19 @@ from edusync_ad.core.quotas import (
     load_all_quota_configs,
     save_all_quota_configs,
 )
+from edusync_ad.core.logon_hours import (
+    DISPLAY_DAYS,
+    Grid,
+    LogonHoursManager,
+    LogonHoursPreset,
+    current_utc_offset_hours,
+    decode_logon_hours,
+    encode_logon_hours,
+    grid_summary,
+    is_empty,
+    is_unrestricted,
+    new_grid,
+)
 
 __all__ = [
     # AD
@@ -211,4 +224,16 @@ __all__ = [
     "QuotaManager",
     "load_all_quota_configs",
     "save_all_quota_configs",
+    # Heures de connexion (M16)
+    "DISPLAY_DAYS",
+    "Grid",
+    "LogonHoursManager",
+    "LogonHoursPreset",
+    "current_utc_offset_hours",
+    "decode_logon_hours",
+    "encode_logon_hours",
+    "grid_summary",
+    "is_empty",
+    "is_unrestricted",
+    "new_grid",
 ]

@@ -348,6 +348,29 @@ class AsyncADConnection:
         )
         return self._submit_job(job)
 
+    # -- Heures de connexion (M16) -----------------------------------------------
+
+    def get_logon_hours(self, user_dn: str) -> str:
+        job = Job(
+            coro=self._wrap_operation("get_logon_hours",
+                lambda: self._ad.get_logon_hours(user_dn)),
+        )
+        return self._submit_job(job)
+
+    def set_logon_hours(self, user_dn: str, value: bytes) -> str:
+        job = Job(
+            coro=self._wrap_operation("set_logon_hours",
+                lambda: self._ad.set_logon_hours(user_dn, value)),
+        )
+        return self._submit_job(job)
+
+    def clear_logon_hours(self, user_dn: str) -> str:
+        job = Job(
+            coro=self._wrap_operation("clear_logon_hours",
+                lambda: self._ad.clear_logon_hours(user_dn)),
+        )
+        return self._submit_job(job)
+
     def rename_user(self, user_dn: str, new_cn: str) -> str:
         job = Job(
             coro=self._wrap_operation("rename_user",

@@ -762,6 +762,38 @@ class ADConnection:
         if not conn.modify(user_dn, {attribute: [(MODIFY_REPLACE, [value])]}):
             _raise_ad_error(conn, f"Échec de modification de {attribute}.")
 
+    # -- Heures de connexion (M16) ----------------------------------------------
+
+    @_logged_write("Lecture des heures de connexion")
+    def get_logon_hours(self, user_dn: str) -> bytes | None:
+        """Retourne la valeur binaire de ``logonHours`` (None si non définie
+        = toutes les heures autorisées)."""
+        conn = self._require_connected()
+        if not conn.search(
+            user_dn, "(objectClass=user)", search_scope=BASE, attributes=["logonHours"]
+        ):
+            return None
+        if not conn.entries:
+            return None
+        val = conn.entries[0]["logonHours"].value
+        if val is None:
+            return None
+        return val if isinstance(val, bytes) else bytes(val)
+
+    @_logged_write("Modification des heures de connexion")
+    def set_logon_hours(self, user_dn: str, value: bytes) -> None:
+        """Définit ``logonHours`` (21 octets encodés — voir core.logon_hours)."""
+        conn = self._require_connected()
+        if not conn.modify(user_dn, {"logonHours": [(MODIFY_REPLACE, [value])]}):
+            _raise_ad_error(conn, "Échec de modification de logonHours.")
+
+    @_logged_write("Suppression des heures de connexion")
+    def clear_logon_hours(self, user_dn: str) -> None:
+        """Supprime ``logonHours`` (revenir à « toutes les heures »)."""
+        conn = self._require_connected()
+        if not conn.modify(user_dn, {"logonHours": [(MODIFY_DELETE, [])]}):
+            _raise_ad_error(conn, "Échec de suppression de logonHours.")
+
     @_logged_write("Renommage du compte")
     def rename_user(self, user_dn: str, new_cn: str) -> None:
         """Renomme un utilisateur (modifie le CN/RDN)."""
