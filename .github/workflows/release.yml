@@ -34,12 +34,12 @@ jobs:
           
           # Check if icons already exist (committed in repo)
           if os.path.exists('assets/icon.ico') and os.path.exists('assets/icon.png'):
-              print('✅ Icons already exist in repo, skipping generation')
+              print('Icons already exist in repo, skipping generation')
               exit(0)
           
           svg_path = 'assets/icon.svg'
           if not os.path.exists(svg_path):
-              print('⚠️ No icon.svg found, creating placeholder icons')
+              print('No icon.svg found, creating placeholder icons')
               img = Image.new('RGBA', (256, 256), (0, 120, 212, 255))
           else:
               # Try to convert SVG using cairosvg (requires Cairo system library)
@@ -49,9 +49,9 @@ jobs:
                   svg = open(svg_path, 'rb').read()
                   png_data = cairosvg.svg2png(bytestring=svg, output_width=256, output_height=256)
                   img = Image.open(io.BytesIO(png_data))
-                  print('✅ SVG converted via cairosvg')
+                  print('SVG converted via cairosvg')
               except Exception as e:
-                  print(f'⚠️ cairosvg failed ({e}), creating placeholder')
+                  print('cairosvg failed (%s), creating placeholder' % e)
                   img = Image.new('RGBA', (256, 256), (0, 120, 212, 255))
           
           # Save PNG
@@ -61,7 +61,7 @@ jobs:
           ico_sizes = [(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)]
           ico_images = [img.resize(size, Image.Resampling.LANCZOS) for size in ico_sizes]
           ico_images[0].save('assets/icon.ico', format='ICO', sizes=ico_sizes)
-          print('✅ Icons generated: icon.ico, icon.png')
+          print('Icons generated: icon.ico, icon.png')
           "
 
       - name: Build EXE
