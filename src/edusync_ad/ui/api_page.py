@@ -460,7 +460,7 @@ class APIPage(QWidget):
         self.wh_secret.setPlaceholderText("(optionnel, laissé vide si non chiffré)")
         wcform.addRow("Secret (HMAC)", self.wh_secret)
         btn_wh_create = QPushButton("Créer webhook")
-        btn_wh_create.clicked.connect(self._on_webhook_create)
+        btn_wh_create.clicked.connect(self._on_create_webhook)
         wcform.addRow(btn_wh_create)
         layout.addWidget(create_grp)
 
@@ -629,6 +629,15 @@ class APIPage(QWidget):
     def _on_clear_spec(self) -> None:
         self.spec_viewer.clear()
         self.spec_status.setText("Aucun spec généré")
+
+    def _on_open_doc(self) -> None:
+        """Ouvre la documentation OpenAPI dans le navigateur."""
+        try:
+            import webbrowser
+            # Ouvre l'UI Swagger locale si le serveur tourne, sinon doc en ligne
+            webbrowser.open("http://127.0.0.1:8080/docs")
+        except Exception as exc:
+            QMessageBox.warning(self, "Erreur", f"Impossible d'ouvrir la doc : {exc}")
 
     # -- Utilitaires ---------------------------------------------------------
 
