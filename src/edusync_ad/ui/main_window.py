@@ -7,6 +7,7 @@ import webbrowser
 from urllib.parse import quote
 
 from PyQt6.QtCore import QThread, QTimer, pyqtSignal, Qt, QEvent
+from PyQt6.QtGui import QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -20,9 +21,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget,
     QVBoxLayout,
     QWidget,
-    QShortcut,
 )
-from PyQt6.QtGui import QKeySequence
 
 from edusync_ad import __version__ as CURRENT_VERSION
 from edusync_ad.core.ad.async_connection import AsyncADConnection
