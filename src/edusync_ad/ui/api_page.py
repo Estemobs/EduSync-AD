@@ -7,6 +7,7 @@ import os
 import sys
 import threading
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -17,6 +18,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
@@ -30,6 +32,7 @@ from PyQt6.QtWidgets import (
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
     QProgressBar,
@@ -232,6 +235,54 @@ class APIPage(QWidget):
             self._refresh_key_list()
         except ValueError as exc:
             QMessageBox.warning(self, "Erreur", str(exc))
+
+    def _on_test_api_key(self) -> None:
+        """Teste la clé API saisie en faisant une requête simple vers l'endpoint /health."""
+        test_key = self.test_key.text().strip()
+        if not test_key:
+            QMessageBox.warning(self, "Clé manquante", "Entrez une clé API à tester.")
+            return
+
+        # Tenter de joindre le serveur API local (port par défaut 8080)
+        import urllib.request
+        import urllib.error
+        import json
+
+        url = "http://127.0.0.1:8080/api/v1/health"
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {test_key}"})
+
+        try:
+            with urllib.request.urlopen(req, timeout=3) as resp:
+                if resp.status == 200:
+                    body = resp.read().decode("utf-8")
+                    QMessageBox.information(
+                        self,
+                        "Test réussi",
+                        f"✅ Clé API valide\n\nRéponse du serveur :\n{body}",
+                    )
+                else:
+                    QMessageBox.warning(
+                        self,
+                        "Échec du test",
+                        f"Code HTTP {resp.status}\nLa clé pourrait être invalide ou expirée.",
+                    )
+        except urllib.error.HTTPError as exc:
+            QMessageBox.warning(
+                self,
+                "Échec du test",
+                f"Erreur HTTP {exc.code} : {exc.reason}\n\n"
+                f"Vérifiez que le serveur API est démarré (onglet OpenAPI → Générer le spec)\n"
+                f"et que la clé est correcte.",
+            )
+        except urllib.error.URLError as exc:
+            QMessageBox.warning(
+                self,
+                "Serveur inaccessible",
+                f"Impossible de joindre le serveur API :\n{exc.reason}\n\n"
+                f"Le serveur API REST (port 8080) doit être démarré pour tester la clé.",
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Erreur", f"Erreur inattendue : {exc}")
 
     def _on_revoke_key(self) -> None:
         selected = self.key_list_table.selectedItems()
@@ -469,7 +520,7 @@ class APIPage(QWidget):
                 events=[events] if events != "*" else ["*"],
                 secret=self.wh_secret.text().strip() or "",
                 active=True,
-                created_at=__import__('datetime').datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
             )
             self.webhook_store.create(wh_config)
             QMessageBox.information(self, "Webhook créé", f"Webhook {name} créé avec ID {wh_config.id}.")
@@ -488,7 +539,7 @@ class APIPage(QWidget):
             return
 
         # Préparer un payload de test
-        payload = {"event": "test", "timestamp": __import__('datetime').datetime.now(timezone.utc).isoformat()}
+        payload = {"event": "test", "timestamp": datetime.now(timezone.utc).isoformat()}
         body = json.dumps({"event": "user.created", "data": payload}).encode("utf-8")
         parsed = __import__('urllib.parse').urlparse(wh.url)
         req = __import__('urllib.request').Request(
