@@ -1,0 +1,61 @@
+# Patch pour corriger l'erreur AttributeError: 'APIPage' object has no attribute '_on_test_api_key'
+# Ce patch ajoute la méthode _on_test_api_key manquante dans la classe APIPage
+# Appliquez ce patch si la version flatpak est basée sur un code source plus ancien
+
+--- a/src/edusync_ad/ui/api_page.py
++++ b/src/edusync_ad/ui/api_page.py
+@@ -236,6 +236,53 @@ class APIPage(QWidget):
+         except ValueError as exc:
+             QMessageBox.warning(self, "Erreur", str(exc))
+ 
++    def _on_test_api_key(self) -> None:
++        """Teste la clé API saisie en faisant une requête simple vers l'endpoint /health."""
++        test_key = self.test_key.text().strip()
++        if not test_key:
++            QMessageBox.warning(self, "Clé manquante", "Entrez une clé API à tester.")
++            return
++
++        # Tenter de joindre le serveur API local (port par défaut 8080)
++        import urllib.request
++        import urllib.error
++        import json
++
++        url = "http://127.0.0.1:8080/api/v1/health"
++        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {test_key}"})
++
++        try:
++            with urllib.request.urlopen(req, timeout=3) as resp:
++                if resp.status == 200:
++                    body = resp.read().decode("utf-8")
++                    QMessageBox.information(
++                        self,
++                        "Test réussi",
++                        f"✅ Clé API valide\n\nRéponse du serveur :\n{body}",
++                    )
++                else:
++                    QMessageBox.warning(
++                        self,
++                        "Échec du test",
++                        f"Code HTTP {resp.status}\nLa clé pourrait être invalide ou expirée.",
++                    )
++        except urllib.error.HTTPError as exc:
++            QMessageBox.warning(
++                self,
++                "Échec du test",
++                f"Erreur HTTP {exc.code} : {exc.reason}\n\n"
++                f"Vérifiez que le serveur API est démarré (onglet OpenAPI → Générer le spec)\n"
++                f"et que la clé est correcte.",
++            )
++        except urllib.error.URLError as exc:
++            QMessageBox.warning(
++                self,
++                "Serveur inaccessible",
++                f"Impossible de joindre le serveur API :\n{exc.reason}\n\n"
++                f"Le serveur API REST (port 8080) doit être démarré pour tester la clé.",
++            )
++        except Exception as exc:
++            QMessageBox.critical(self, "Erreur", f"Erreur inattendue : {exc}")
++
+     def _on_revoke_key(self) -> None:
+         selected = self.key_list_table.selectedItems()
+         if not selected:
