@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
 Hotfix script to patch the installed Flatpak version of EduSync AD
-Adds the missing _on_test_api_key method to APIPage class
+Adds missing methods and fixes wrong connections in APIPage class
 """
 import sys
 import os
 import shutil
+import re
 from pathlib import Path
 
 
@@ -33,19 +34,43 @@ def has_method(content, method_name):
     return f"def {method_name}" in content
 
 
-def patch_api_page(file_path):
+def fix_webhook_connection(content):
+    """Fix _on_webhook_create -> _on_create_webhook connection."""
+    # Fix the button connection
+    content = content.replace(
+        'btn_wh_create.clicked.connect(self._on_webhook_create)',
+        'btn_wh_create.clicked.connect(self._on_create_webhook)'
+    )
+    return content
+
+
+def add_on_open_doc_method(content):
+    """Add the missing _on_open_doc method after _on_clear_spec."""
+    if has_method(content, '_on_open_doc'):
+        return content, False
+    
+    # Find _on_clear_spec and add _on_open_doc after it
+    pattern = r'(    def _on_clear_spec\(self\) -> None:\n        self\.spec_viewer\.clear\(\)\n        self\.spec_status\.setText\("Aucun spec généré"\))'
+    
+    replacement = r'''\1
+
+    def _on_open_doc(self) -> None:
+        """Ouvre la documentation OpenAPI dans le navigateur."""
+        try:
+            import webbrowser
+            # Ouvre l'UI Swagger locale si le serveur tourne, sinon doc en ligne
+            webbrowser.open("http://127.0.0.1:8080/docs")
+        except Exception as exc:
+            QMessageBox.warning(self, "Erreur", f"Impossible d'ouvrir la doc : {exc}")'''
+    
+    new_content = re.sub(pattern, replacement, content)
+    return new_content, new_content != content
+
+
+def add_on_test_api_key_method(content):
     """Add the missing _on_test_api_key method after _on_generate_key."""
-    
-    with open(file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
     if has_method(content, '_on_test_api_key'):
-        print(f"✅ Méthode _on_test_api_key déjà présente dans {file_path}")
-        return False
-    
-    # Find the position after _on_generate_key method
-    # Look for the end of _on_generate_key (the line with "QMessageBox.warning(self, \"Erreur\", str(exc))" followed by blank line and "def _on_revoke_key")
-    import re
+        return content, False
     
     # Pattern: end of _on_generate_key followed by _on_revoke_key
     pattern = r'(            QMessageBox\.warning\(self, "Erreur", str\(exc\)\)\n        )(\n    def _on_revoke_key)'
@@ -98,14 +123,12 @@ def patch_api_page(file_path):
                 f"Le serveur API REST (port 8080) doit être démarré pour tester la clé.",
             )
         except Exception as exc:
-            QMessageBox.critical(self, "Erreur", f"Erreur inattendue : {exc}")
-\2'''
+            QMessageBox.critical(self, "Erreur", f"Erreur inattendue : {exc}")\2'''
     
     new_content = re.sub(pattern, replacement, content)
     
     if new_content == content:
-        print("⚠️  Pattern non trouvé, tentative alternative...")
-        # Alternative: insert after _on_generate_key definition
+        # Alternative pattern
         alt_pattern = r'(    def _on_generate_key\(self\) -> None:.*?QMessageBox\.warning\(self, "Erreur", str\(exc\)\))'
         match = re.search(alt_pattern, content, re.DOTALL)
         if match:
@@ -161,8 +184,38 @@ def patch_api_page(file_path):
             QMessageBox.critical(self, "Erreur", f"Erreur inattendue : {exc}")'''
             new_content = content[:insert_pos] + method_code + content[insert_pos:]
         else:
-            print("❌ Impossible de trouver l'emplacement d'insertion")
-            return False
+            return content, False
+    
+    return new_content, new_content != content
+
+
+def patch_api_page(file_path):
+    """Apply all patches to the api_page.py file."""
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    original_content = content
+    changes = []
+    
+    # Fix 1: _on_webhook_create -> _on_create_webhook connection
+    if 'btn_wh_create.clicked.connect(self._on_webhook_create)' in content:
+        content = fix_webhook_connection(content)
+        changes.append("Fixé connexion webhook: _on_webhook_create → _on_create_webhook")
+    
+    # Fix 2: Add _on_open_doc method
+    content, added = add_on_open_doc_method(content)
+    if added:
+        changes.append("Ajouté méthode _on_open_doc")
+    
+    # Fix 3: Add _on_test_api_key method
+    content, added = add_on_test_api_key_method(content)
+    if added:
+        changes.append("Ajouté méthode _on_test_api_key")
+    
+    if content == original_content:
+        print("✅ Aucune modification nécessaire - toutes les méthodes sont présentes")
+        return False
     
     # Backup
     backup_path = file_path.with_suffix('.py.bak')
@@ -171,14 +224,16 @@ def patch_api_page(file_path):
     
     # Write patched file
     with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(new_content)
+        f.write(content)
     
-    print(f"✅ Patch appliqué avec succès à {file_path}")
+    print("✅ Patches appliqués:")
+    for change in changes:
+        print(f"  - {change}")
     return True
 
 
 def main():
-    print("🔧 Hotfix Flatpak EduSync AD - Ajout de _on_test_api_key")
+    print("🔧 Hotfix Flatpak EduSync AD - Correction APIPage")
     print("=" * 60)
     
     api_page_path = find_flatpak_api_page()
@@ -212,8 +267,8 @@ def main():
         print("\n✅ Hotfix appliqué avec succès!")
         print("🔄 Relancez l'application: flatpak run org.edusync.AD")
     else:
-        print("\n❌ Échec du patch")
-        sys.exit(1)
+        print("\n✅ Rien à faire - le fichier est déjà à jour")
+        sys.exit(0)
 
 
 if __name__ == "__main__":

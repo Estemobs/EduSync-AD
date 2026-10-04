@@ -1,8 +1,8 @@
 @echo off
 REM Hotfix for Flatpak EduSync AD on Windows
-REM Adds the missing _on_test_api_key method to APIPage class
+REM Adds missing methods and fixes wrong connections in APIPage class
 
-echo 🔧 Hotfix Flatpak EduSync AD - Ajout de _on_test_api_key
+echo 🔧 Hotfix Flatpak EduSync AD - Correction APIPage
 echo ============================================================
 
 REM Possible paths for Windows Flatpak installation
@@ -56,16 +56,8 @@ if errorlevel 1 (
 )
 echo ✅ Backup créé: %API_PAGE%.bak
 
-REM Check if method already exists
-findstr /c:"def _on_test_api_key" "%API_PAGE%" >nul
-if not errorlevel 1 (
-    echo ✅ Méthode _on_test_api_key déjà présente
-    pause
-    exit /b 0
-)
-
 REM Use Python to do the patching
-echo 🔧 Application du patch...
+echo 🔧 Application des patches...
 python -c "
 import re
 import sys
@@ -73,10 +65,38 @@ import sys
 with open(r'%API_PAGE%', 'r', encoding='utf-8') as f:
     content = f.read()
 
-# Find the end of _on_generate_key method
-pattern = r'(            QMessageBox\.warning\(self, \"Erreur\", str\(exc\)\)\n        )(\n    def _on_revoke_key)'
-replacement = r'''\1
+original = content
+changes = []
 
+# Fix 1: _on_webhook_create -> _on_create_webhook connection
+if 'btn_wh_create.clicked.connect(self._on_webhook_create)' in content:
+    content = content.replace(
+        'btn_wh_create.clicked.connect(self._on_webhook_create)',
+        'btn_wh_create.clicked.connect(self._on_create_webhook)'
+    )
+    changes.append('Fixé connexion webhook: _on_webhook_create -> _on_create_webhook')
+
+# Fix 2: Add _on_open_doc method after _on_clear_spec
+if 'def _on_open_doc' not in content:
+    pattern = r'(    def _on_clear_spec\(self\) -> None:\n        self\.spec_viewer\.clear\(\)\n        self\.spec_status\.setText\(\"Aucun spec généré\"\))'
+    replacement = r'''\1
+
+    def _on_open_doc(self) -> None:
+        \"\"\"Ouvre la documentation OpenAPI dans le navigateur.\"\"\"
+        try:
+            import webbrowser
+            webbrowser.open(\"http://127.0.0.1:8080/docs\")
+        except Exception as exc:
+            QMessageBox.warning(self, \"Erreur\", f\"Impossible d'ouvrir la doc : {exc}\")'''
+    content = re.sub(pattern, replacement, content)
+    if content != original:
+        changes.append('Ajouté méthode _on_open_doc')
+
+# Fix 3: Add _on_test_api_key method after _on_generate_key
+if 'def _on_test_api_key' not in content:
+    pattern = r'(            QMessageBox\.warning\(self, \"Erreur\", str\(exc\)\)\n        )(\n    def _on_revoke_key)'
+    replacement = r'''\1
+    
     def _on_test_api_key(self) -> None:
         \"\"\"Teste la clé API saisie en faisant une requête simple vers l'endpoint /health.\"\"\"
         test_key = self.test_key.text().strip()
@@ -84,7 +104,6 @@ replacement = r'''\1
             QMessageBox.warning(self, \"Clé manquante\", \"Entrez une clé API à tester.\")
             return
 
-        # Tenter de joindre le serveur API local (port par défaut 8080)
         import urllib.request
         import urllib.error
         import json
@@ -124,17 +143,15 @@ replacement = r'''\1
             )
         except Exception as exc:
             QMessageBox.critical(self, \"Erreur\", f\"Erreur inattendue : {exc}\")\2'''
-
-new_content = re.sub(pattern, replacement, content)
-
-if new_content == content:
-    print('Pattern non trouvé, tentative alternative...')
-    # Alternative: insert after _on_generate_key
-    alt_pattern = r'(    def _on_generate_key\(self\) -> None:.*?QMessageBox\.warning\(self, \"Erreur\", str\(exc\)\))'
-    match = re.search(alt_pattern, content, re.DOTALL)
-    if match:
-        insert_pos = match.end()
-        method_code = '''
+    content = re.sub(pattern, replacement, content)
+    
+    if content == original:
+        # Alternative pattern
+        alt_pattern = r'(    def _on_generate_key\(self\) -> None:.*?QMessageBox\.warning\(self, \"Erreur\", str\(exc\)\))'
+        match = re.search(alt_pattern, content, re.DOTALL)
+        if match:
+            insert_pos = match.end()
+            method_code = '''
 
     def _on_test_api_key(self) -> None:
         \"\"\"Teste la clé API saisie en faisant une requête simple vers l'endpoint /health.\"\"\"
@@ -143,7 +160,6 @@ if new_content == content:
             QMessageBox.warning(self, \"Clé manquante\", \"Entrez une clé API à tester.\")
             return
 
-        # Tenter de joindre le serveur API local (port par défaut 8080)
         import urllib.request
         import urllib.error
         import json
@@ -183,15 +199,24 @@ if new_content == content:
             )
         except Exception as exc:
             QMessageBox.critical(self, \"Erreur\", f\"Erreur inattendue : {exc}\")'''
-        new_content = content[:insert_pos] + method_code + content[insert_pos:]
+            content = content[:insert_pos] + method_code + content[insert_pos:]
+            changes.append('Ajouté méthode _on_test_api_key')
+        else:
+            print('Impossible de trouver l\'emplacement d\'insertion pour _on_test_api_key')
+            sys.exit(1)
     else:
-        print('Impossible de trouver l\'emplacement d\'insertion')
-        sys.exit(1)
+        changes.append('Ajouté méthode _on_test_api_key')
+
+if content == original:
+    print('✅ Aucune modification nécessaire - toutes les méthodes sont présentes')
+    sys.exit(0)
 
 with open(r'%API_PAGE%', 'w', encoding='utf-8') as f:
-    f.write(new_content)
+    f.write(content)
 
-print('Patch appliqué avec succès')
+print('✅ Patches appliqués:')
+for change in changes:
+    print('  - ' + change)
 "
 
 if errorlevel 1 (
