@@ -22,7 +22,7 @@ import json
 import logging
 import threading
 import time
-from dataclasses import asdataclass, dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -223,7 +223,7 @@ class WebhookStore:
 
     def _save(self) -> None:
         with self._lock:
-            data = [asdataclass(w) for w in self._webhooks.values()]
+            data = [asdict(w) for w in self._webhooks.values()]
             with self.config_path.open("w", encoding="utf-8") as fh:
                 json.dump(data, fh, indent=2, ensure_ascii=False)
 

@@ -15,6 +15,7 @@ from pathlib import Path
 
 from reportlab.graphics import renderPDF
 from reportlab.graphics.barcode import qr
+from reportlab.graphics.barcode import code128  # noqa: F401  # explicite pour le packaging Windows
 from reportlab.graphics.shapes import Drawing
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
