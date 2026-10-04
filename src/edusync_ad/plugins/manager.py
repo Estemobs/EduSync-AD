@@ -6,7 +6,21 @@ import logging
 from importlib.metadata import entry_points
 from typing import Any
 
-from PyQt6.QtWidgets import QWidget
+# PyQt6 optionnel — gestion tête sèche (pas de display/graphique)
+# L'import peut échouer si libEGL/libGL manquant (environnements CI headless)
+try:
+    from PyQt6.QtWidgets import QWidget  # type: ignore
+    _HAS_PYQT6 = True
+except ImportError:  # pragma: no cover
+    # QWidget factice pour permettre l'import du module sans PyQt6
+    # Les widgets réels ne seront créés que si PyQt6 est disponible
+    class QWidget:  # type: ignore
+        """Classe factice lorsque PyQt6 n'est pas disponible."""
+        def __init__(self, *args, **kwargs):
+            pass
+        def deleteLater(self):
+            pass
+    _HAS_PYQT6 = False
 
 from edusync_ad.plugins.base import IModule, ModuleMetadata, ModuleLoadError
 
