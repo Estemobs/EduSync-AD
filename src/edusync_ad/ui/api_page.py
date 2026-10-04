@@ -36,11 +36,8 @@ from PyQt6.QtWidgets import (
 )
 
 from edusync_ad.core.api import APIRouter, APIHandler, APIResponse, APIError, APIServer
-from edusync_ad.core.api_auth import (
-    APIKeyStore,
-    load_api_keys,
-    save_api_keys,
-    APIKeyInfo,
+from edusync_ad.core.api_auth import APIKeyStore, load_api_keys, save_api_keys, APIKeyInfo
+from edusync_ad.core.webhooks import (
     WebhookEvent,
     WebhookStore,
     WebhookDispatcher,

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from edusync_ad.core.api import APIRouter, APIResponse
-from edusync_ad.core.api_auth import WebhookEvent
+from edusync_ad.core.webhooks import WebhookEvent
 from edusync_ad.core.config import AppConfig
 from edusync_ad.core.portal import PortalService, PortalConfig, PortalStore, PortalUser, Demande
 
