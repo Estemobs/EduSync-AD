@@ -50,11 +50,11 @@ En quelques clics, pas en PowerShell.
 - **Mise à jour intégrée** : vérification, téléchargement, installation, redémarrage auto, vérification somme de contrôle
 - **Configuration chiffrée** (domaine, utilisateur) via `platformdirs` + AES
 
-### Disponible (v3.5 — Livré)
+### Disponible (v4.0 — Livré)
 
-Étiquettes avancées : éditeur WYSIWYG, badges/cartes, trombinoscope photo A4/A3 et envoi d'une étiquette par mail, **multisite : plusieurs domaines/forêts AD gérés depuis une seule instance (profils chiffrés, sélecteur de site, journal par domaine)**, **délégation d'administration (RBAC) : 5 rôles, portées par OU/groupe, garde-fou sur chaque écriture AD, journal filtrable par opérateur**, **portail auto-service élève/parent : réinitialisation MDP par code mail, consultation identifiant/mail, demande création compte avec validation admin (serveur web stdlib, sans dépendance externe)**.
+Étiquettes avancées : éditeur WYSIWYG, badges/cartes, trombinoscope photo A4/A3 et envoi d'une étiquette par mail, **multisite : plusieurs domaines/forêts AD gérés depuis une seule instance (profils chiffrés, sélecteur de site, journal par domaine)**, **délégation d'administration (RBAC) : 5 rôles, portées par OU/groupe, garde-fou sur chaque écriture AD, journal filtrable par opérateur**, **portail auto-service élève/parent : réinitialisation MDP par code mail, consultation identifiant/mail, demande création compte avec validation admin (serveur web stdlib, sans dépendance externe)**, **API REST + Webhooks : intégration SIS (PRONOTE, etc.), notifications externes (Teams, Slack, mail, SIG), synchronisation bidirectionnelle**, **IA / Assistant : détection anomalies (doublons, comptes orphelins), suggestion nettoyage fin d'année, génération identifiants 'intelligents', analyse logs → recommandations sécurité**, **conformité RGPD (rapport, droit à l'oubli, chiffrement exports)**, **MFA admin, session unique, granularité MDP (PSO), signature numérique exports**, **sauvegarde & restauration (backup ZIP, restore 1-clic, migration vN→vN+1)**.
 
-### Prochainement (v4+)
+### Prochainement (v5+)
 
 ---
 
