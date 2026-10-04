@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Optional
 
 from edusync_ad.core.config import config_dir
-from edusync_ad.core.crypto import decrypt_str, encrypt_str, get_or_create_key
 
 API_KEYS_FILE = config_dir() / "api_keys.json"
 

@@ -11,20 +11,14 @@ Chaque route applique un garde-fou par défaut via le décorateur
 
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass, field
 from typing import Any
 
-from edusync_ad.core.api import (
-    APIRouter,
-    APIError,
-    NotFoundError,
-    UnauthorizedError,
-    ForbiddenError,
-    ValidationError,
-    APIResponse,
-    require_api_key,
-    APIKeyStore,
-)
-from edusync_ad.core.api_auth import WebhookEvent, WebhookStore, WebhookDispatcher
+from edusync_ad.core.api import APIRouter, APIResponse
+from edusync_ad.core.api_auth import WebhookEvent
+from edusync_ad.core.config import AppConfig
+from edusync_ad.core.portal import PortalService, PortalConfig, PortalStore, PortalUser, Demande
 
 # ---------------------------------------------------------------------------
 # Helpers JSON / sérialisation

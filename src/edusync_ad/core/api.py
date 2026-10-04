@@ -19,15 +19,13 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from functools import wraps
-from html import escape
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any, Callable, Optional
 from urllib.parse import parse_qs, urlsplit
 
-from edusync_ad.core.config import AppConfig
-from edusync_ad.core.api_auth import APIKeyStore, load_api_keys, save_api_keys
+from edusync_ad.core.api_auth import APIKeyStore, load_api_keys
 
 logger = logging.getLogger("edusync_ad.api")
 
@@ -350,7 +348,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
 
     def _send_error(self, status: int, message: str, code: str = "error", details: dict | None = None) -> None:
-        self._send_json(status, {"success": False, "error": {"code": code, "message": message, "details": details or {}}})
+        payload = {"success": False, "error": {"code": code, "message": message, "details": details or {}}}
+        self._send_json(status, payload)
 
     def _extract_api_key(self) -> str | None:
         # 1. Header X-API-Key
