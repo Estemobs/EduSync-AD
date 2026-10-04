@@ -46,6 +46,7 @@ from edusync_ad.ui.modules.exchange_page import ExchangePage
 from edusync_ad.ui.modules.rds_page import RDSPage
 from edusync_ad.ui.modules.advanced_io_page import AdvancedIOPage
 from edusync_ad.ui.modules.templates_page import TemplatesPage
+from edusync_ad.ui.modules.label_studio_page import LabelStudioPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
@@ -241,6 +242,9 @@ class MainWindow(QMainWindow):
         self.templates_page = TemplatesPage(
             self.ad_connection, self.config, self.audit_log, self.session_id
         )
+        self.label_studio_page = LabelStudioPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id
+        )
         self.audit_page = AuditPage(self.audit_log)
         self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
@@ -264,9 +268,10 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.rds_page)                 # index 14
         self.pages.addWidget(self.advanced_io_page)         # index 15
         self.pages.addWidget(self.templates_page)           # index 16
-        self.pages.addWidget(self.audit_page)              # index 17
-        self.pages.addWidget(self.logs_page)               # index 18
-        self.pages.addWidget(self.settings_page)           # index 19
+        self.pages.addWidget(self.label_studio_page)         # index 17
+        self.pages.addWidget(self.audit_page)              # index 18
+        self.pages.addWidget(self.logs_page)               # index 19
+        self.pages.addWidget(self.settings_page)           # index 20
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -289,10 +294,11 @@ class MainWindow(QMainWindow):
             ("RDS / Bureau à distance", 14),
             ("Import / Export avancés", 15),
             ("Modèles de groupes", 16),
+            ("Étiquettes / trombinoscopes", 17),
             None,
-            ("Journal d'actions", 17),
-            ("Journal de l'application", 18),
-            ("Paramètres", 19),
+            ("Journal d'actions", 18),
+            ("Journal de l'application", 19),
+            ("Paramètres", 20),
         ]
         for item in nav_items:
             if item is None:
@@ -338,6 +344,7 @@ class MainWindow(QMainWindow):
         self.rds_page.update_config(config)
         self.advanced_io_page.update_config(config)
         self.templates_page.update_config(config)
+        self.label_studio_page.update_config(config)
         self.apply_theme()
 
     def _on_check_update(self) -> None:

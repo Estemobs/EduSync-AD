@@ -50,15 +50,18 @@ En quelques clics, pas en PowerShell.
 - **Mise à jour intégrée** : vérification, téléchargement, installation, redémarrage auto, vérification somme de contrôle
 - **Configuration chiffrée** (domaine, utilisateur) via `platformdirs` + AES
 
-### En développement (v2.x — Prochainement)
+### Disponible (v2.x — Livré)
 
 Photos d'identité, profils itinérants, quotas FSRM, scripts logon/logoff, heures de connexion,
-dossiers personnels (Home Directory), espaces partagés par équipe/groupe.
+dossiers personnels (Home Directory), espaces partagés par classe/groupe, Microsoft 365 / Entra ID,
+Exchange, RDS, imports/exports avancés (LDAP, LDIF, vCard, publipostage, GEP), modèles de groupes
+(instanciation 1-clic), **étiquettes avancées : éditeur WYSIWYG, badges/cartes, trombinoscope
+photo A4/A3 et envoi d'une étiquette par mail**.
 
-### Vision (v3+)
+### Prochainement (v3+)
 
-Office 365 / Entra ID, Exchange, RDS, modèles de groupes (templates), éditeur étiquettes WYSIWYG,
-multisite/multi-domaine, RBAC/délégation, API REST + webhooks, IA/Assistant, conformité RGPD.
+Multisite / multi-domaine, délégation d'administration (RBAC), portail auto-service élève/parent,
+API REST + webhooks, IA / Assistant, conformité RGPD, sauvegarde & restauration.
 
 ---
 

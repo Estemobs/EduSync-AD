@@ -48,6 +48,7 @@ exchange = "edusync_ad.plugins.builtin:ExchangeModule"
 rds = "edusync_ad.plugins.builtin:RDSModule"
 advanced_io = "edusync_ad.plugins.builtin:AdvancedIOModule"
 group_templates = "edusync_ad.plugins.builtin:GroupTemplatesModule"
+label_studio = "edusync_ad.plugins.builtin:LabelStudioModule"
 
 [tool.setuptools.packages.find]
 where = ["src"]

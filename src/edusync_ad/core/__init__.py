@@ -253,6 +253,31 @@ from edusync_ad.core.templates import (
     unique_template_id,
     validate_values,
 )
+# M24 — Étiquettes & trombinoscopes : les noms qui chevauchent le module M23
+# sont importés sous un alias explicite (pas de doublon dans __all__).
+from edusync_ad.core.label_studio import (
+    ALIGNMENTS,
+    ELEMENT_KINDS,
+    FONTS,
+    SHEETS,
+    LabelElement,
+    LabelTemplate,
+    MailConfig,
+    MailError,
+    SheetSpec,
+    builtin_templates as builtin_label_templates,
+    duplicate_template as duplicate_label_template,
+    export_template as export_label_template,
+    generate_trombinoscope_pdf,
+    import_template as import_label_template,
+    load_mail_config,
+    load_templates as load_label_templates,
+    render_labels_pdf,
+    save_mail_config,
+    save_templates as save_label_templates,
+    send_label_email,
+    unique_template_id as unique_label_template_id,
+)
 
 __all__ = [
     # AD
@@ -495,4 +520,26 @@ __all__ = [
     "save_templates",
     "unique_template_id",
     "validate_values",
+    # M24 — Étiquettes & trombinoscopes
+    "ALIGNMENTS",
+    "ELEMENT_KINDS",
+    "FONTS",
+    "SHEETS",
+    "LabelElement",
+    "LabelTemplate",
+    "MailConfig",
+    "MailError",
+    "SheetSpec",
+    "builtin_label_templates",
+    "duplicate_label_template",
+    "export_label_template",
+    "generate_trombinoscope_pdf",
+    "import_label_template",
+    "load_mail_config",
+    "load_label_templates",
+    "render_labels_pdf",
+    "save_mail_config",
+    "save_label_templates",
+    "send_label_email",
+    "unique_label_template_id",
 ]

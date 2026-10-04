@@ -659,6 +659,43 @@ class AdvancedIOModule(_BaseModule):
         return widget
 
 
+class LabelStudioModule(_BaseModule):
+    @property
+    def metadata(self) -> ModuleMetadata:
+        return ModuleMetadata(
+            id="label_studio",
+            name="Étiquettes & trombinoscopes",
+            version="1.0.0",
+            description=(
+                "Éditeur WYSIWYG d'étiquettes (Avery L7160/L7163, badge, carte), "
+                "trombinoscope photo A4/A3, envoi d'une étiquette par mail"
+            ),
+            requires_ad=True,
+            permissions=["read_ad", "export_data"],
+        )
+
+    def _create_widget_impl(self, parent: QWidget | None, **context) -> QWidget:
+        from edusync_ad.ui.modules.label_studio_page import LabelStudioPage
+
+        ad_connection = context.get("ad_connection")
+        config = context.get("config")
+        audit_log = context.get("audit_log")
+        session_id = context.get("session_id")
+
+        if not all([ad_connection, config, audit_log, session_id]):
+            raise ValueError("Contexte incomplet pour LabelStudioModule")
+
+        widget = LabelStudioPage(
+            ad_connection=ad_connection,
+            config=config,
+            audit_log=audit_log,
+            session_id=session_id,
+            parent=parent,
+        )
+        self._widget = widget
+        return widget
+
+
 class GroupTemplatesModule(_BaseModule):
     @property
     def metadata(self) -> ModuleMetadata:

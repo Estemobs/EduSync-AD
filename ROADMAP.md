@@ -12,6 +12,19 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 ---
 
+## 📊 Avancement (mise à jour : 4 octobre 2026)
+
+| Lot | Modules | État |
+|-----|---------|------|
+| **Fondations v2.0** | T0 LDAP asynchrone, T1 système de plugins, T2 cache AD SQLite | ✅ Livré |
+| **v2.0** | M12 → M18 (photos, profils, quotas, scripts, heures, dossiers perso, espaces de classe) | ✅ Livré |
+| **v2.5** | M19 → M22 (Microsoft 365, Exchange, RDS, imports/exports avancés) | ✅ Livré |
+| **v3.0 (en cours)** | M23 modèles de groupes ✅ — M24 étiquettes & trombinoscopes ✅ — **M25 multisite → prochain module** | 🚧 |
+| **v3.5** | M26 délégation RBAC, M27 portail auto-service | ⬜ À faire |
+| **v4.0** | M28 → M32 (API REST, IA, conformité, DFS/IIS, sauvegarde) | ⬜ À faire |
+
+---
+
 ## 📦 Modules actuels (v1.x — Déployés)
 
 | Module | Statut | Description |
@@ -42,40 +55,40 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 ## 🚀 Modules planifiés (v2.x — Court terme)
 
-### M12 — Gestion des photos d'identité
+### M12 — Gestion des photos d'identité ✅
 - Import manuel (une par une) via Explorateur AD
 - Import en masse depuis CSV + dossier photos (mapping prénom/nom → fichier)
 - Import par nommage conventionnel (ex: `prenom_nom.jpg`, `identifiant.jpg`)
 - Redimensionnement/cadrage auto (ratio 3:4, max 100 Ko)
 - Affichage vignette dans Explorateur AD + étiquettes PDF
 
-### M13 — Profils utilisateurs (itinérant / local / obligatoire)
+### M13 — Profils utilisateurs (itinérant / local / obligatoire) ✅
 - Configuration par OU ou groupe : chemin profil itinérant (`\\srv\profil\%USERNAME%`), local, obligatoire (`.man`)
 - Application en masse lors création/migration
 - Support variables `%USERNAME%`, `%SAM%`, `%OU%`
 
-### M14 — Quotas de disque (FSRM)
+### M14 — Quotas de disque (FSRM) ✅
 - Définition quota par OU/groupe (taille, seuils alerte, blocage dur)
 - Application auto à la création de dossier personnel
 - Rapport quotas (export CSV)
 
-### M15 — Scripts logon/logoff (GPO-like)
+### M15 — Scripts logon/logoff (GPO-like) ✅
 - Éditeur de scripts (bat/powershell/vbs) par OU ou groupe
 - Variables : `%USERNAME%`, `%FULLNAME%`, `%OU%`, `%GROUP%`, `%EMAIL%`, `%HOMEDIR%`
 - Déploiement auto via attribut `scriptPath` ou GPO liaison
 
-### M16 — Heures de connexion (logonHours)
+### M16 — Heures de connexion (logonHours) ✅
 - Interface visuelle (grille 24h × 7j) par utilisateur ou en masse (OU/groupe)
 - Préréglages : "Heures cours", "Heures admin", "Personnalisé"
 - Application via `logonHours` attribut AD
 
-### M17 — Dossiers personnels (Home Directory)
+### M17 — Dossiers personnels (Home Directory) ✅
 - Création auto à la création de compte : `\\srv\homes\%USERNAME%`
 - Droits NTFS : utilisateur (Modification), Administrateurs (Contrôle total), SYSTEM
 - Quotas FSRM liés (voir M14)
 - Lettre de lecteur configurable (ex: H:)
 
-### M18 — Espaces partagés par classe/groupe
+### M18 — Espaces partagés par classe/groupe ✅
 - Création auto partage SMB + droits NTFS à la création groupe de classe
 - Modèle : `\\srv\classes\%GROUP%` — profs (Lecture/Écriture), élèves (Lecture), admins (Total)
 - Synchronisation membres AD ↔ droits partage
@@ -84,25 +97,25 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 ## 📈 Modules planifiés (v2.5 — Moyen terme)
 
-### M19 — Office 365 / Entra ID (Hybride)
+### M19 — Office 365 / Entra ID (Hybride) ✅
 - Connexion Microsoft Graph (app registration, certificat/secret)
 - Création utilisateurs cloud + licences (packs éducation A1/A3/A5)
 - Groupes de distribution / sécurité / Teams auto depuis groupes AD primaires
 - Synchronisation mot de passe (PHS) ou fédération (ADFS/PTA)
 - Photos utilisateurs → cloud
 
-### M20 — Microsoft Exchange (On-prem / Online)
+### M20 — Microsoft Exchange (On-prem / Online) ✅
 - Création boîtes aux lettres utilisateurs/groupes
 - Aliases / adresses proxy supplémentaires
 - Politiques d'adresses (Email Address Policies)
 - Quotas boîte, rétention, archivage
 
-### M21 — RDS / Bureau à distance
+### M21 — RDS / Bureau à distance ✅
 - Collections de sessions / applications RemoteApp
 - Publication apps par groupe AD
 - Profils utilisateurs RDS (disques profil UPD / FSLogix)
 
-### M22 — Import/Export avancés
+### M22 — Import/Export avancés ✅
 - **Import LDAP** : depuis OU, groupe, filtre LDAP personnalisé
 - **Export LDIF** : paramétrable, pour annuaires LDAP tiers
 - **Export vCard** : cartes de visite
@@ -113,13 +126,13 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 
 ## 🔮 Modules vision (v3.x+ — Long terme / Différenciation)
 
-### M23 — Modèles de groupes (Templates)
+### M23 — Modèles de groupes (Templates) ✅
 - Modèle "Classe élève", "Classe prof", "Personnel admin", "Service technique"…
 - Chaque modèle définit : OU parente, groupes auto, scripts, quotas, dossier personnel, partage, profil, heures connexion, politiques MDP, licences O365
 - Instanciation 1-clic : saisie nom classe → tout créé
 - Duplication/export/import modèles (XML/JSON)
 
-### M24 — Étiquettes & Trombinoscopes avancés
+### M24 — Étiquettes & Trombinoscopes avancés ✅
 - Éditeur visuel WYSIWYG (positionnement champs, police, couleur, QR code, photo)
 - Modèles pré-enregistrés (Avery L7160, L7163, badges, cartes)
 - Trombinoscope : grille photos + noms, export PDF A4/A3
