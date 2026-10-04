@@ -21,7 +21,7 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 | **v2.5** | M19 → M22 (Microsoft 365, Exchange, RDS, imports/exports avancés) | ✅ Livré |
 | **v3.0** | M23 modèles de groupes ✅ — M24 étiquettes & trombinoscopes ✅ — M25 multisite ✅ | ✅ Livré |
 | **v3.5** | M26 délégation RBAC ✅ — M27 portail auto-service ✅ — M28 API REST + Webhooks ✅ | ⬜ À faire |
-| **v4.0** | M29 IA / Assistant ✅ — M30 conformité & sécurité — M31 DFS/IIS — M32 sauvegarde | ⬜ À faire |
+| **v4.0** | M29 IA / Assistant ✅ — M30 conformité & sécurité ✅ — M31 DFS/IIS ⚡ — M32 sauvegarde | ⬜ À faire |
 
 ---
 
