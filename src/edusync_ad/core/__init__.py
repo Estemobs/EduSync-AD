@@ -70,6 +70,19 @@ from edusync_ad.core.crypto import (
     save_remembered_connection,
     clear_remembered_connection,
 )
+from edusync_ad.core.multisite import (
+    DomainProfile,
+    MultisiteError,
+    ensure_sites,
+    find_profile,
+    import_legacy_connection,
+    load_sites,
+    new_profile,
+    profile_for_domain,
+    save_sites,
+    sites_path,
+    unique_site_id,
+)
 from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
 from edusync_ad.core.export import build_export_row, export_users_csv, generate_labels_pdf
 from edusync_ad.core.photos import (
@@ -542,4 +555,16 @@ __all__ = [
     "save_label_templates",
     "send_label_email",
     "unique_label_template_id",
+    # M25 — Multisite / multi-domaine
+    "DomainProfile",
+    "MultisiteError",
+    "ensure_sites",
+    "find_profile",
+    "import_legacy_connection",
+    "load_sites",
+    "new_profile",
+    "profile_for_domain",
+    "save_sites",
+    "sites_path",
+    "unique_site_id",
 ]

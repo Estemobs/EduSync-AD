@@ -28,6 +28,14 @@ from edusync_ad.core.crypto import (
     load_remembered_connection,
     save_remembered_connection,
 )
+from edusync_ad.core.multisite import (
+    DomainProfile,
+    MultisiteError,
+    ensure_sites,
+    find_profile,
+    load_sites,
+    save_sites,
+)
 from edusync_ad.ui.debug_console import DebugConsole
 from edusync_ad.ui.log_manager import AppLogManager
 
@@ -72,12 +80,20 @@ class _ConnectWorker(QThread):
 
 
 class LoginDialog(QDialog):
-    def __init__(self, parent=None, config: AppConfig | None = None) -> None:
+    def __init__(
+        self,
+        parent=None,
+        config: AppConfig | None = None,
+        profile: DomainProfile | None = None,
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("EduSync AD — Connexion")
         self.setMinimumWidth(440)
 
         self.config = config or AppConfig()
+        # Profil M25 (multisite) à utiliser pour cette session : préremplit le
+        # formulaire et re-sauvegarde les identifiants après connexion réussie.
+        self._site_profile = profile
         self.ad_connection = ADConnection(
             verify_certificate=self.config.ldaps_verifier_certificat,
             ca_cert_path=self.config.ldaps_chemin_certificat_ca or None,
@@ -152,7 +168,14 @@ class LoginDialog(QDialog):
         layout.addLayout(status_layout)
         layout.addWidget(self.connect_button)
 
-        self._prefill_remembered_connection()
+        if self._site_profile is not None:
+            self._prefill_profile(self._site_profile)
+        elif not self._prefill_remembered_connection():
+            # Aucune connexion mémorisée : on propose le premier site enregistré
+            # plutôt qu'un formulaire vide (l'admin n'a rien à retaper).
+            sites = ensure_sites()
+            if sites:
+                self._prefill_profile(sites[0], remember=False)
 
         app = QApplication.instance()
         if app is not None:
@@ -164,16 +187,60 @@ class LoginDialog(QDialog):
         if self._worker is not None and self._worker.isRunning():
             self._worker.wait(5000)
 
-    def _prefill_remembered_connection(self) -> None:
+    def _prefill_remembered_connection(self) -> bool:
         remembered = load_remembered_connection()
-        if remembered:
-            self.domain_edit.setText(remembered.domaine)
-            self.controller_edit.setText(remembered.controleur)
-            self.username_edit.setText(remembered.utilisateur)
-            self.remember_checkbox.setChecked(True)
-            if remembered.mot_de_passe is not None:
-                self.password_edit.setText(remembered.mot_de_passe)
+        if not remembered:
+            return False
+        self.domain_edit.setText(remembered.domaine)
+        self.controller_edit.setText(remembered.controleur)
+        self.username_edit.setText(remembered.utilisateur)
+        self.remember_checkbox.setChecked(True)
+        if remembered.mot_de_passe is not None:
+            self.password_edit.setText(remembered.mot_de_passe)
+            self.remember_password_checkbox.setChecked(True)
+        return True
+
+    def _prefill_profile(self, profile: DomainProfile, *, remember: bool = True) -> None:
+        """Préremplit l'écran avec un profil de domaine (M25 multisite)."""
+        self.domain_edit.setText(profile.domain)
+        self.controller_edit.setText(profile.controller)
+        self.username_edit.setText(profile.username)
+        self.remember_checkbox.setChecked(remember)
+        if profile.password and profile.remember_password:
+            self.password_edit.setText(profile.password)
+            if remember:
                 self.remember_password_checkbox.setChecked(True)
+        self.verify_cert_checkbox.setChecked(profile.verify_certificate)
+        self.ca_cert_path_edit.setText(profile.ca_cert_path)
+
+    def _update_site_profile(self) -> None:
+        """Re-sauvegarde le profil M25 avec les identifiants réellement acceptés par l'AD.
+
+        Le champ « nom de domaine » est volontairement laissé tel quel : c'est
+        l'identité du site. Si l'administrateur a tapé un autre domaine pour
+        cette session, le profil ne bascule pas en douce — le sélecteur affiche
+        alors « site non enregistré » et le site s'ajoute via « Domaines… ».
+        """
+        if self._site_profile is None:
+            return
+        try:
+            profiles = load_sites()
+        except MultisiteError:
+            # Fichier illisible : on ne l'écrase pas à la volée.
+            return
+        profile = find_profile(profiles, self._site_profile.id)
+        if profile is None:
+            return
+        profile.controller = self.controller_edit.text().strip()
+        profile.username = self.username_edit.text().strip()
+        profile.remember_password = self.remember_password_checkbox.isChecked()
+        profile.password = self.password_edit.text() if profile.remember_password else ""
+        profile.verify_certificate = self.verify_cert_checkbox.isChecked()
+        profile.ca_cert_path = self.ca_cert_path_edit.text().strip()
+        try:
+            save_sites(profiles)
+        except OSError:
+            logger.warning("Impossible de mettre à jour le profil de domaine %s", profile.id)
 
     def _on_browse_ca_cert(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -237,6 +304,8 @@ class LoginDialog(QDialog):
             )
         else:
             clear_remembered_connection()
+
+        self._update_site_profile()
 
         self.config.ldaps_verifier_certificat = self.verify_cert_checkbox.isChecked()
         self.config.ldaps_chemin_certificat_ca = self.ca_cert_path_edit.text().strip()

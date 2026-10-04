@@ -40,7 +40,7 @@ En quelques clics, pas en PowerShell.
 | **Réinitialisation MDP** | Par OU, groupe AD ou CSV, politiques différées (élèves/personnels), forçage changement à la prochaine connexion |
 | **Explorateur AD** | Arborescence OUs/groupes, panneau central unifié (utilisateurs + groupes + sous-OU), clic droit complet (modif, move, MDP, groupes, suppr), recherche temps réel |
 | **Export (CSV / Étiquettes PDF)** | Sélection OU ± sous-OU, champs cochables (incl. MDP mémorisés), PDF Avery L7160/L7163, QR codes, couleurs pastel |
-| **Journal d'actions** | Filtres date/type/résultat, export CSV, stockage local SQLite (append-only) |
+| **Journal d'actions** | Filtres date/type/résultat/domaine, export CSV, stockage local SQLite (append-only) |
 | **Mode simulation** | Toute écriture AD = prévisualisation modifiable avant validation |
 
 ### Sécurité & Exploitation
@@ -56,11 +56,12 @@ Photos d'identité, profils itinérants, quotas FSRM, scripts logon/logoff, heur
 dossiers personnels (Home Directory), espaces partagés par classe/groupe, Microsoft 365 / Entra ID,
 Exchange, RDS, imports/exports avancés (LDAP, LDIF, vCard, publipostage, GEP), modèles de groupes
 (instanciation 1-clic), **étiquettes avancées : éditeur WYSIWYG, badges/cartes, trombinoscope
-photo A4/A3 et envoi d'une étiquette par mail**.
+photo A4/A3 et envoi d'une étiquette par mail**, **multisite : plusieurs domaines/forêts AD
+gérés depuis une seule instance (profils chiffrés, sélecteur de site, journal par domaine)**.
 
 ### Prochainement (v3+)
 
-Multisite / multi-domaine, délégation d'administration (RBAC), portail auto-service élève/parent,
+Délégation d'administration (RBAC), portail auto-service élève/parent,
 API REST + webhooks, IA / Assistant, conformité RGPD, sauvegarde & restauration.
 
 ---

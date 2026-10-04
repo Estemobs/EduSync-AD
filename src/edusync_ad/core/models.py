@@ -113,3 +113,4 @@ class ActionLogEntry:
     simulation: bool
     detail: str = ""
     utilisateur: str = ""
+    domaine: str = ""

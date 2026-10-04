@@ -47,6 +47,9 @@ class AuditLog:
         # (voir MainWindow), inclus automatiquement dans chaque entrée sans
         # devoir modifier tous les appels à record().
         self.current_user: str = ""
+        # Domaine AD de la session courante (M25 multisite) — permet un
+        # journal d'audit séparé par domaine dans une même base SQLite.
+        self.current_domain: str = ""
 
     def _init_schema(self) -> None:
         self._conn.execute(
@@ -68,6 +71,8 @@ class AuditLog:
         existing_cols = {row["name"] for row in self._conn.execute("PRAGMA table_info(actions)")}
         if "utilisateur" not in existing_cols:
             self._conn.execute("ALTER TABLE actions ADD COLUMN utilisateur TEXT")
+        if "domaine" not in existing_cols:
+            self._conn.execute("ALTER TABLE actions ADD COLUMN domaine TEXT")
         self._conn.execute(
             """
             CREATE TABLE IF NOT EXISTS pending_deletions (
@@ -90,8 +95,8 @@ class AuditLog:
             """
             INSERT INTO actions
                 (timestamp, action_type, compte, ou_source, ou_destination,
-                 resultat, session_id, simulation, detail, utilisateur)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 resultat, session_id, simulation, detail, utilisateur, domaine)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 entry.timestamp,
@@ -104,6 +109,7 @@ class AuditLog:
                 int(entry.simulation),
                 entry.detail,
                 entry.utilisateur,
+                entry.domaine or self.current_domain,
             ),
         )
         self._conn.commit()
@@ -131,6 +137,7 @@ class AuditLog:
             simulation=simulation,
             detail=detail,
             utilisateur=self.current_user,
+            domaine=self.current_domain,
         )
         self.log(entry)
         return entry
@@ -142,6 +149,7 @@ class AuditLog:
         date_to: str | None = None,
         action_type: str | None = None,
         resultat: str | None = None,
+        domaine: str | None = None,
     ) -> list[ActionLogEntry]:
         clauses: list[str] = []
         params: list[str] = []
@@ -157,6 +165,9 @@ class AuditLog:
         if resultat:
             clauses.append("resultat = ?")
             params.append(resultat)
+        if domaine:
+            clauses.append("domaine = ?")
+            params.append(domaine)
 
         sql = "SELECT * FROM actions"
         if clauses:
@@ -165,6 +176,14 @@ class AuditLog:
 
         rows = self._conn.execute(sql, params).fetchall()
         return [self._row_to_entry(row) for row in rows]
+
+    def domains(self) -> list[str]:
+        """Domaines AD déjà présents dans le journal (M25 — filtre multisite)."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT domaine FROM actions "
+            "WHERE domaine IS NOT NULL AND domaine != '' ORDER BY domaine"
+        ).fetchall()
+        return [row["domaine"] for row in rows]
 
     @staticmethod
     def _row_to_entry(row: sqlite3.Row) -> ActionLogEntry:
@@ -179,6 +198,7 @@ class AuditLog:
             simulation=bool(row["simulation"]),
             detail=row["detail"] or "",
             utilisateur=row["utilisateur"] or "",
+            domaine=row["domaine"] or "",
         )
 
     def export_csv(self, path: Path) -> None:
@@ -197,6 +217,7 @@ class AuditLog:
                     "simulation",
                     "detail",
                     "utilisateur",
+                    "domaine",
                 ]
             )
             for entry in entries:
@@ -212,6 +233,7 @@ class AuditLog:
                         "oui" if entry.simulation else "non",
                         entry.detail,
                         entry.utilisateur,
+                        entry.domaine,
                     ]
                 )
 

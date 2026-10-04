@@ -10,10 +10,12 @@ from PyQt6.QtCore import QThread, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -24,9 +26,11 @@ from edusync_ad.core.ad.async_connection import AsyncADConnection
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.audit import AuditLog, new_session_id
 from edusync_ad.core.config import AppConfig, save_config
+from edusync_ad.core.multisite import ensure_sites, find_profile, profile_for_domain
 from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
 from edusync_ad.ui.audit_page import AuditPage
+from edusync_ad.ui.domain_dialog import DomainsDialog
 from edusync_ad.ui.log_manager import AppLogManager
 from edusync_ad.ui.log_view_widget import LogViewWidget
 from edusync_ad.ui.modules.ad_explorer_page import ADExplorerPage
@@ -71,7 +75,22 @@ class _StartupUpdateCheckWorker(QThread):
         self.found.emit(check_for_update())
 
 
+# Référence conservée aux threads de vérification de mise à jour qui survivent
+# à leur fenêtre : sans elle, le changement de domaine (M25) recrée la fenêtre
+# pendant que le thread tourne → « QThread: Destroyed while thread is running ».
+_detached_workers: set[_StartupUpdateCheckWorker] = set()
+
+
+def _keep_worker_alive(worker: _StartupUpdateCheckWorker) -> None:
+    _detached_workers.add(worker)
+    worker.finished.connect(lambda w=worker: _detached_workers.discard(w))
+
+
 class MainWindow(QMainWindow):
+    #: Demande de changement de site (M25) — émet l'identifiant du profil de
+    #: domaine choisi ; `app.py` referme la fenêtre et rouvre la connexion.
+    site_switched = pyqtSignal(str)
+
     def __init__(
         self,
         ad_connection: ADConnection,
@@ -120,6 +139,23 @@ class MainWindow(QMainWindow):
         self._refresh_connection_label()
         # L'indicateur peut être mis à jour depuis l'extérieur via set_connection_state()
         layout.addWidget(self.connection_label)
+
+        # Sélecteur de domaine (M25 multisite) — un seul domaine connecté à la fois.
+        self.domain_combo = QComboBox()
+        self.domain_combo.setMinimumWidth(210)
+        self.domain_combo.setToolTip(
+            "Domaine AD actif.\nChoisir un autre site referme la session en cours\n"
+            "et rouvre l'écran de connexion avec le profil de ce site."
+        )
+        self.domain_combo.currentIndexChanged.connect(self._on_domain_selected)
+        layout.addWidget(self.domain_combo)
+        self._populate_domain_combo()
+
+        manage_domains_btn = QPushButton("Domaines…")
+        manage_domains_btn.setToolTip("Ajouter, modifier ou supprimer les domaines gérés")
+        manage_domains_btn.clicked.connect(self._on_manage_domains)
+        layout.addWidget(manage_domains_btn)
+
         layout.addStretch()
 
         report_btn = QPushButton("🐞 Signaler un problème")
@@ -135,6 +171,84 @@ class MainWindow(QMainWindow):
         layout.addWidget(version_label)
 
         self.setMenuWidget(top_bar)
+
+    # -- Multisite (M25) -----------------------------------------------------
+
+    def _populate_domain_combo(self) -> None:
+        """Remplit le sélecteur de domaine et repère le profil de la session en cours."""
+        profiles = ensure_sites()
+        self._site_profiles = profiles
+        active = profile_for_domain(profiles, self.ad_connection.domain)
+        self._active_site_id = active.id if active is not None else ""
+
+        self.domain_combo.blockSignals(True)
+        try:
+            self.domain_combo.clear()
+            if active is None:
+                current = self.ad_connection.domain or ""
+                suffix = f"{current} (site non enregistré)" if current else "(site non enregistré)"
+                self.domain_combo.addItem(suffix, "")
+            for profile in profiles:
+                self.domain_combo.addItem(profile.display_name, profile.id)
+            self.domain_combo.setCurrentIndex(self._row_for_active_site())
+            self.domain_combo.setEnabled(bool(profiles))
+        finally:
+            self.domain_combo.blockSignals(False)
+
+    def _row_for_active_site(self) -> int:
+        for row in range(self.domain_combo.count()):
+            if self.domain_combo.itemData(row) == self._active_site_id:
+                return row
+        return 0
+
+    def _revert_domain_combo(self) -> None:
+        self.domain_combo.blockSignals(True)
+        try:
+            self.domain_combo.setCurrentIndex(self._row_for_active_site())
+        finally:
+            self.domain_combo.blockSignals(False)
+
+    def _on_domain_selected(self, index: int) -> None:
+        site_id = self.domain_combo.itemData(index)
+        site_id = site_id if isinstance(site_id, str) else ""
+        if not site_id or site_id == self._active_site_id:
+            return
+        profile = find_profile(self._site_profiles, site_id)
+        if profile is None:
+            self._revert_domain_combo()
+            return
+        answer = QMessageBox.question(
+            self,
+            "Changer de domaine",
+            f"Passer au site « {profile.display_name} » ?\n\n"
+            "Un seul domaine est connecté à la fois : la session en cours sera fermée "
+            "et l'écran de connexion rouvert avec les identifiants de ce site.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            self._revert_domain_combo()
+            return
+        self._active_site_id = site_id
+        self.site_switched.emit(site_id)
+
+    def _on_manage_domains(self) -> None:
+        dialog = DomainsDialog(
+            self,
+            profiles=list(self._site_profiles),
+            current_domain=self.ad_connection.domain or "",
+        )
+        dialog.exec()
+        # Les ajouts/suppressions sont persistés par le dialogue : on rebâtit
+        # le sélecteur même s'il a été fermé sans « Enregistrer ».
+        self._populate_domain_combo()
+
+    def closeEvent(self, event) -> None:
+        worker = self._update_check_worker
+        if worker is not None and worker.isRunning():
+            _keep_worker_alive(worker)
+        self._update_check_worker = None
+        super().closeEvent(event)
 
     def set_connection_state(self, state: str, domain: str = "", protocol: str = "") -> None:
         """Met à jour l'indicateur tricolore. state : 'connected' | 'connecting' | 'disconnected'."""

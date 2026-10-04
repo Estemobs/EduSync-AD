@@ -29,6 +29,7 @@ COLUMNS = [
     "Action",
     "Compte",
     "Effectué par",
+    "Domaine",
     "OU source",
     "OU destination",
     "Résultat",
@@ -55,6 +56,7 @@ ACTION_TYPES = [
     "suppression_ou",
     "creation_groupe",
     "creation_utilisateur_manuel",
+    "changement_domaine",
 ]
 
 ACTION_LABELS = {
@@ -76,6 +78,7 @@ ACTION_LABELS = {
     "suppression_ou": "Suppression d'OU",
     "creation_groupe": "Création de groupe",
     "creation_utilisateur_manuel": "Création manuelle d'utilisateur",
+    "changement_domaine": "Changement de domaine (site)",
 }
 
 
@@ -112,8 +115,10 @@ class AuditPage(QWidget):
         self.resultat_combo.addItem("(tous)", "")
         self.resultat_combo.addItem("Succès", "succes")
         self.resultat_combo.addItem("Échec", "echec")
+        self.domain_combo = QComboBox()
         type_form.addRow("Type d'action :", self.action_combo)
         type_form.addRow("Résultat :", self.resultat_combo)
+        type_form.addRow("Domaine :", self.domain_combo)
         filter_layout.addLayout(type_form)
 
         btn_col = QVBoxLayout()
@@ -156,19 +161,38 @@ class AuditPage(QWidget):
         self.date_to.setDate(QDate.currentDate())
         self.action_combo.setCurrentIndex(0)
         self.resultat_combo.setCurrentIndex(0)
+        self.domain_combo.setCurrentIndex(0)
         self.refresh()
 
+    def _refresh_domain_filter(self) -> None:
+        """Reconstruit la liste des domaines présents dans le journal (M25),
+        en conservant la sélection courante si elle existe toujours."""
+        selected = self.domain_combo.currentData() or ""
+        self.domain_combo.blockSignals(True)
+        try:
+            self.domain_combo.clear()
+            self.domain_combo.addItem("(tous)", "")
+            for domain in self.audit_log.domains():
+                self.domain_combo.addItem(domain, domain)
+            index = self.domain_combo.findData(selected)
+            self.domain_combo.setCurrentIndex(index if index >= 0 else 0)
+        finally:
+            self.domain_combo.blockSignals(False)
+
     def refresh(self) -> None:
+        self._refresh_domain_filter()
         date_from = self.date_from.date().toString("yyyy-MM-dd") + "T00:00:00+00:00"
         date_to = self.date_to.date().toString("yyyy-MM-dd") + "T23:59:59+00:00"
         action_type = self.action_combo.currentData() or None
         resultat = self.resultat_combo.currentData() or None
+        domaine = self.domain_combo.currentData() or None
 
         entries = self.audit_log.query(
             date_from=date_from,
             date_to=date_to,
             action_type=action_type,
             resultat=resultat,
+            domaine=domaine,
         )
 
         self.table.setRowCount(len(entries))
@@ -178,6 +202,7 @@ class AuditPage(QWidget):
                 ACTION_LABELS.get(entry.action_type, entry.action_type),
                 entry.compte,
                 entry.utilisateur or "—",
+                entry.domaine or "—",
                 entry.ou_source or "",
                 entry.ou_destination or "",
                 "Succès" if entry.resultat == "succes" else "Échec",
