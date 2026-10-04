@@ -23,10 +23,35 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
-          pip install pyinstaller pillow
+          pip install pyinstaller pillow cairosvg
 
-      - name: Générer l'icône
-        run: python tools/generate_icon.py
+      - name: Générer les icônes (ICO/PNG depuis SVG)
+        run: |
+          python -c "
+          from PIL import Image
+          import io
+          svg = open('assets/icon.svg', 'rb').read()
+          # Convert SVG to PNG using Pillow (requires cairosvg or similar)
+          # For Windows CI, we'll use a simple approach
+          try:
+              import cairosvg
+              png_data = cairosvg.svg2png(bytestring=svg, output_width=256, output_height=256)
+              img = Image.open(io.BytesIO(png_data))
+              img.save('assets/icon.png', 'PNG')
+              # Create ICO with multiple sizes
+              ico_sizes = [(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)]
+              ico_images = [img.resize(size, Image.Resampling.LANCZOS) for size in ico_sizes]
+              ico_images[0].save('assets/icon.ico', format='ICO', sizes=ico_sizes)
+              print('✅ Icons generated: icon.ico, icon.png')
+          except ImportError:
+              # Fallback: create basic PNG/ICO without cairosvg
+              img = Image.new('RGBA', (256, 256), (0, 120, 212, 255))
+              img.save('assets/icon.png', 'PNG')
+              ico_sizes = [(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)]
+              ico_images = [img.resize(size, Image.Resampling.LANCZOS) for size in ico_sizes]
+              ico_images[0].save('assets/icon.ico', format='ICO', sizes=ico_sizes)
+              print('⚠️ cairosvg not available, created placeholder icons')
+          "
 
       - name: Build EXE
         run: pyinstaller packaging/edusync_ad.spec
@@ -104,17 +129,12 @@ jobs:
         with:
           name: linux-build
 
-      - name: Extraire le changelog depuis RELEASE_NOTES.md
-        # Un fichier suivi normalement dans le dépôt, pas le message du tag
-        # annoté : celui-ci se perd de façon répétée dans la synchronisation
-        # Gitea -> GitHub (le tag arrive en lightweight côté GitHub, sans
-        # son message), alors qu'un fichier de commit normal, lui, arrive
-        # toujours intact.
+      - name: Extraire le changelog
         run: |
           {
             echo "## EduSync AD ${{ github.ref_name }}"
             echo ""
-            cat RELEASE_NOTES.md
+            cat RELEASE_NOTES_1.16.1.md
             echo ""
             echo "---"
             echo ""
