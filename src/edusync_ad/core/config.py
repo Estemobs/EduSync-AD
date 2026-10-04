@@ -70,6 +70,9 @@ class AppConfig:
     theme: str = "clair"  # "clair" | "sombre"
     langue: str = "fr"    # "fr" | "en"
 
+    # Guide de démarrage
+    startup_guide_completed: bool = False
+
     # Sécurité de la connexion LDAPS — voir core/ad/connection.py.
     # Un AD interne utilise presque toujours un certificat émis par sa propre
     # autorité (AD CS), absente du magasin de confiance du poste : indiquer

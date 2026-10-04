@@ -20,7 +20,11 @@ from platformdirs import user_cache_dir
 logger = logging.getLogger("edusync_ad.updater")
 
 RELEASES_API_URL = "https://api.github.com/repos/estemobs/EduSync-AD/releases/latest"
-CURRENT_VERSION = "1.14.0"
+# Version lue depuis pyproject.toml au build, ou fallback
+try:
+    from edusync_ad import __version__ as CURRENT_VERSION
+except ImportError:
+    CURRENT_VERSION = "1.16.5"  # fallback si pas installé
 APP_NAME = "EduSyncAD"
 APP_AUTHOR = "EduSyncAD"
 FLATPAK_APP_ID = "org.edusync.AD"

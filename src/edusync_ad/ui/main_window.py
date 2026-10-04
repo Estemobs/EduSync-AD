@@ -6,7 +6,7 @@ import platform
 import webbrowser
 from urllib.parse import quote
 
-from PyQt6.QtCore import QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QThread, QTimer, pyqtSignal, Qt, QEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -20,15 +20,18 @@ from PyQt6.QtWidgets import (
     QStackedWidget,
     QVBoxLayout,
     QWidget,
+    QShortcut,
 )
+from PyQt6.QtGui import QKeySequence
 
+from edusync_ad import __version__ as CURRENT_VERSION
 from edusync_ad.core.ad.async_connection import AsyncADConnection
 from edusync_ad.core.ad.connection import ADConnection
 from edusync_ad.core.audit import AuditLog, new_session_id
-from edusync_ad.core.config import AppConfig, save_config
+from edusync_ad.core.config import AppConfig, load_config, save_config
 from edusync_ad.core.multisite import ensure_sites, find_profile, profile_for_domain
 from edusync_ad.core.password_vault import PasswordVault
-from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
+from edusync_ad.core.updater import check_for_update
 from edusync_ad.ui.audit_page import AuditPage
 from edusync_ad.ui.domain_dialog import DomainsDialog
 from edusync_ad.ui.log_manager import AppLogManager
@@ -54,6 +57,7 @@ from edusync_ad.ui.modules.label_studio_page import LabelStudioPage
 from edusync_ad.ui.api_page import APIPage
 from edusync_ad.ui.portal_page import PortalPage
 from edusync_ad.ui.settings_page import SettingsPage
+from edusync_ad.ui.startup_guide import run_startup_guide_if_needed
 from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
 
@@ -111,8 +115,13 @@ class MainWindow(QMainWindow):
         self.password_vault = PasswordVault()
         self.session_id = new_session_id()
 
+        # État plein écran
+        self._is_fullscreen = False
+        self._normal_geometry = None
+
         self.setWindowTitle(f"EduSync AD — v{CURRENT_VERSION}{_platform_suffix()}")
-        self.resize(1100, 720)
+        self._setup_window_size()
+        self._setup_shortcuts()
 
         self._build_top_bar()
         self._build_body()
@@ -120,6 +129,64 @@ class MainWindow(QMainWindow):
 
         self._update_check_worker: _StartupUpdateCheckWorker | None = None
         QTimer.singleShot(1500, self._check_update_on_startup)
+
+        # Lancer le guide de démarrage si premier lancement (après affichage)
+        QTimer.singleShot(500, self._maybe_show_startup_guide)
+
+    def _setup_window_size(self) -> None:
+        """Adapte la taille de la fenêtre à l'écran disponible."""
+        screen = QApplication.primaryScreen()
+        if screen is None:
+            self.resize(1100, 720)
+            return
+
+        available = screen.availableGeometry()
+        # 85% de l'écran dispo, avec minimum 1000x650 et maximum 1600x1000
+        w = max(1000, min(1600, int(available.width() * 0.85)))
+        h = max(650, min(1000, int(available.height() * 0.85)))
+        self.resize(w, h)
+
+        # Centrer sur l'écran
+        self.move(
+            available.x() + (available.width() - w) // 2,
+            available.y() + (available.height() - h) // 2,
+        )
+
+    def _setup_shortcuts(self) -> None:
+        """Raccourcis clavier globaux."""
+        # F11 = plein écran
+        fs_shortcut = QShortcut(QKeySequence(Qt.Key.Key_F11), self)
+        fs_shortcut.activated.connect(self._toggle_fullscreen)
+
+        # Ctrl+1..9 = modules directs
+        for i in range(9):
+            sc = QShortcut(QKeySequence(f"Ctrl+{i+1}"), self)
+            idx = i
+            sc.activated.connect(lambda checked=False, index=idx: self.pages.setCurrentIndex(index))
+
+    def _maybe_show_startup_guide(self) -> None:
+        """Affiche le guide si premier lancement."""
+        run_startup_guide_if_needed(self)
+
+    def _toggle_fullscreen(self) -> None:
+        """Bascule mode plein écran / fenêtre normale."""
+        if self._is_fullscreen:
+            self._exit_fullscreen()
+        else:
+            self._enter_fullscreen()
+
+    def _enter_fullscreen(self) -> None:
+        """Passe en plein écran."""
+        self._normal_geometry = self.saveGeometry()
+        self.setWindowState(self.windowState() | Qt.WindowState.WindowFullScreen)
+        self._is_fullscreen = True
+
+    def _exit_fullscreen(self) -> None:
+        """Revient en mode fenêtre."""
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowFullScreen)
+        if self._normal_geometry:
+            self.restoreGeometry(self._normal_geometry)
+        self._is_fullscreen = False
 
     def _check_update_on_startup(self) -> None:
         self._update_check_worker = _StartupUpdateCheckWorker()
@@ -135,6 +202,9 @@ class MainWindow(QMainWindow):
     def _build_top_bar(self) -> None:
         top_bar = QWidget()
         top_bar.setObjectName("TopBar")
+        top_bar.setMouseTracking(True)
+        # Installer un filtre d'événement pour détecter double-clic sur la barre
+        top_bar.installEventFilter(self)
         layout = QHBoxLayout(top_bar)
 
         self.connection_label = QLabel()
@@ -142,11 +212,8 @@ class MainWindow(QMainWindow):
         self._connection_domain = self.ad_connection.domain or ""
         self._connection_protocol = "LDAPS" if self.ad_connection.used_ldaps else "LDAP (non chiffré)"
         self._refresh_connection_label()
-        # L'indicateur peut être mis à jour depuis l'extérieur via set_connection_state()
         layout.addWidget(self.connection_label)
 
-        # Rôle de l'opérateur courant (M26 RBAC) — visible en permanence pour
-        # savoir ce que la délégation autorise sur ce poste.
         if self._rbac is not None:
             self.role_label = QLabel(f"Rôle : {self._rbac.label}")
             self.role_label.setToolTip(self._rbac.describe())
@@ -155,7 +222,6 @@ class MainWindow(QMainWindow):
             )
             layout.addWidget(self.role_label)
 
-        # Sélecteur de domaine (M25 multisite) — un seul domaine connecté à la fois.
         self.domain_combo = QComboBox()
         self.domain_combo.setMinimumWidth(210)
         self.domain_combo.setToolTip(
@@ -186,6 +252,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(version_label)
 
         self.setMenuWidget(top_bar)
+
+    def eventFilter(self, obj: QWidget, event: QEvent) -> bool:
+        """Filtre d'événement pour double-clic sur la barre de titre = plein écran."""
+        if obj is self.menuWidget() and event.type() == QEvent.Type.MouseButtonDblClick:
+            self._toggle_fullscreen()
+            return True
+        return super().eventFilter(obj, event)
 
     # -- Multisite (M25) -----------------------------------------------------
 

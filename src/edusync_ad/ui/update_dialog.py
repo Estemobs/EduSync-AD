@@ -16,7 +16,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from edusync_ad.core.updater import check_for_update, download_and_install, CURRENT_VERSION
+from edusync_ad import __version__ as CURRENT_VERSION
+from edusync_ad.core.updater import check_for_update, download_and_install
 
 
 class _CheckWorker(QThread):
