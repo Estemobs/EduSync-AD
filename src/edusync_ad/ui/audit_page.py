@@ -116,9 +116,11 @@ class AuditPage(QWidget):
         self.resultat_combo.addItem("Succès", "succes")
         self.resultat_combo.addItem("Échec", "echec")
         self.domain_combo = QComboBox()
+        self.operator_combo = QComboBox()
         type_form.addRow("Type d'action :", self.action_combo)
         type_form.addRow("Résultat :", self.resultat_combo)
         type_form.addRow("Domaine :", self.domain_combo)
+        type_form.addRow("Opérateur :", self.operator_combo)
         filter_layout.addLayout(type_form)
 
         btn_col = QVBoxLayout()
@@ -162,30 +164,41 @@ class AuditPage(QWidget):
         self.action_combo.setCurrentIndex(0)
         self.resultat_combo.setCurrentIndex(0)
         self.domain_combo.setCurrentIndex(0)
+        self.operator_combo.setCurrentIndex(0)
         self.refresh()
 
-    def _refresh_domain_filter(self) -> None:
-        """Reconstruit la liste des domaines présents dans le journal (M25),
-        en conservant la sélection courante si elle existe toujours."""
-        selected = self.domain_combo.currentData() or ""
-        self.domain_combo.blockSignals(True)
+    @staticmethod
+    def _refill_filter(combo: QComboBox, values: list[str], all_label: str) -> None:
+        """Reconstruit une liste de filtre en conservant la sélection courante."""
+        selected = combo.currentData() or ""
+        combo.blockSignals(True)
         try:
-            self.domain_combo.clear()
-            self.domain_combo.addItem("(tous)", "")
-            for domain in self.audit_log.domains():
-                self.domain_combo.addItem(domain, domain)
-            index = self.domain_combo.findData(selected)
-            self.domain_combo.setCurrentIndex(index if index >= 0 else 0)
+            combo.clear()
+            combo.addItem(all_label, "")
+            for value in values:
+                combo.addItem(value, value)
+            index = combo.findData(selected)
+            combo.setCurrentIndex(index if index >= 0 else 0)
         finally:
-            self.domain_combo.blockSignals(False)
+            combo.blockSignals(False)
+
+    def _refresh_domain_filter(self) -> None:
+        """Domaines présents dans le journal (M25), sélection conservée."""
+        self._refill_filter(self.domain_combo, self.audit_log.domains(), "(tous)")
+
+    def _refresh_operator_filter(self) -> None:
+        """Opérateurs présents dans le journal (M26), sélection conservée."""
+        self._refill_filter(self.operator_combo, self.audit_log.operators(), "(tous)")
 
     def refresh(self) -> None:
         self._refresh_domain_filter()
+        self._refresh_operator_filter()
         date_from = self.date_from.date().toString("yyyy-MM-dd") + "T00:00:00+00:00"
         date_to = self.date_to.date().toString("yyyy-MM-dd") + "T23:59:59+00:00"
         action_type = self.action_combo.currentData() or None
         resultat = self.resultat_combo.currentData() or None
         domaine = self.domain_combo.currentData() or None
+        utilisateur = self.operator_combo.currentData() or None
 
         entries = self.audit_log.query(
             date_from=date_from,
@@ -193,6 +206,7 @@ class AuditPage(QWidget):
             action_type=action_type,
             resultat=resultat,
             domaine=domaine,
+            utilisateur=utilisateur,
         )
 
         self.table.setRowCount(len(entries))

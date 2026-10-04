@@ -20,7 +20,7 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 | **v2.0** | M12 → M18 (photos, profils, quotas, scripts, heures, dossiers perso, espaces de classe) | ✅ Livré |
 | **v2.5** | M19 → M22 (Microsoft 365, Exchange, RDS, imports/exports avancés) | ✅ Livré |
 | **v3.0** | M23 modèles de groupes ✅ — M24 étiquettes & trombinoscopes ✅ — M25 multisite ✅ | ✅ Livré |
-| **v3.5** | M26 délégation RBAC, M27 portail auto-service | ⬜ À faire |
+| **v3.5** | M26 délégation RBAC ✅ — M27 portail auto-service | ⬜ À faire |
 | **v4.0** | M28 → M32 (API REST, IA, conformité, DFS/IIS, sauvegarde) | ⬜ À faire |
 
 ---
@@ -35,8 +35,8 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 | **M4 — Réinitialisation MDP** | ✅ Fait | Par OU, groupe AD, ou CSV ; politique MDP configurable ; export CSV |
 | **M5 — Explorateur AD** | ✅ Fait | Arborescence OUs + groupes, panneau central unifié, clic droit complet (modif, move, MDP, groupes, suppr), recherche temps réel |
 | **M6 — Export (CSV / Étiquettes PDF)** | ✅ Fait | Sélection OU ± sous-OUs, champs cochables (incl. MDP mémorisés), PDF Avery L7160/L7163, couleurs, QR codes |
-| **M7 — Journal d'actions** | ✅ Fait | Filtres date/type/résultat/domaine (M25), export CSV, SQLite local |
-| **M8 — Paramètres globaux** | ✅ Fait | 3 onglets : Comptes (identifiants, mail, groupes, départs), Mots de passe (politiques élèves/personnels, coffre), Apparence (thème, langue) |
+| **M7 — Journal d'actions** | ✅ Fait | Filtres date/type/résultat/domaine (M25)/opérateur (M26), export CSV, SQLite local |
+| **M8 — Paramètres globaux** | ✅ Fait | 4 onglets : Comptes (identifiants, mail, groupes, départs), Mots de passe (politiques élèves/personnels, coffre), Apparence (thème, langue), Délégation (M26, Super-admin) |
 | **M9 — Connexion LDAPS/LDAP** | ✅ Fait | LDAPS prioritaire, repli LDAP, validation certif configurable, CA custom, mémorisation chiffrée AES-256 |
 | **M10 — Mise à jour intégrée** | ✅ Fait | Vérification, téléchargement, installation, redémarrage auto, somme de contrôle |
 | **M11 — Mode simulation** | ✅ Fait | Test import sans écriture AD |
@@ -145,10 +145,13 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 - Connexion un seul domaine à la fois
 - Journal d'audit séparé par domaine
 
-### M26 — Délégation d'administration (RBAC)
+### M26 — Délégation d'administration (RBAC) ✅
 - Rôles : Super-admin, Admin site, Admin classe, Helpdesk, Lecture seule
 - Délégation par OU/groupe : qui peut créer/migrer/supprimer/réinitialiser où
 - Journal d'audit par opérateur (enrichir M7)
+- Fichier `delegations.json` (clair) : opérateur, rôle, site (M25), portées OU/groupes, actif
+- Double barrière : garde-fou sur chaque écriture AD (`ADConnection`) + navigation filtrée
+- Onglet « Délégation » dans les Paramètres, réservé au Super-admin
 
 ### M27 — Auto-service élève/parent (Portail Web) — *Optionnel, backend léger requis*
 - Réinitialisation MDP self-service (code SMS/mail, questions secrètes, Microsoft Authenticator)

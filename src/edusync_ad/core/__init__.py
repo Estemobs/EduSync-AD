@@ -83,6 +83,27 @@ from edusync_ad.core.multisite import (
     sites_path,
     unique_site_id,
 )
+from edusync_ad.core.rbac import (
+    PERMISSIONS,
+    READ_PERMISSIONS,
+    ROLE_LABELS,
+    ROLE_ORDER,
+    ROLE_PERMISSIONS,
+    SCOPED_ROLES,
+    OperatorGrant,
+    RBACPolicy,
+    Role,
+    build_policy,
+    delegations_path,
+    dn_in_scopes,
+    find_grant,
+    load_grants,
+    matching_grants,
+    normalize_dn,
+    role_label,
+    save_grants,
+    unique_grant_id,
+)
 from edusync_ad.core.updater import CURRENT_VERSION, check_for_update
 from edusync_ad.core.export import build_export_row, export_users_csv, generate_labels_pdf
 from edusync_ad.core.photos import (
@@ -567,4 +588,24 @@ __all__ = [
     "save_sites",
     "sites_path",
     "unique_site_id",
+    # M26 — Délégation d'administration (RBAC)
+    "OperatorGrant",
+    "PERMISSIONS",
+    "RBACPolicy",
+    "READ_PERMISSIONS",
+    "ROLE_LABELS",
+    "ROLE_ORDER",
+    "ROLE_PERMISSIONS",
+    "SCOPED_ROLES",
+    "Role",
+    "build_policy",
+    "delegations_path",
+    "dn_in_scopes",
+    "find_grant",
+    "load_grants",
+    "matching_grants",
+    "normalize_dn",
+    "role_label",
+    "save_grants",
+    "unique_grant_id",
 ]

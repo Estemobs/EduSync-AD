@@ -10,12 +10,13 @@ l'appel à `connect()`.
 from __future__ import annotations
 
 import functools
+import inspect
 import logging
 import ssl
 import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Sequence
+from typing import TYPE_CHECKING, Callable, Sequence
 
 from ldap3 import ALL, LEVEL, MODIFY_ADD, MODIFY_DELETE, MODIFY_REPLACE, SIMPLE, SUBTREE, BASE, Connection, Server, Tls
 from ldap3.core.exceptions import LDAPException
@@ -31,6 +32,9 @@ from edusync_ad.core.ad.exceptions import (
 )
 
 logger = logging.getLogger("edusync_ad.ad")
+
+if TYPE_CHECKING:
+    from edusync_ad.core.rbac import RBACPolicy
 
 ConnectionFactory = Callable[[str, str, str, bool], Connection]
 
@@ -59,25 +63,83 @@ def _locked(func):
     return wrapper
 
 
-def _logged_write(action_desc: str):
-    """Journalise chaque opération d'écriture AD (visible dans le menu Journal),
+def _primary_target(args, kwargs):
+    """Premier DN passé à la méthode (pour les messages de journal)."""
+    if args:
+        return args[0]
+    for key in ("dn", "user_dn"):
+        if key in kwargs:
+            return kwargs[key]
+    return "?"
+
+
+def _enforce_rbac(policy, func, action_desc, permission, targets, args, kwargs) -> None:
+    """Contrôle RBAC (M26) avant toute écriture AD.
+
+    Les DN concernés sont résolus via la signature réelle de la méthode : la
+    politique vérifie à la fois la **permission** et, pour un rôle scopé
+    (admin classe, helpdesk), que **chaque cible** appartient aux OU/groupes
+    délégués. Une action sans permission déclarée est refusée : on échoue du
+    côté sûr plutôt que d'ouvrir un trou dans la délégation.
+    """
+    if not permission:
+        raise ADInsufficientRightsError(
+            f"Action refusée « {action_desc} » : aucune permission RBAC n'est "
+            "déclarée pour cette action (verrouillage de sécurité)."
+        )
+    dns: list[str] = []
+    try:
+        bound = inspect.signature(func).bind_partial(*args, **kwargs)
+    except TypeError:
+        bound = None
+    if bound is not None:
+        for name in targets:
+            value = bound.arguments.get(name)
+            if isinstance(value, str):
+                dns.append(value)
+    policy.check(permission, *dns)
+
+
+def _logged_write(
+    action_desc: str,
+    *,
+    permission: str | None = None,
+    targets: tuple[str, ...] = ("dn",),
+):
+    """Journalise chaque opération d'écriture AD (visible dans le journal),
     pour comprendre en direct ce qui se passe pendant une action par lot.
     Sérialise aussi l'accès à la connexion (voir _locked) — le verrou est
     réentrant (RLock) car create_user rappelle set_password/enable_account,
-    elles-mêmes décorées ici."""
+    elles-mêmes décorées ici.
+
+    RBAC (M26) : ``permission`` est l'autorisation exigée (vocabulaire
+    ``core.rbac.PERMISSIONS``) et ``targets`` les paramètres dont le DN doit
+    relever des portées de l'opérateur. Sans politique active (``rbac is None``)
+    aucun contrôle n'est appliqué — tests et hors-UI inclus.
+    """
 
     def decorator(func):
         @functools.wraps(func)
-        def wrapper(self, dn, *args, **kwargs):
-            logger.debug("%s : %s", action_desc, dn)
+        def wrapper(self, *args, **kwargs):
+            policy = getattr(self, "rbac", None)
+            if policy is not None:
+                # ``args`` ne contient pas ``self`` : on le réintègre pour que
+                # la signature réelle soit bindée correctement (sinon chaque
+                # paramètre serait décalé d'un cran et la cible vérifiée serait
+                # le mot de passe ou le nom, pas le DN).
+                _enforce_rbac(
+                    policy, func, action_desc, permission, targets, (self, *args), kwargs
+                )
+            target = _primary_target(args, kwargs)
+            logger.debug("%s : %s", action_desc, target)
             with self._lock:
                 try:
-                    result = func(self, dn, *args, **kwargs)
+                    result = func(self, *args, **kwargs)
                 except Exception as exc:
-                    logger.warning("Échec — %s (%s) : %s", action_desc, dn, exc)
+                    logger.warning("Échec — %s (%s) : %s", action_desc, target, exc)
                     raise
                 else:
-                    logger.debug("OK — %s : %s", action_desc, dn)
+                    logger.debug("OK — %s : %s", action_desc, target)
                     return result
 
         return wrapper
@@ -248,6 +310,9 @@ class ADConnection:
         # Réentrant : create_user (déjà verrouillé) rappelle set_password et
         # enable_account, elles-mêmes verrouillées.
         self._lock = threading.RLock()
+        # Politique RBAC (M26) : None = aucun contrôle (tests, hors UI).
+        # Renseignée par app.py juste après la connexion — voir core/rbac.py.
+        self.rbac: RBACPolicy | None = None
 
     @staticmethod
     def format_bind_user(domain: str, username: str) -> str:
@@ -383,7 +448,7 @@ class ADConnection:
 
     # -- Écriture --------------------------------------------------------------
 
-    @_logged_write("Création du compte")
+    @_logged_write("Création du compte", permission="create_user")
     def create_user(
         self,
         dn: str,
@@ -416,7 +481,7 @@ class ADConnection:
                     )
                 raise
 
-    @_logged_write("Définition du mot de passe")
+    @_logged_write("Définition du mot de passe", permission="reset_password")
     def set_password(self, dn: str, password: str) -> None:
         """Définit le mot de passe AD via l'opération étendue Microsoft dédiée
         (nécessite une connexion chiffrée — LDAPS — sur un AD réel)."""
@@ -434,7 +499,7 @@ class ADConnection:
                 )
             _raise_ad_error(conn, "Échec de définition du mot de passe.")
 
-    @_logged_write("Activation du compte")
+    @_logged_write("Activation du compte", permission="disable_account")
     def enable_account(self, dn: str, *, force_password_change: bool = False) -> None:
         conn = self._require_connected()
         changes = {"userAccountControl": [(MODIFY_REPLACE, [UAC_NORMAL_ACCOUNT_ENABLED])]}
@@ -453,7 +518,7 @@ class ADConnection:
                 )
             _raise_ad_error(conn, "Échec d'activation du compte.")
 
-    @_logged_write("Création de l'OU")
+    @_logged_write("Création de l'OU", permission="create_ou")
     def create_ou(self, dn: str, name: str) -> None:
         conn = self._require_connected()
         if not conn.add(dn, ["top", "organizationalUnit"], {"ou": name}):
@@ -527,19 +592,19 @@ class ADConnection:
                 result.append({"dn": dn, "cn": leaf.split("=", 1)[-1], "kind": "autre"})
         return result
 
-    @_logged_write("Suppression de l'OU")
+    @_logged_write("Suppression de l'OU", permission="delete_ou")
     def delete_ou(self, dn: str) -> None:
         conn = self._require_connected()
         if not conn.delete(dn):
             _raise_ad_error(conn, "Échec de suppression de l'OU.")
 
-    @_logged_write("Renommage de l'OU")
+    @_logged_write("Renommage de l'OU", permission="create_ou")
     def rename_ou(self, dn: str, new_name: str) -> None:
         conn = self._require_connected()
         if not conn.modify_dn(dn, f"OU={escape_rdn(new_name)}"):
             _raise_ad_error(conn, "Échec du renommage de l'OU.")
 
-    @_logged_write("Création du groupe")
+    @_logged_write("Création du groupe", permission="create_group")
     def create_group(self, dn: str, sam_account_name: str, group_type: int = -2147483646) -> None:
         """Crée un groupe de sécurité.
 
@@ -551,19 +616,23 @@ class ADConnection:
         if not conn.add(dn, ["top", "group"], attributes):
             _raise_ad_error(conn, "Échec de création du groupe.")
 
-    @_logged_write("Suppression du groupe")
+    @_logged_write("Suppression du groupe", permission="delete_group")
     def delete_group(self, dn: str) -> None:
         conn = self._require_connected()
         if not conn.delete(dn):
             _raise_ad_error(conn, "Échec de suppression du groupe.")
 
-    @_logged_write("Ajout au groupe")
+    @_logged_write(
+        "Ajout au groupe", permission="manage_groups", targets=("group_dn",)
+    )
     def add_user_to_group(self, user_dn: str, group_dn: str) -> None:
         conn = self._require_connected()
         if not conn.modify(group_dn, {"member": [(MODIFY_ADD, [user_dn])]}):
             _raise_ad_error(conn, "Échec d'ajout au groupe.")
 
-    @_logged_write("Retrait du groupe")
+    @_logged_write(
+        "Retrait du groupe", permission="manage_groups", targets=("group_dn",)
+    )
     def remove_user_from_group(self, user_dn: str, group_dn: str) -> None:
         conn = self._require_connected()
         if not conn.modify(group_dn, {"member": [(MODIFY_DELETE, [user_dn])]}):
@@ -597,7 +666,11 @@ class ADConnection:
         entry = conn.entries[0]
         return str(entry.entry_dn), str(entry["cn"].value)
 
-    @_logged_write("Déplacement du compte")
+    @_logged_write(
+        "Déplacement du compte",
+        permission="move_user",
+        targets=("user_dn", "new_ou_dn"),
+    )
     def move_user(self, user_dn: str, new_ou_dn: str) -> None:
         """Déplace un utilisateur vers une autre OU (modify_dn LDAP)."""
         conn = self._require_connected()
@@ -605,14 +678,14 @@ class ADConnection:
         if not conn.modify_dn(user_dn, new_rdn, new_superior=new_ou_dn):
             _raise_ad_error(conn, "Échec du déplacement du compte.")
 
-    @_logged_write("Désactivation du compte")
+    @_logged_write("Désactivation du compte", permission="disable_account")
     def disable_account(self, dn: str) -> None:
         conn = self._require_connected()
         changes = {"userAccountControl": [(MODIFY_REPLACE, [UAC_NORMAL_ACCOUNT_DISABLED])]}
         if not conn.modify(dn, changes):
             _raise_ad_error(conn, "Échec de désactivation du compte.")
 
-    @_logged_write("Suppression du compte")
+    @_logged_write("Suppression du compte", permission="delete_user")
     def delete_user(self, dn: str) -> None:
         conn = self._require_connected()
         if not conn.delete(dn):
@@ -779,7 +852,7 @@ class ADConnection:
         result["dernier_changement_mdp"] = _format_pwd_last_set(e["pwdLastSet"].value)
         return result
 
-    @_logged_write("Mise à jour photo")
+    @_logged_write("Mise à jour photo", permission="modify_user", targets=("user_dn",))
     def set_user_photo(self, user_dn: str, photo_data: bytes, *, is_thumbnail: bool = False) -> None:
         """Définit la photo d'un utilisateur (jpegPhoto ou thumbnailPhoto).
         
@@ -793,7 +866,7 @@ class ADConnection:
         if not conn.modify(user_dn, {attr: [(MODIFY_REPLACE, [photo_data])]}):
             _raise_ad_error(conn, f"Échec de mise à jour de {attr}.")
 
-    @_logged_write("Suppression photo")
+    @_logged_write("Suppression photo", permission="modify_user", targets=("user_dn",))
     def delete_user_photo(self, user_dn: str, *, delete_thumbnail: bool = True) -> None:
         """Supprime la photo d'un utilisateur."""
         conn = self._require_connected()
@@ -803,7 +876,7 @@ class ADConnection:
         if not conn.modify(user_dn, changes):
             _raise_ad_error(conn, "Échec de suppression de la photo.")
 
-    @_logged_write("Modification d'attribut")
+    @_logged_write("Modification d'attribut", permission="modify_user", targets=("user_dn",))
     def update_user_attribute(
         self, user_dn: str, attribute: str, value: str | list[str]
     ) -> None:
@@ -817,7 +890,7 @@ class ADConnection:
 
     # -- Heures de connexion (M16) ----------------------------------------------
 
-    @_logged_write("Lecture des heures de connexion")
+    @_logged_write("Lecture des heures de connexion", permission="read_ad", targets=("user_dn",))
     def get_logon_hours(self, user_dn: str) -> bytes | None:
         """Retourne la valeur binaire de ``logonHours`` (None si non définie
         = toutes les heures autorisées)."""
@@ -833,28 +906,28 @@ class ADConnection:
             return None
         return val if isinstance(val, bytes) else bytes(val)
 
-    @_logged_write("Modification des heures de connexion")
+    @_logged_write("Modification des heures de connexion", permission="modify_user", targets=("user_dn",))
     def set_logon_hours(self, user_dn: str, value: bytes) -> None:
         """Définit ``logonHours`` (21 octets encodés — voir core.logon_hours)."""
         conn = self._require_connected()
         if not conn.modify(user_dn, {"logonHours": [(MODIFY_REPLACE, [value])]}):
             _raise_ad_error(conn, "Échec de modification de logonHours.")
 
-    @_logged_write("Suppression des heures de connexion")
+    @_logged_write("Suppression des heures de connexion", permission="modify_user", targets=("user_dn",))
     def clear_logon_hours(self, user_dn: str) -> None:
         """Supprime ``logonHours`` (revenir à « toutes les heures »)."""
         conn = self._require_connected()
         if not conn.modify(user_dn, {"logonHours": [(MODIFY_DELETE, [])]}):
             _raise_ad_error(conn, "Échec de suppression de logonHours.")
 
-    @_logged_write("Suppression du script de connexion")
+    @_logged_write("Suppression du script de connexion", permission="modify_user", targets=("user_dn",))
     def clear_script_path(self, user_dn: str) -> None:
         """Supprime l'attribut ``scriptPath`` (plus de script de connexion)."""
         conn = self._require_connected()
         if not conn.modify(user_dn, {"scriptPath": [(MODIFY_DELETE, [])]}):
             _raise_ad_error(conn, "Échec de suppression de scriptPath.")
 
-    @_logged_write("Renommage du compte")
+    @_logged_write("Renommage du compte", permission="modify_user", targets=("user_dn",))
     def rename_user(self, user_dn: str, new_cn: str) -> None:
         """Renomme un utilisateur (modifie le CN/RDN)."""
         conn = self._require_connected()

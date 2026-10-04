@@ -150,6 +150,7 @@ class AuditLog:
         action_type: str | None = None,
         resultat: str | None = None,
         domaine: str | None = None,
+        utilisateur: str | None = None,
     ) -> list[ActionLogEntry]:
         clauses: list[str] = []
         params: list[str] = []
@@ -168,6 +169,9 @@ class AuditLog:
         if domaine:
             clauses.append("domaine = ?")
             params.append(domaine)
+        if utilisateur:
+            clauses.append("utilisateur = ?")
+            params.append(utilisateur)
 
         sql = "SELECT * FROM actions"
         if clauses:
@@ -184,6 +188,14 @@ class AuditLog:
             "WHERE domaine IS NOT NULL AND domaine != '' ORDER BY domaine"
         ).fetchall()
         return [row["domaine"] for row in rows]
+
+    def operators(self) -> list[str]:
+        """Opérateurs déjà présents dans le journal (M26 — journal par opérateur)."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT utilisateur FROM actions "
+            "WHERE utilisateur IS NOT NULL AND utilisateur != '' ORDER BY utilisateur"
+        ).fetchall()
+        return [row["utilisateur"] for row in rows]
 
     @staticmethod
     def _row_to_entry(row: sqlite3.Row) -> ActionLogEntry:

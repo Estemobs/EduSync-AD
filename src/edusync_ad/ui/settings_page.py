@@ -27,6 +27,8 @@ from edusync_ad.core.config import AppConfig
 from edusync_ad.core.identifiers import CAMEL_PRESETS, PRESETS, render_template
 from edusync_ad.core.models import DoublonRule, PasswordPolicy, PrenomComposeRule
 from edusync_ad.core.password_vault import PasswordVault
+from edusync_ad.core.rbac import RBACPolicy
+from edusync_ad.ui.delegation_panel import DelegationPanel
 
 MAIL_FORMAT_PRESET_KEYS = [
     "{P}.{N}",
@@ -100,12 +102,16 @@ class SettingsPage(QWidget):
         on_save: Callable[[AppConfig], None],
         password_vault: PasswordVault,
         ad_domain: str | None = None,
+        rbac: RBACPolicy | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._on_save = on_save
         self._ad_domain = ad_domain
         self.password_vault = password_vault
+        # Politique RBAC de la session : seul un opérateur autorisé voit
+        # l'onglet « Délégation » (M26).
+        self.rbac = rbac
         # Conservé pour préserver au moment d'enregistrer les champs que ce
         # formulaire ne gère pas (ex. réglages LDAPS de l'écran de connexion) —
         # voir _save().
@@ -259,6 +265,11 @@ class SettingsPage(QWidget):
             "Mots de passe",
         )
         tabs.addTab(self._build_tab((appearance_group,)), "Apparence")
+        if rbac is not None and rbac.can_manage_delegation:
+            self.delegation_panel = DelegationPanel()
+            tabs.addTab(self.delegation_panel, "Délégation")
+        else:
+            self.delegation_panel = None
 
         outer = QVBoxLayout(self)
         outer.addWidget(tabs)

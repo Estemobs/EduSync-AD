@@ -103,6 +103,9 @@ class MainWindow(QMainWindow):
         self.async_ad = AsyncADConnection(ad_connection)
         self.config = config
         self.audit_log = audit_log
+        # Politique RBAC (M26) — posée par app.py juste après la connexion.
+        # Sans elle (tests, imports hors UI) aucun écran n'est restreint.
+        self._rbac = getattr(ad_connection, "rbac", None)
         self.password_vault = PasswordVault()
         self.session_id = new_session_id()
 
@@ -139,6 +142,16 @@ class MainWindow(QMainWindow):
         self._refresh_connection_label()
         # L'indicateur peut être mis à jour depuis l'extérieur via set_connection_state()
         layout.addWidget(self.connection_label)
+
+        # Rôle de l'opérateur courant (M26 RBAC) — visible en permanence pour
+        # savoir ce que la délégation autorise sur ce poste.
+        if self._rbac is not None:
+            self.role_label = QLabel(f"Rôle : {self._rbac.label}")
+            self.role_label.setToolTip(self._rbac.describe())
+            self.role_label.setStyleSheet(
+                "color: #888; font-size: 11px; font-weight: 600; padding-left: 10px;"
+            )
+            layout.addWidget(self.role_label)
 
         # Sélecteur de domaine (M25 multisite) — un seul domaine connecté à la fois.
         self.domain_combo = QComboBox()
@@ -362,7 +375,11 @@ class MainWindow(QMainWindow):
         self.audit_page = AuditPage(self.audit_log)
         self.logs_page = LogViewWidget()
         self.settings_page = SettingsPage(
-            self.config, self._on_config_saved, self.password_vault, ad_domain=self.ad_connection.domain
+            self.config,
+            self._on_config_saved,
+            self.password_vault,
+            ad_domain=self.ad_connection.domain,
+            rbac=self._rbac,
         )
 
         self.pages.addWidget(self.create_accounts_page)    # index 0
@@ -390,30 +407,34 @@ class MainWindow(QMainWindow):
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
         # None = séparateur visuel (regroupe "Comptes/actions" vs "Système")
+        # Chaque entrée porte les permissions requises (une seule suffit) :
+        # c'est le filtrage M26 — tuple vide = module toujours visible.
         nav_items = [
-            ("Création de comptes", 0),
-            ("Migration (fin d'année)", 1),
-            ("Gestion des départs", 2),
-            ("Réinit. mots de passe", 3),
-            ("Explorateur AD", 4),
-            ("Export (CSV / étiquettes)", 5),
-            ("Profils utilisateurs", 6),
-            ("Dossiers personnels", 7),
-            ("Quotas de disque", 8),
-            ("Heures de connexion", 9),
-            ("Scripts de session", 10),
-            ("Espaces de classe", 11),
-            ("Microsoft 365", 12),
-            ("Microsoft Exchange", 13),
-            ("RDS / Bureau à distance", 14),
-            ("Import / Export avancés", 15),
-            ("Modèles de groupes", 16),
-            ("Étiquettes / trombinoscopes", 17),
+            ("Création de comptes", 0, ("create_user",)),
+            ("Migration (fin d'année)", 1, ("move_user",)),
+            ("Gestion des départs", 2, ("disable_account", "delete_user")),
+            ("Réinit. mots de passe", 3, ("reset_password",)),
+            ("Explorateur AD", 4, ("read_ad",)),
+            ("Export (CSV / étiquettes)", 5, ("export_data",)),
+            ("Profils utilisateurs", 6, ("modify_user",)),
+            ("Dossiers personnels", 7, ("create_ou", "modify_user")),
+            ("Quotas de disque", 8, ("modify_ad",)),
+            ("Heures de connexion", 9, ("modify_ad",)),
+            ("Scripts de session", 10, ("modify_ad",)),
+            ("Espaces de classe", 11, ("create_group", "create_ou")),
+            ("Microsoft 365", 12, ("modify_user",)),
+            ("Microsoft Exchange", 13, ("modify_user",)),
+            ("RDS / Bureau à distance", 14, ("modify_ad",)),
+            ("Import / Export avancés", 15, ("read_ad",)),
+            ("Modèles de groupes", 16, ("create_group",)),
+            ("Étiquettes / trombinoscopes", 17, ("export_data",)),
             None,
-            ("Journal d'actions", 18),
-            ("Journal de l'application", 19),
-            ("Paramètres", 20),
+            ("Journal d'actions", 18, ("read_audit",)),
+            ("Journal de l'application", 19, ()),
+            ("Paramètres", 20, ()),
         ]
+        self._nav_buttons: dict[int, QPushButton] = {}
+        self._nav_permissions: dict[int, tuple[str, ...]] = {}
         for item in nav_items:
             if item is None:
                 separator = QFrame()
@@ -423,20 +444,54 @@ class MainWindow(QMainWindow):
                 sidebar_layout.addWidget(separator)
                 sidebar_layout.addSpacing(8)
                 continue
-            label, index = item
+            label, index, required = item
             button = QPushButton(label)
             button.setObjectName("SidebarButton")
             button.setCheckable(True)
             button.clicked.connect(lambda _checked, i=index: self.pages.setCurrentIndex(i))
             self._nav_group.addButton(button)
             sidebar_layout.addWidget(button)
+            self._nav_buttons[index] = button
+            self._nav_permissions[index] = required
             if index == 0:
                 button.setChecked(True)
         sidebar_layout.addStretch()
 
+        self._apply_rbac()
         root_layout.addWidget(sidebar)
         root_layout.addWidget(self.pages)
         self.setCentralWidget(central)
+
+    # -- Délégation (M26 RBAC) ------------------------------------------------
+
+    def _is_page_allowed(self, index: int) -> bool:
+        if self._rbac is None:
+            return True
+        required = self._nav_permissions.get(index, ())
+        return not required or self._rbac.has_any(required)
+
+    def _apply_rbac(self) -> None:
+        """Masque les modules interdits au rôle et empêche d'y accéder.
+
+        C'est une première barrière visuelle : la décision d'autorité reste le
+        garde-fou posé dans ``ADConnection`` (aucune écriture ne passe ailleurs).
+        """
+        if self._rbac is None:
+            return
+        first_allowed: int | None = None
+        for index, button in self._nav_buttons.items():
+            allowed = self._is_page_allowed(index)
+            button.setVisible(allowed)
+            self.pages.widget(index).setEnabled(allowed)
+            if allowed and first_allowed is None:
+                first_allowed = index
+        if first_allowed is None:
+            return
+        if not self._is_page_allowed(self.pages.currentIndex()):
+            self.pages.setCurrentIndex(first_allowed)
+            button = self._nav_buttons.get(first_allowed)
+            if button is not None:
+                button.setChecked(True)
 
     def _on_config_saved(self, config: AppConfig) -> None:
         self.config = config

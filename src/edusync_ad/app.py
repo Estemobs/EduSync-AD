@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QApplication
 from edusync_ad.core.audit import AuditLog
 from edusync_ad.core.config import load_config
 from edusync_ad.core.multisite import DomainProfile, ensure_sites, find_profile
+from edusync_ad.core.rbac import build_policy
 from edusync_ad.ui.login_dialog import LoginDialog
 from edusync_ad.ui.main_window import MainWindow
 from edusync_ad.ui.theme import stylesheet_for
@@ -76,6 +77,14 @@ def main() -> int:
 
         audit_log.current_user = login.ad_connection.username or ""
         audit_log.current_domain = login.ad_connection.domain or ""
+
+        # Politique RBAC de la session (M26) : posée sur la connexion AVANT la
+        # construction de la fenêtre, pour que chaque écriture LDAP passe par
+        # le garde-fou et que l'interface n'affiche que les modules autorisés.
+        login.ad_connection.rbac = build_policy(
+            login.ad_connection.username or "",
+            login.ad_connection.domain or "",
+        )
 
         window = MainWindow(login.ad_connection, config, audit_log)
         requested: dict[str, str | None] = {"site": None}
