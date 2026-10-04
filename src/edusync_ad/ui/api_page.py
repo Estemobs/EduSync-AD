@@ -6,6 +6,9 @@ import json
 import os
 import sys
 import threading
+import uuid
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,15 +48,12 @@ from edusync_ad.core.webhooks import (
     WebhookStore,
     WebhookDispatcher,
     WebhookConfig,
+    load_webhooks,
 )
 from edusync_ad.core.openapi import OpenAPISpec, generate_spec, write_spec
+from edusync_ad.core.api_routes import router as api_router
 from edusync_ad.core.config import config_dir, AppConfig
-
-try:
-    import urllib.request
-    from urllib.error import HTTPError, URLError
-except ImportError:  # pragma: no cover
-    urllib = None  # type: ignore  # noqa: F811
+from urllib.error import HTTPError, URLError
 
 
 # ---------------------------------------------------------------------------
@@ -514,7 +514,7 @@ class APIPage(QWidget):
             return
         try:
             wh_config = WebhookConfig(
-                id=f"w{__import__('uuid').uuid4().hex[:8]}",
+                id=f"w{uuid.uuid4().hex[:8]}",
                 name=name,
                 url=url,
                 events=[events] if events != "*" else ["*"],
@@ -541,8 +541,8 @@ class APIPage(QWidget):
         # Préparer un payload de test
         payload = {"event": "test", "timestamp": datetime.now(timezone.utc).isoformat()}
         body = json.dumps({"event": "user.created", "data": payload}).encode("utf-8")
-        parsed = __import__('urllib.parse').urlparse(wh.url)
-        req = __import__('urllib.request').Request(
+        parsed = urllib.parse.urlparse(wh.url)
+        req = urllib.request.Request(
             wh.url,
             data=body,
             headers={
@@ -553,7 +553,7 @@ class APIPage(QWidget):
             method="POST",
         )
         try:
-            with __import__('urllib.request').urlopen(req, timeout=5) as resp:
+            with urllib.request.urlopen(req, timeout=5) as resp:
                 resp_body = resp.read().decode("utf-8")[:200]
                 QMessageBox.information(self, "Webhook test", f"Code {resp.status} : {resp_body}")
         except Exception as exc:
@@ -601,7 +601,7 @@ class APIPage(QWidget):
 
     def _on_generate_spec(self) -> None:
         try:
-            spec = generate_spec(__import__('edusync_ad.core.api_routes').router)
+            spec = generate_spec(api_router)
             self.spec_viewer.setPlainText(json.dumps(spec.__dict__, ensure_ascii=False, indent=2))
             self.spec_status.setText("Spec généré avec succès")
             self.spec_status.setStyleSheet("color: #1f9d55;")
@@ -619,7 +619,7 @@ class APIPage(QWidget):
         if not path:
             return
         try:
-            spec = __import__('edusync_ad.core.openapi').generate_spec(__import__('edusync_ad.core.api_routes').router)
+            spec = generate_spec(api_router)
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(spec.__dict__, f, ensure_ascii=False, indent=2)
             QMessageBox.information(self, "Enregistré", f"Spec enregistré sous {path}")
@@ -697,7 +697,7 @@ class APIPage(QWidget):
         # Charger le key_store
         self.key_store = APIKeyStore()
         # Charger le webhook store
-        self.webhook_store = __import__('edusync_ad.core.webhooks').load_webhooks()
+        self.webhook_store = load_webhooks()
 
         # Remplir les listes
         self._refresh_key_list()
