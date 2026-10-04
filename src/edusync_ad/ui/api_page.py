@@ -318,7 +318,7 @@ class APIPage(QWidget):
         self.filter_path = QLineEdit()
         self.filter_path.setPlaceholderText("Filtre par chemin (ex: /users)")
         ffilt.addRow("Chemin", self.filter_path)
-        btn_apply_filter = QPushButton "Appliquer"
+        btn_apply_filter = QPushButton("Appliquer")
         btn_apply_filter.clicked.connect(self._apply_filter)
         ffilt.addRow(btn_apply_filter)
         layout.addWidget(filt_group)
