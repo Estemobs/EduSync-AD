@@ -60,7 +60,8 @@ from edusync_ad.core.password_vault import PasswordVault
 from edusync_ad.core.passwords import (
     generate_password,
     generate_passwords_for_batch,
-    PasswordPolicy,  # type: ignore[attr-defined]
+    # validate_password : réexportée via core.portal pour M27
+    # PasswordPolicy : déjà importée depuis core.models (l.56)
 )
 from edusync_ad.core.crypto import (
     decrypt_str as decrypt,
@@ -296,21 +297,57 @@ from edusync_ad.core.label_studio import (
     SHEETS,
     LabelElement,
     LabelTemplate,
-    MailConfig,
-    MailError,
     SheetSpec,
     builtin_templates as builtin_label_templates,
     duplicate_template as duplicate_label_template,
     export_template as export_label_template,
     generate_trombinoscope_pdf,
     import_template as import_label_template,
-    load_mail_config,
     load_templates as load_label_templates,
     render_labels_pdf,
-    save_mail_config,
     save_templates as save_label_templates,
     send_label_email,
     unique_template_id as unique_label_template_id,
+)
+
+# M27 — Courriels SMTP : configuration extraite de M24, envoi générique.
+from edusync_ad.core.mailer import (
+    MailConfig,
+    MailError,
+    load_mail_config,
+    save_mail_config,
+)
+
+# M27 — Portail auto-service
+from edusync_ad.core.portal import (
+    SCOPE_LOOKUP,
+    SCOPE_RESET,
+    STATUT_APPROUVEE,
+    STATUT_EN_ATTENTE,
+    STATUT_REFUSEE,
+    PORTAL_CONFIG_FILE,
+    PORTAL_DB_PATH,
+    CODE_LENGTH,
+    THROTTLE_WINDOW_MINUTES,
+    GENERIC_CODE_MESSAGE,
+    POLITIQUE_LABELS,
+    PROFIL_ELEVE,
+    PROFIL_PERSONNEL,
+    PortalConfig,
+    PortalError,
+    PortalService,
+    PortalStore,
+    PortalUser,
+    Demande,
+    AdDirectory,
+    load_portal_config,
+    save_portal_config,
+    validate_password,
+)
+from edusync_ad.core.portal_server import (
+    PortalServer,
+    PortalHandler,
+    PortalHTTPServer,
 )
 
 __all__ = [
@@ -373,6 +410,7 @@ __all__ = [
     # Passwords
     "generate_password",
     "generate_passwords_for_batch",
+    "validate_password",
     # Crypto
     "decrypt",
     "encrypt",
@@ -608,4 +646,31 @@ __all__ = [
     "role_label",
     "save_grants",
     "unique_grant_id",
+    # M27 — Portail auto-service
+    "AdDirectory",
+    "CODE_LENGTH",
+    "Demande",
+    "GENERIC_CODE_MESSAGE",
+    "PORTAL_CONFIG_FILE",
+    "PORTAL_DB_PATH",
+    "POLITIQUE_LABELS",
+    "PROFIL_ELEVE",
+    "PROFIL_PERSONNEL",
+    "PortalConfig",
+    "PortalError",
+    "PortalHTTPServer",
+    "PortalHandler",
+    "PortalServer",
+    "PortalService",
+    "PortalStore",
+    "PortalUser",
+    "SCOPE_LOOKUP",
+    "SCOPE_RESET",
+    "STATUT_APPROUVEE",
+    "STATUT_EN_ATTENTE",
+    "STATUT_REFUSEE",
+    "THROTTLE_WINDOW_MINUTES",
+    "load_portal_config",
+    "save_portal_config",
+    "validate_password",
 ]

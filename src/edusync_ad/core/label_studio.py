@@ -25,10 +25,8 @@ from __future__ import annotations
 import io
 import json
 import re
-import smtplib
 import unicodedata
 from dataclasses import dataclass, field, replace
-from email.message import EmailMessage
 from pathlib import Path
 
 from PIL import Image
@@ -42,7 +40,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen import canvas
 
 from edusync_ad.core.config import config_dir
-from edusync_ad.core.crypto import decrypt_str, encrypt_str, get_or_create_key
 from edusync_ad.core.export import (
     DEFAULT_COLOR_THEME,
     EXPORT_FIELDS,
@@ -51,8 +48,20 @@ from edusync_ad.core.export import (
     LabelFormat,
 )
 
+# Configuration SMTP extraite dans core/mailer.py (M27) pour être partagée
+# avec le portail auto-service — réexportée ici pour rester compatible avec
+# les appels M24 existants.
+from edusync_ad.core.mailer import (  # noqa: F401
+    MAIL_CONFIG_FILE,
+    MailConfig,
+    MailError,
+    build_message,
+    load_mail_config,
+    save_mail_config,
+    send_message,
+)
+
 LABEL_TEMPLATES_FILE = config_dir() / "label_templates.json"
-MAIL_CONFIG_FILE = config_dir() / "label_mail.json"
 
 EPS_MM = 0.1  # tolérance d'arrondi pour les contrôles de débordement
 MIN_FONT_PT = 4.0
@@ -847,99 +856,8 @@ def _initials(label: str) -> str:
 
 
 # -- Envoi par mail ------------------------------------------------------------------------
-
-class MailError(Exception):
-    """Échec de configuration ou d'envoi SMTP (message déjà en français)."""
-
-
-@dataclass
-class MailConfig:
-    """Configuration SMTP — le mot de passe n'est chiffré qu'au stockage."""
-
-    host: str = ""
-    port: int = 587
-    username: str = ""
-    password: str = ""
-    use_tls: bool = True
-    use_ssl: bool = False
-    from_addr: str = ""
-    from_name: str = "EduSync AD"
-    timeout: float = 20.0
-
-    def validate(self) -> list[str]:
-        errors: list[str] = []
-        if not (self.host or "").strip():
-            errors.append("Serveur SMTP renseigné requis.")
-        if not (1 <= int(self.port) <= 65535):
-            errors.append("Port SMTP invalide (1-65535).")
-        if not (self.from_addr or "").strip():
-            errors.append("Adresse d'expéditrice requise.")
-        elif "@" not in self.from_addr:
-            errors.append(f"Adresse d'expéditrice « {self.from_addr} » invalide.")
-        if self.use_ssl and self.use_tls:
-            errors.append("SSL implicite et STARTTLS sont exclusifs.")
-        return errors
-
-    def to_stored_dict(self, key_path: Path | None = None) -> dict:
-        data = {
-            "host": self.host,
-            "port": int(self.port),
-            "username": self.username,
-            "use_tls": self.use_tls,
-            "use_ssl": self.use_ssl,
-            "from_addr": self.from_addr,
-            "from_name": self.from_name,
-            "timeout": self.timeout,
-        }
-        if self.password:
-            data["password_token"] = encrypt_str(get_or_create_key(key_path), self.password)
-        return data
-
-    @classmethod
-    def from_stored_dict(cls, data: dict, key_path: Path | None = None) -> "MailConfig":
-        config = cls(
-            host=str(data.get("host", "")),
-            port=int(data.get("port", 587)),
-            username=str(data.get("username", "")),
-            use_tls=bool(data.get("use_tls", True)),
-            use_ssl=bool(data.get("use_ssl", False)),
-            from_addr=str(data.get("from_addr", "")),
-            from_name=str(data.get("from_name", "EduSync AD")),
-            timeout=float(data.get("timeout", 20.0)),
-        )
-        token = data.get("password_token")
-        if token:
-            try:
-                config.password = decrypt_str(get_or_create_key(key_path), str(token))
-            except Exception:
-                config.password = ""  # clé de chiffrement perdue : à ressaisir
-        return config
-
-
-def load_mail_config(path: Path | None = None, key_path: Path | None = None) -> MailConfig:
-    dest = path if path is not None else MAIL_CONFIG_FILE
-    if dest.exists():
-        try:
-            with dest.open("r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            if isinstance(data, dict):
-                return MailConfig.from_stored_dict(data, key_path)
-        except (OSError, ValueError, TypeError):
-            pass
-    return MailConfig()
-
-
-def save_mail_config(
-    config: MailConfig, path: Path | None = None, key_path: Path | None = None
-) -> Path:
-    errors = config.validate()
-    if errors:
-        raise MailError("Configuration SMTP invalide : " + "; ".join(errors))
-    dest = path if path is not None else MAIL_CONFIG_FILE
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    with dest.open("w", encoding="utf-8") as fh:
-        json.dump(config.to_stored_dict(key_path), fh, indent=2, ensure_ascii=False)
-    return dest
+# La configuration SMTP (MailConfig, MailError, MAIL_CONFIG_FILE, load/save)
+# vit dans core/mailer.py — partagée avec le portail auto-service (M27).
 
 
 def send_label_email(
@@ -957,12 +875,13 @@ def send_label_email(
     `smtp_factory(hôte, port, timeout)` → objet compatible ``smtplib.SMTP``
     (injectable pour les tests).
     """
-    errors = config.validate()
-    if errors:
-        raise MailError("Configuration SMTP invalide : " + "; ".join(errors))
-    to_addr = (to_addr or "").strip()
-    if "@" not in to_addr:
-        raise MailError(f"Adresse du destinataire « {to_addr} » invalide.")
+    message = build_message(
+        config,
+        to_addr,
+        subject,
+        body or "Veuillez trouver en pièce jointe votre étiquette.",
+        default_subject="Votre étiquette",
+    )
     try:
         payload = Path(pdf_path).read_bytes()
     except OSError as exc:
@@ -970,11 +889,6 @@ def send_label_email(
     if not payload.startswith(b"%PDF"):
         raise MailError("Le fichier à joindre n'est pas un PDF.")
 
-    message = EmailMessage()
-    message["Subject"] = subject.strip() or "Votre étiquette"
-    message["From"] = f"{config.from_name} <{config.from_addr}>"
-    message["To"] = to_addr
-    message.set_content(body or "Veuillez trouver en pièce jointe votre étiquette.")
     attachment = filename or Path(pdf_path).name or "etiquette.pdf"
     message.add_attachment(
         payload,
@@ -982,25 +896,4 @@ def send_label_email(
         subtype="pdf",
         filename=attachment,
     )
-
-    def _connect(host: str, port: int, timeout: float):
-        if config.use_ssl:
-            return smtplib.SMTP_SSL(host, port, timeout=timeout)
-        return smtplib.SMTP(host, port, timeout=timeout)
-
-    factory = smtp_factory or _connect
-    try:
-        with factory(config.host, int(config.port), config.timeout) as server:
-            if not config.use_ssl and config.use_tls:
-                server.starttls()
-            if config.username:
-                server.login(config.username, config.password)
-            server.send_message(message)
-    except MailError:
-        raise
-    except smtplib.SMTPAuthenticationError as exc:
-        raise MailError(f"Authentification SMTP refusée ({getattr(exc, 'smtp_code', '?')}).") from exc
-    except smtplib.SMTPRecipientsRefused as exc:
-        raise MailError("Destinataire refusé par le serveur SMTP.") from exc
-    except (smtplib.SMTPException, OSError) as exc:
-        raise MailError(f"Envoi impossible : {exc}") from exc
+    send_message(config, message, smtp_factory=smtp_factory)

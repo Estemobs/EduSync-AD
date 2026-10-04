@@ -20,7 +20,7 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 | **v2.0** | M12 → M18 (photos, profils, quotas, scripts, heures, dossiers perso, espaces de classe) | ✅ Livré |
 | **v2.5** | M19 → M22 (Microsoft 365, Exchange, RDS, imports/exports avancés) | ✅ Livré |
 | **v3.0** | M23 modèles de groupes ✅ — M24 étiquettes & trombinoscopes ✅ — M25 multisite ✅ | ✅ Livré |
-| **v3.5** | M26 délégation RBAC ✅ — M27 portail auto-service | ⬜ À faire |
+| **v3.5** | M26 délégation RBAC ✅ — M27 portail auto-service ✅ | ⬜ À faire |
 | **v4.0** | M28 → M32 (API REST, IA, conformité, DFS/IIS, sauvegarde) | ⬜ À faire |
 
 ---
@@ -153,10 +153,13 @@ Devenir l'outil de référence pour la gestion du cycle de vie des comptes Activ
 - Double barrière : garde-fou sur chaque écriture AD (`ADConnection`) + navigation filtrée
 - Onglet « Délégation » dans les Paramètres, réservé au Super-admin
 
-### M27 — Auto-service élève/parent (Portail Web) — *Optionnel, backend léger requis*
-- Réinitialisation MDP self-service (code SMS/mail, questions secrètes, Microsoft Authenticator)
-- Consultation identifiant/mail
-- Demande création compte (pré-inscription) → validation admin
+### M27 — Auto-service élève/parent (Portail Web) ✅
+- Réinitialisation MDP self-service (code par courriel, stockage PBKDF2 à usage unique, anti-énumération)
+- Consultation identifiant/mail (même vérification par code)
+- Demande création compte (pré-inscription) → validation admin (création compte + envoi identifiants)
+- **Hors périmètre** : codes par SMS et validation Microsoft Authenticator (fournisseurs externes requis)
+- Portail web 100 % stdlib (`http.server`, `smtplib`, `sqlite3`) — aucune dépendance externe
+- Cycle de vie serveur géré par l'onglet, RBAC (`reset_password` / `create_user`), audit `utilisateur="portail"`
 
 ### M28 — API REST + Webhooks
 - API documentée (OpenAPI/Swagger) pour intégration SIS (PRONOTE, EcoleDirecte, etc.)

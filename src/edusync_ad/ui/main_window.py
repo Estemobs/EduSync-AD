@@ -51,6 +51,7 @@ from edusync_ad.ui.modules.rds_page import RDSPage
 from edusync_ad.ui.modules.advanced_io_page import AdvancedIOPage
 from edusync_ad.ui.modules.templates_page import TemplatesPage
 from edusync_ad.ui.modules.label_studio_page import LabelStudioPage
+from edusync_ad.ui.portal_page import PortalPage
 from edusync_ad.ui.settings_page import SettingsPage
 from edusync_ad.ui.theme import status_colors_for, stylesheet_for
 from edusync_ad.ui.update_dialog import UpdateDialog
@@ -261,6 +262,7 @@ class MainWindow(QMainWindow):
         if worker is not None and worker.isRunning():
             _keep_worker_alive(worker)
         self._update_check_worker = None
+        self.portal_page.shutdown()
         super().closeEvent(event)
 
     def set_connection_state(self, state: str, domain: str = "", protocol: str = "") -> None:
@@ -381,6 +383,10 @@ class MainWindow(QMainWindow):
             ad_domain=self.ad_connection.domain,
             rbac=self._rbac,
         )
+        self.portal_page = PortalPage(
+            self.ad_connection, self.config, self.audit_log, self.session_id,
+            self.password_vault, rbac=self._rbac,
+        )
 
         self.pages.addWidget(self.create_accounts_page)    # index 0
         self.pages.addWidget(self.migration_page)          # index 1
@@ -403,6 +409,7 @@ class MainWindow(QMainWindow):
         self.pages.addWidget(self.audit_page)              # index 18
         self.pages.addWidget(self.logs_page)               # index 19
         self.pages.addWidget(self.settings_page)           # index 20
+        self.pages.addWidget(self.portal_page)             # index 21
 
         self._nav_group = QButtonGroup(self)
         self._nav_group.setExclusive(True)
@@ -432,6 +439,7 @@ class MainWindow(QMainWindow):
             ("Journal d'actions", 18, ("read_audit",)),
             ("Journal de l'application", 19, ()),
             ("Paramètres", 20, ()),
+            ("Portail auto-service", 21, ("reset_password", "create_user")),
         ]
         self._nav_buttons: dict[int, QPushButton] = {}
         self._nav_permissions: dict[int, tuple[str, ...]] = {}
@@ -514,6 +522,7 @@ class MainWindow(QMainWindow):
         self.advanced_io_page.update_config(config)
         self.templates_page.update_config(config)
         self.label_studio_page.update_config(config)
+        self.portal_page.update_config(config)
         self.apply_theme()
 
     def _on_check_update(self) -> None:

@@ -19,7 +19,8 @@ dans un Active Directory, conçu pour les administrateurs réseau des
 7. [Export (CSV / étiquettes)](#7-export-csv--étiquettes)
 8. [Journal d'actions](#8-journal-dactions)
 9. [Paramètres globaux](#9-paramètres-globaux)
-10. [Dépannage — Erreur de certificat LDAPS](#10-dépannage--erreur-de-certificat-ldaps)
+10. [Portail auto-service (M27)](#10-portail-auto-service-m27)
+11. [Dépannage — Erreur de certificat LDAPS](#11-dépannage--erreur-de-certificat-ldaps)
 
 ---
 
@@ -529,7 +530,63 @@ perdue ; une réinitialisation le remémorisera.
 
 ---
 
-## 10. Dépannage — Erreur de certificat LDAPS
+## 10. Portail auto-service (M27)
+
+L'onglet **Portail auto-service** permet de publier un petit serveur web
+accessible depuis un navigateur (intranet de l'établissement) pour que les
+élèves, parents ou personnels puissent agir en toute autonomie :
+
+### 10.1. Ce que permet le portail
+
+| Action | Description |
+|--------|-------------|
+| **Réinitialiser son mot de passe** | L'usager saisit son identifiant ou son adresse mail, reçoit un code à 6 chiffres par courriel, puis choisit un nouveau mot de passe (politique élèves ou personnels). |
+| **Consulter son identifiant / son mail** | Même vérification par code, utile pour un élève qui a oublié son identifiant. |
+| **Demander la création d'un compte** | Pré-inscription (profil, prénom, nom, mail, classe, motif). L'administrateur valide la demande depuis l'onglet « Demandes » : le compte est créé dans l'AD, les identifiants sont générés et (optionnellement) envoyés par mail. |
+
+### 10.2. Onglet « Serveur » — Configuration
+
+| Réglage | Effet |
+|---------|-------|
+| **Démarrer le serveur en même temps que la session** | Coché = le portail est publié automatiquement à chaque ouverture d'EduSync AD. |
+| **Interface d'écoute** | `127.0.0.1` = accessible seulement depuis la machine admin (test). `0.0.0.0` = accessible depuis le réseau interne (production). |
+| **Port** | Par défaut 8787. Doit être libre sur la machine. |
+| **Titre affiché** | Texte affiché dans le navigateur (ex. « Portail EduSync — Lycée Victor Hugo »). |
+| **Validité du code** | Durée de vie d'un code (1 à 60 minutes). |
+| **Tentatives par code** | Nombre max d'essais (bons ou mauvais) avant invalidation (1 à 10). |
+| **Envois / 15 min** | Plafonnement anti-spam par identifiant (1 à 20). |
+| **Politique de mot de passe** | Règles appliquées à la réinitialisation (élèves ou personnels). |
+| **OU d'accueil** | DN de l'OU où les comptes validés seront créés (ex. `OU=Eleves,DC=lycee,DC=local`). Bouton « Lister les OUs… » pour la sélectionner visuellement. |
+| **Envoyer les identifiants générés** | Si coché, l'usager reçoit ses identifiants par mail lors de la validation de sa demande. |
+
+**Prérequis** : un serveur SMTP doit être configuré dans *Étiquettes & trombinoscopes* → onglet *Envoi par mail*. Sans cela, les codes ne peuvent pas être envoyés (un avertissement s'affiche dans l'onglet).
+
+### 10.3. Onglet « Demandes » — Validation
+
+Liste toutes les demandes soumises depuis le portail. Filtres : *En attente* (défaut), *Approuvées*, *Refusées*, *Toutes*.
+
+* **Valider et créer le compte…** : génère un identifiant unique (selon le format configuré), un mot de passe conforme à la politique, crée le compte dans l'OU d'accueil, le mémorise dans le coffre MDP, et (si coché) envoie les identifiants par mail. Une fenêtre affiche les identifiants générés — les copier avant de fermer.
+* **Refuser…** : marque la demande comme refusée, l'usager ne reçoit rien (à l'administrateur de répondre par un autre canal).
+
+> **Sécurité** : le portail nécessite le rôle `reset_password` ou `create_user` (M26 RBAC). Un opérateur *Lecture seule* ou *Helpdesk* ne verra pas l'onglet, ou s'il y accède, un garde-fou l'empêchera de démarrer le serveur.
+
+### 10.4. Onglet « Aide »
+
+Texte prêt à imprimer ou afficher pour expliquer le portail aux usagers.
+
+### 10.5. Journal d'audit
+
+Chaque action du portail est tracée dans le journal (onglet *Journal d'actions*) avec l'utilisateur `portail` et le domaine AD concerné. Actions filtrantes :
+- `portail_code` — envoi d'un code
+- `portail_reinitialisation` — réinitialisation réussie ou échouée
+- `portail_consultation` — consultation identifiant/mail
+- `portail_demande_compte` — demande, validation ou refus
+
+> **Note** : les codes sont stockés sous forme de dérivation PBKDF2-HMAC-SHA256 (60 000 itérations, sel 16 octets), à usage unique, avec expiration. Aucune énumération de comptes n'est possible : le message affiché est identique que le compte existe ou non.
+
+---
+
+## 11. Dépannage — Erreur de certificat LDAPS
 
 ### Pourquoi cette erreur apparaît
 

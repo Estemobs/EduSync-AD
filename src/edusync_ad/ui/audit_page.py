@@ -57,6 +57,10 @@ ACTION_TYPES = [
     "creation_groupe",
     "creation_utilisateur_manuel",
     "changement_domaine",
+    "portail_code",
+    "portail_reinitialisation",
+    "portail_consultation",
+    "portail_demande_compte",
 ]
 
 ACTION_LABELS = {
@@ -79,6 +83,10 @@ ACTION_LABELS = {
     "creation_groupe": "Création de groupe",
     "creation_utilisateur_manuel": "Création manuelle d'utilisateur",
     "changement_domaine": "Changement de domaine (site)",
+    "portail_code": "Code portail (envoi)",
+    "portail_reinitialisation": "Réinitialisation portail",
+    "portail_consultation": "Consultation identifiants",
+    "portail_demande_compte": "Demande compte (portail)",
 }
 
 

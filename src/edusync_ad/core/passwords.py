@@ -106,3 +106,44 @@ def generate_passwords_for_batch(
     return [
         generate_password(policy, prenom=prenom, nom=nom, year=year) for prenom, nom in rows
     ]
+
+
+#: Longueur maximale acceptée pour un mot de passe choisi par un utilisateur
+#: (limite confortable, Active Directory en accepte davantage).
+MAX_INPUT_LENGTH = 128
+
+
+def validate_password(
+    policy: PasswordPolicy, password: str, *, forbidden: list[str] | tuple[str, ...] = ()
+) -> list[str]:
+    """Contrôle un mot de passe **choisi** par un utilisateur (M4, portail M27).
+
+    Retourne la liste des exigences non satisfaites (vide = valide), en
+    français. Le champ ``pattern_fixe`` n'entre pas en compte : il ne sert
+    qu'à *générer* des mots de passe, pas à en valider un choisi.
+    ``forbidden`` rejoint des valeurs interdites (identifiant, nom…),
+    comparées sans tenir compte de la casse.
+    """
+    value = password or ""
+    if not value:
+        return ["Le mot de passe est obligatoire."]
+
+    errors: list[str] = []
+    minimum = max(MIN_LENGTH, int(policy.longueur))
+    if len(value) < minimum:
+        errors.append(f"Le mot de passe doit contenir au moins {minimum} caractères.")
+    if len(value) > MAX_INPUT_LENGTH:
+        errors.append(f"Le mot de passe ne doit pas dépasser {MAX_INPUT_LENGTH} caractères.")
+    if policy.majuscules and not any(char.isupper() for char in value):
+        errors.append("Le mot de passe doit contenir au moins une majuscule.")
+    if policy.chiffres and not any(char.isdigit() for char in value):
+        errors.append("Le mot de passe doit contenir au moins un chiffre.")
+    if policy.caracteres_speciaux and not any(not char.isalnum() for char in value):
+        errors.append("Le mot de passe doit contenir au moins un caractère spécial.")
+
+    lowered = value.lower()
+    for candidate in forbidden:
+        if candidate and lowered == str(candidate).strip().lower():
+            errors.append("Le mot de passe ne doit pas être identique à votre identifiant.")
+            break
+    return errors
