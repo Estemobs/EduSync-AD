@@ -9,7 +9,7 @@
 Import CSV → comptes créés. Restructuration → comptes migrés. Départ → compte archivé.
 En quelques clics, pas en PowerShell.
 
-📖 [Guide utilisateur](docs/guide_utilisateur.md) · 📥 [Télécharger la dernière version](../../releases/latest) · 🗺️ [Feuille de route](ROADMAP.md)
+📖 [Guide utilisateur](docs/guide_utilisateur.md) · 📥 [Télécharger la dernière version](../../releases/latest) · 🗺️ [Feuille de route Go](ROADMAP_GO_MIGRATION.md)
 
 </div>
 

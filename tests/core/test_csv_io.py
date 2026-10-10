@@ -1,15 +1,17 @@
-from pathlib import Path
-
 from edusync_ad.core.csv_io import export_created_accounts, export_failed_rows, load_preview, load_rows
 from edusync_ad.core.models import GeneratedUser, RawUserRow
 
-EXAMPLE_CSV = (
-    Path(__file__).resolve().parents[2] / "resources" / "csv_examples" / "creation_comptes_exemple.csv"
-)
 
-
-def test_load_preview_detects_headers_and_semicolon_delimiter():
-    preview = load_preview(EXAMPLE_CSV)
+def test_load_preview_detects_headers_and_semicolon_delimiter(tmp_path):
+    csv_path = tmp_path / "creation_comptes_exemple.csv"
+    csv_path.write_text(
+        "prenom;nom;ou;email;date_naissance;numero\n"
+        "Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee-victor-hugo,DC=local;thomas.martin.perso@gmail.com;12/05/2011;20251001\n"
+        "Léa;Petit;OU=3emeA,OU=Eleves,DC=lycee-victor-hugo,DC=local;lea.petit.perso@gmail.com;03/09/2011;20251002\n"
+        "Hugo;Durand;OU=3emeB,OU=Eleves,DC=lycee-victor-hugo,DC=local;hugo.durand.perso@gmail.com;27/11/2010;20251003\n",
+        encoding="utf-8-sig",
+    )
+    preview = load_preview(csv_path)
     assert preview.delimiter == ";"
     assert preview.headers == [
         "prenom",
@@ -23,8 +25,12 @@ def test_load_preview_detects_headers_and_semicolon_delimiter():
     assert preview.rows[0]["prenom"] == "Thomas"
 
 
-def test_load_preview_suggests_mapping_from_matching_headers():
-    preview = load_preview(EXAMPLE_CSV)
+def test_load_preview_suggests_mapping_from_matching_headers(tmp_path):
+    csv_path = tmp_path / "creation_comptes_exemple.csv"
+    csv_path.write_text(
+        "prenom;nom;ou\nThomas;Martin;OU=3emeA\n", encoding="utf-8-sig"
+    )
+    preview = load_preview(csv_path)
     assert preview.suggested_mapping["prenom"] == "prenom"
     assert preview.suggested_mapping["nom"] == "nom"
     assert preview.suggested_mapping["ou"] == "ou"
@@ -39,7 +45,15 @@ def test_load_preview_suggests_empty_mapping_for_unmatched_headers(tmp_path):
     assert preview.suggested_mapping["ou"] == ""
 
 
-def test_load_rows_with_matching_headers():
+def test_load_rows_with_matching_headers(tmp_path):
+    csv_path = tmp_path / "creation_comptes_exemple.csv"
+    csv_path.write_text(
+        "prenom;nom;ou;email;date_naissance;numero\n"
+        "Thomas;Martin;OU=3emeA,OU=Eleves,DC=lycee-victor-hugo,DC=local;thomas.martin.perso@gmail.com;12/05/2011;20251001\n"
+        "Léa;Petit;OU=3emeA,OU=Eleves,DC=lycee-victor-hugo,DC=local;lea.petit.perso@gmail.com;03/09/2011;20251002\n"
+        "Hugo;Durand;OU=3emeB,OU=Eleves,DC=lycee-victor-hugo,DC=local;hugo.durand.perso@gmail.com;27/11/2010;20251003\n",
+        encoding="utf-8-sig",
+    )
     mapping = {
         "prenom": "prenom",
         "nom": "nom",
@@ -48,7 +62,7 @@ def test_load_rows_with_matching_headers():
         "date_naissance": "date_naissance",
         "numero": "numero",
     }
-    result = load_rows(EXAMPLE_CSV, mapping)
+    result = load_rows(csv_path, mapping)
     assert len(result.rows) == 3
     assert result.skipped_row_numbers == []
     assert result.rows[0] == RawUserRow(

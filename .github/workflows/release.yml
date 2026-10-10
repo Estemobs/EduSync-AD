@@ -145,7 +145,7 @@ jobs:
           {
             echo "## EduSync AD ${{ github.ref_name }}"
             echo ""
-            cat RELEASE_NOTES_1.16.1.md
+            cat docs/release-notes/RELEASE_NOTES_1.17.1.md
             echo ""
             echo "---"
             echo ""
