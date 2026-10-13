@@ -1,12 +1,12 @@
 # 🗺️ Feuille de route — Migration EduSync-AD : Python/PyQt6 → Go/Wails
 
-> **Version** : 1.0 — 10 octobre 2026
+> **Version** : 1.1 — 13 octobre 2026
 > **Objectif** : Réécrire entièrement EduSync-AD en Go (backend + UI desktop via Wails) **sans perte de fonctionnalité**, avec une architecture testable et "IA-ready" (l'IA peut tester, détecter les erreurs et patcher).
 > **Timeline** : ~14 semaines, qualité > vitesse.
 
 ---
 
-## 0. État d'avancement (mise à jour : 12 octobre 2026)
+## 0. État d'avancement (mise à jour : 13 octobre 2026)
 
 > Statut vérifié **dans le code et les tests**, pas dans les intentions.
 
@@ -21,7 +21,14 @@
 | 7-8 | Modèles domaine + audit SQLite | ✅ Livré (testé) | `internal/models`, `internal/audit` (schéma identique à Python, append-only) |
 | 9-10 | Testutil container Samba + fixtures | 🔨 En cours | `Dockerfile.samba-ad`, `provision-ad.sh`, `docs/AD_TEST_ENV.md` |
 | 11-12 | CLI squelette | ✅ Livré (testé) | `cmd/edusync-cli` : `version`, `paths`, `config show`, `audit list`, `connect` (DNS + TCP + TLS) |
-| 13-14 | Wails v3 + HTMX/Alpine/Tailwind embeddé | ✅ Livré (testé) | `cmd/edusync-ad`, `internal/ui`, `web/` — login, dashboard, thème clair/sombre, i18n fr/en |
+| 13-14 | Wails v3 + HTMX/Alpine/Tailwind embeddé | ✅ Livré (testé) | `cmd/edusync-ad`, `internal/ui`, `web/` — login, dashboard, thème clair/sombre, i18n fr/en + gabarits `users`, `password`, `migration` |
+
+### Phase 1 (amorcée côté UI — semaine 3)
+
+| Module | Avancement constaté | Où |
+|---|---|---|
+| Réinitialisation MDP | 🔨 Gabarit HTMX + routes + i18n fr/en livrés (logique AD à brancher) | `web/templates/password.html`, `internal/ui/server.go`, `internal/ui/i18n.go` |
+| Migration / restructuration | 🔨 Gabarit HTMX + routes + i18n fr/en livrés (logique AD à brancher) | `web/templates/migration.html`, `internal/ui/server.go`, `internal/ui/i18n.go` |
 
 ### Mesures constatées (Linux amd64 — Go 1.27.2, Wails v3.0.0-beta.28, WebKitGTK 2.54.1)
 
@@ -57,7 +64,7 @@
   CA custom, SASL/GSSAPI — **étape bloquante pour les Phases 1+**.
 - `internal/testutil` + tests d'intégration `-tags=integration` contre le
   container Samba (une fois livré).
-- Workflows `integration.yml` (tests AD réels) et `release.yml` Go.
+- Workflow `integration.yml` (tests AD réels) à ajouter.
 
 ---
 
@@ -208,9 +215,9 @@ edusync-ad/
 |---|---|---|
 | **Connexion AD** | LDAPS par défaut (636), fallback LDAP explicite avec avertissement, certificat CA custom, pool de connexions, Kerberos/GSSAPI, auto-discovery DC | ⬜ |
 | **Création de comptes / Arrivées** | Import CSV (encodage + séparateur auto), génération identifiants/MDP/mail, résolution doublons (incrément), vérification AD existants, export CSV étiquettes | ⬜ |
-| **Migration (restructuration)** | Via CSV (prénom/nom/équipe) ou UI (sélection OU), déplacement AD + groupes auto, résolution par prénom/nom | ⬜ |
+| **Migration (restructuration)** | Via CSV (prénom/nom/équipe) ou UI (sélection OU), déplacement AD + groupes auto, résolution par prénom/nom | 🔨 |
 | **Gestion des départs** | Désactivation immédiate ou archivage + purge planifiée (délai configurable, 30 j par défaut) | ⬜ |
-| **Réinitialisation MDP** | Par OU, groupe AD ou CSV, politiques différées (élèves/personnels), forçage changement à la prochaine connexion | ⬜ |
+| **Réinitialisation MDP** | Par OU, groupe AD ou CSV, politiques différées (élèves/personnels), forçage changement à la prochaine connexion | 🔨 |
 | **Explorateur AD** | Arborescence OUs/groupes, panneau central unifié, clic droit complet (modif, move, MDP, groupes, suppr), recherche temps réel | ⬜ |
 | **Export (CSV / Étiquettes PDF)** | Sélection OU ± sous-OU, champs cochables (incl. MDP mémorisés), PDF Avery L7160/L7163, QR codes, couleurs pastel | ⬜ |
 | **Journal d'actions** | Filtres date/type/résultat/domaine/opérateur, export CSV, SQLite append-only | ⬜ |
@@ -239,8 +246,8 @@ edusync-ad/
 
 | Fonctionnalité | Statut |
 |---|---|
-| Configuration chiffrée (domaine, utilisateur) via platformdirs + AES | ⬜ |
-| Thème dark/light, i18n fr/en | ⬜ |
+| Configuration chiffrée (domaine, utilisateur) via platformdirs + AES | ✅ |
+| Thème dark/light, i18n fr/en | ✅ |
 | Historique/mode démo VM (protocole de test) | ⬜ |
 
 ---
@@ -510,12 +517,14 @@ La migration est terminée quand **tous** ces critères sont réunis :
      premiers tests d'intégration `-tags=integration` ;
    - implémenter `internal/ad` (pool de connexions, LDAPS + CA custom,
      SASL/GSSAPI, retry/backoff) — jours 5-6 de la Phase 0 ;
-   - ajouter les workflows `integration.yml` et `release.yml` Go.
-2. **Attaquer la Phase 1** (semaines 3-7) : modules core v1.x, un par un,
+   - ajouter le workflow `integration.yml` pour les tests AD réels.
+2. **Poursuivre la Phase 1** (semaines 3-7) : modules core v1.x, un par un,
    tests d'abord, en suivant le prompt « nouveau module » de `CLAUDE.md`.
 3. **Aligner le budget binaire** : l'app desktop pèse 17,2 MB (cible 15 MB) —
    à traiter en Phase 3 (packaging) ou par build tags Wails.
 
 > Historique : la Phase 0 (hors pool AD et testutil) a été livrée le
-> 12 octobre 2026 — starter kit, config, crypto, modèles, audit, CLI, UI,
-> CI et documentation IA (`CLAUDE.md`, `AGENTS.md`).
+> 12 octobre 2026 — starter kit, config, crypto, modèles, audit, CLI, UI.
+> Les 13 octobre 2026, les gabarits UI « reset MDP » et « migration »
+> (routes + i18n fr/en) ont amorcé la Phase 1 côté interface, en attente du
+> branchement complet du cœur AD.
