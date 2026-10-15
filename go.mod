@@ -6,7 +6,7 @@ require (
 	github.com/boombuler/barcode v1.1.0
 	github.com/go-ldap/ldap/v3 v3.4.15
 	github.com/jcmturner/gokrb5/v8 v8.4.4
-	github.com/jung-kurt/gofpdf v1.16.2
+	github.com/jung-kurt/gofpdf/v2 v2.17.3
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.29
 	modernc.org/sqlite v1.60.1
