@@ -409,7 +409,6 @@ func (p *Pool) dial(ctx context.Context) (*ldap.Conn, error) {
 			_ = ldapConn.Close()
 			return nil, errors.New("ad: client Kerberos non initialisé pour SASL")
 		}
-		// Utiliser SASL/GSSAPI via gokrb5
 		if err := p.bindSASLGSSAPI(ldapConn); err != nil {
 			_ = ldapConn.Close()
 			return nil, fmt.Errorf("ad: bind SASL/GSSAPI: %w", err)
@@ -424,24 +423,15 @@ func (p *Pool) dial(ctx context.Context) (*ldap.Conn, error) {
 
 // bindSASLGSSAPI effectue l'authentification SASL/GSSAPI (Kerberos).
 func (p *Pool) bindSASLGSSAPI(conn *ldap.Conn) error {
-	// gokrb5 fournit un client GSSAPI via client.GSSAPIClient()
-	// Mais go-ldap attend un mécanisme SASL personnalisé.
-	// On utilise BindSASL avec un mécanisme GSS-SPNEGO.
-
-	// Pour go-ldap v3, on peut utiliser la méthode BindSASL avec un mécanisme
-	// qui implémente ldap.SASLMechanism. gokrb5 fournit cela via
-	// client.GSSAPIClient()...
-
-	// Note: l'implémentation complète nécessite l'interface GSSAPI.
-	// Ici on fait un bind simple en fallback si SASL n'est pas dispo,
-	// mais en production on utiliserait gokrb5/client.GSSAPIClient()
-
-	// Pour l'instant, on log et on fallback sur simple bind si credentials fournis
-	// (Le support complet SASL/GSSAPI nécessite une implémentation plus poussée)
-	if p.cfg.BindDN != "" && p.cfg.BindPassword != "" {
-		return conn.Bind(p.cfg.BindDN, p.cfg.BindPassword)
+	// Utiliser le client Kerberos pour obtenir un mécanisme GSSAPI
+	gssapi, err := p.krb5Cli.GSSAPIClient()
+	if err != nil {
+		return fmt.Errorf("échec de la création du client GSSAPI: %w", err)
 	}
-	return fmt.Errorf("ad: SASL/GSSAPI non complètement implémenté - fournir BindDN/BindPassword pour fallback")
+	if err := conn.BindSASL(gssapi); err != nil {
+		return fmt.Errorf("bind SASL/GSSAPI échoué: %w", err)
+	}
+	return nil
 }
 
 // isHealthy vérifie qu'une connexion idle est encore valide (ping LDAP).
