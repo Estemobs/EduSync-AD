@@ -15,7 +15,9 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -159,4 +161,40 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 		return nil, fmt.Errorf("crypto: mode GCM indisponible: %w", err)
 	}
 	return gcm, nil
+}
+
+// PBKDF2 dérive une clé via PBKDF2-HMAC-SHA256 (RFC 2898).
+// Identique à hashlib.pbkdf2_hmac("sha256", ...) côté Python.
+func PBKDF2(motDePasse, sel []byte, iterations, longueurCle int) []byte {
+	prf := hmac.New(sha256.New, motDePasse)
+	tailleEmpreinte := prf.Size()
+	nombreBlocs := (longueurCle + tailleEmpreinte - 1) / tailleEmpreinte
+
+	var compteur [4]byte
+	cle := make([]byte, 0, nombreBlocs*tailleEmpreinte)
+	u := make([]byte, tailleEmpreinte)
+
+	for bloc := 1; bloc <= nombreBlocs; bloc++ {
+		prf.Reset()
+		prf.Write(sel)
+		compteur[0] = byte(bloc >> 24)
+		compteur[1] = byte(bloc >> 16)
+		compteur[2] = byte(bloc >> 8)
+		compteur[3] = byte(bloc)
+		prf.Write(compteur[:4])
+		cle = prf.Sum(cle)
+		t := cle[len(cle)-tailleEmpreinte:]
+		copy(u, t)
+
+		for n := 2; n <= iterations; n++ {
+			prf.Reset()
+			prf.Write(u)
+			u = u[:0]
+			u = prf.Sum(u)
+			for i := range u {
+				t[i] ^= u[i]
+			}
+		}
+	}
+	return cle[:longueurCle]
 }

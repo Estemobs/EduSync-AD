@@ -159,3 +159,10 @@ type ActionLogEntry struct {
 	Utilisateur   string `json:"utilisateur"`
 	Domaine       string `json:"domaine"`
 }
+
+// Version de l'application (renseignée au build via -ldflags).
+var Version = "dev"
+
+// DataVersionCurrent est la version de schéma des données supportée.
+// Doit correspondre à la dernière migration dans internal/backup/migration.go.
+const DataVersionCurrent = 4
