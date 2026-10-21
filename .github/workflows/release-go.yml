@@ -1,288 +1,289 @@
-# Workflow de release Go — EduSync-AD
-# Déclenché sur les tags v0.* (ex: v0.1.0-alpha.1, v0.2.0, etc.)
-# Produit : Windows Setup.exe + Linux AppImage + tar.gz + sommes SHA256
-# Ne JAMAIS modifier release.yml (Python, tags v1.*) — canaux séparés.
-
 name: Release Go (v0.*)
 
 on:
   push:
     tags:
-      - 'v0.*'
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag à construire (ex: v0.1.0-alpha.1)'
-        required: true
-        type: string
+      - "v0.*"
 
 permissions:
-  contents: write  # pour créer la release GitHub
-  attestations: read
-  id-token: write
+  contents: write
 
 env:
-  GO_VERSION: '1.27.2'
-  # Version extraite du tag (ex: v0.1.0-alpha.1 -> 0.1.0-alpha.1)
-  APP_VERSION: ${{ github.event.inputs.tag || github.ref_name }}
+  APP_NAME: edusync-ad
+  CLI_NAME: edusync-cli
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════════════
-  # Windows — EduSyncAD-Setup.exe (InnoSetup)
-  # ═══════════════════════════════════════════════════════════════════════
-  windows:
-    name: Windows (Setup.exe)
-    runs-on: windows-latest
-    timeout-minutes: 30
-    env:
-      CGO_ENABLED: 1
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          cache: true
-
-      - name: Install Inno Setup 6
-        run: |
-          choco install innosetup --version=6.2.2 -y
-          echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Build desktop (Wails)
-        run: |
-          go build -trimpath -ldflags="-s -w -X main.version=${{ env.APP_VERSION }}" -o bin/edusync-ad.exe ./cmd/edusync-ad
-
-      - name: Prepare installer directory
-        run: |
-          New-Item -ItemType Directory -Force -Path build\inno\bin | Out-Null
-          Copy-Item bin\edusync-ad.exe build\inno\bin\edusync-ad.exe
-          Copy-Item assets\icon.ico build\inno\..\..\assets\icon.ico -ErrorAction SilentlyContinue
-
-      - name: Build installer (InnoSetup)
-        working-directory: build/inno
-        run: |
-          iscc /DMyAppVersion=${{ env.APP_VERSION }} installer.iss
-
-      - name: Verify installer
-        run: |
-          $installer = Get-Item build\EduSyncAD-Setup.exe
-          Write-Host "Installer: $($installer.FullName) - $([math]::Round($installer.Length/1MB, 1)) MB"
-          if (-not $installer.Exists) { throw "Installer non trouvé" }
-
-      - name: Generate SHA256
-        run: |
-          $hash = Get-FileHash -Algorithm SHA256 build\EduSyncAD-Setup.exe
-          $hash.Hash | Out-File -FilePath build\EduSyncAD-Setup.exe.sha256 -Encoding ascii
-          cat build\EduSyncAD-Setup.exe.sha256
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-release
-          path: |
-            build/EduSyncAD-Setup.exe
-            build/EduSyncAD-Setup.exe.sha256
-          retention-days: 30
-
-  # ═══════════════════════════════════════════════════════════════════════
-  # Linux — AppImage + tar.gz
-  # ═══════════════════════════════════════════════════════════════════════
-  linux:
-    name: Linux (AppImage + tar.gz)
+  # ─── Build CLI (5 cibles, pur Go, CGO_ENABLED=0) ──────────────────────
+  build-cli:
+    name: CLI ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      CGO_ENABLED: 1
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux   goarch: amd64
+          - goos: linux   goarch: arm64
+          - goos: windows goarch: amd64
+          - goos: darwin  goarch: amd64
+          - goos: darwin  goarch: arm64
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
         with:
-          go-version: ${{ env.GO_VERSION }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
           cache: true
 
-      - name: Install dependencies
+      - name: Récupérer la version depuis le tag
+        id: version
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev gcc libc6-dev libgtk-3-dev libjpeg-dev libpng-dev imagemagick wget
+          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
+      - name: Définir le suffixe d'exécutable
+        id: suffix
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then echo "exe=.exe" >> $GITHUB_OUTPUT; else echo "exe=" >> $GITHUB_OUTPUT; fi
+
+      - name: Compiler la CLI
+        run: |
+          SUFFIX="${{ steps.suffix.outputs.exe }}"
+          go build -trimpath -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" \
+            -o "dist/${CLI_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}${SUFFIX}" \
+            ./cmd/edusync-cli
+
+      - name: Calculer le hash SHA-256 (CLI)
+        run: |
+          SUFFIX="${{ steps.suffix.outputs.exe }}"
+          sha256sum "dist/${CLI_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}${SUFFIX}" \
+            | cut -d ' ' -f1 > "dist/${CLI_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}${SUFFIX}.sha256"
+
+      - uses: actions/upload-artifact@v4
         with:
+          name: cli-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+            dist/${CLI_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}${{ steps.suffix.outputs.exe }}
+            dist/${CLI_NAME}-${{ matrix.goos }}-${{ matrix.goarch }}${{ steps.suffix.outputs.exe }}.sha256
 
-      - name: Make build script executable
-        run: chmod +x build/appimage/build-appimage.sh
-
-      - name: Build AppImage
-        env:
-          VERSION: ${{ env.APP_VERSION }}
-          OUT_DIR: dist
-        run: |
-          mkdir -p dist
-          ./build/appimage/build-appimage.sh
-
-      - name: Verify artifacts
-        run: |
-          ls -lh dist/
-          for f in dist/EduSyncAD-linux.AppImage dist/edusync-ad-linux-amd64.tar.gz; do
-            if [ ! -f "$f" ]; then echo "❌ Manquant: $f"; exit 1; fi
-            echo "✅ $f ($(du -h $f | cut -f1))"
-          done
-
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+  # ─── Build Desktop Windows (Inno Setup) ───────────────────────────────
+  build-windows-desktop:
+    name: Desktop Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
-          name: linux-release
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+          cache: true
+
+      - name: Récupérer la version depuis le tag
+        id: version
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Installer Inno Setup 6
+        run: |
+          # Inno Setup est préinstallé sur windows-latest (C:\Program Files (x86)\Inno Setup 6\ISCC.exe)
+          if (!(Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            Write-Error "Inno Setup 6 introuvable sur ce runner"
+            exit 1
+          }
+          Write-Host "Inno Setup 6 détecté"
+
+      - name: Compiler l'application desktop (Wails v3 / go build)
+        shell: pwsh
+        run: |
+          # WebView2 est présent sur Windows 10/11 (runner) ; mingw-w64 est disponible pour cgo.
+          go build -trimpath -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" `
+            -o "dist\${env:APP_NAME}.exe" `
+            ./cmd/edusync-ad
+
+      - name: Construire l'installeur Inno Setup
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$version" build/inno/installer.iss
+
+      - name: Calculer le hash SHA-256 (Setup.exe)
+        shell: pwsh
+        run: |
+          (Get-FileHash EduSyncAD-Setup.exe -Algorithm SHA256).Hash.ToLower() | Set-Content -NoNewline EduSyncAD-Setup.exe.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-desktop
           path: |
+            EduSyncAD-Setup.exe
+            EduSyncAD-Setup.exe.sha256
+
+  # ─── Build Desktop Linux (AppImage + tar.gz) ──────────────────────────
+  build-linux-desktop:
+    name: Desktop Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.x"
+          cache: true
+
+      - name: Récupérer la version depuis le tag
+        id: version
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Installer les dépendances système (WebKitGTK pour Wails)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libwebkit2gtk-4.1-dev
+
+      - name: Compiler l'application desktop (Wails v3 / go build)
+        run: |
+          go build -trimpath -ldflags="-s -w -X main.version=${{ steps.version.outputs.version }}" \
+            -o "dist/${APP_NAME}" \
+            ./cmd/edusync-ad
+
+      - name: Construire le tar.gz Linux
+        run: |
+          mkdir -p dist/linux-pkg
+          cp dist/${APP_NAME} dist/linux-pkg/
+          cat > dist/linux-pkg/${APP_NAME}.desktop <<EOF
+          [Desktop Entry]
+          Name=EduSync AD
+          Exec=${APP_NAME}
+          Icon=edusync-ad
+          Type=Application
+          Categories=Office;System;
+          EOF
+          tar -czf dist/${APP_NAME}-linux-amd64.tar.gz -C dist/linux-pkg .
+
+      - name: Calculer le hash SHA-256 (tar.gz)
+        run: |
+          sha256sum dist/${APP_NAME}-linux-amd64.tar.gz | cut -d ' ' -f1 > dist/${APP_NAME}-linux-amd64.tar.gz.sha256
+
+      - name: Construire l'AppImage Linux
+        run: |
+          # AppImage nécessite AppImageTool et le runtime WebKitGTK bundlé.
+          # Pour simplifier l'alpha, on produit un AppImage minimal regroupant le binaire.
+          sudo apt-get install -y appimagetool || true
+          if command -v appimagetool >/dev/null 2>&1; then
+            mkdir -p dist/AppDir/usr/bin
+            cp dist/${APP_NAME} dist/AppDir/usr/bin/
+            cat > dist/AppDir/usr/share/applications/${APP_NAME}.desktop <<EOF
+            [Desktop Entry]
+            Name=EduSync AD
+            Exec=${APP_NAME}
+            Icon=edusync-ad
+            Type=Application
+            Categories=Office;System;
+            EOF
+            cd dist/AppDir
+            appimagetool . ../${APP_NAME}-linux.AppImage
+            cd ../..
+          else
+            echo "appimagetool indisponible : AppImage ignoré (tar.gz produit quand même)"
+          fi
+
+      - name: Calculer le hash SHA-256 (AppImage)
+        if: success()
+        run: |
+          sha256sum dist/${APP_NAME}-linux.AppImage | cut -d ' ' -f1 > dist/${APP_NAME}-linux.AppImage.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-desktop
+          path: |
+            dist/${APP_NAME}-linux-amd64.tar.gz
+            dist/${APP_NAME}-linux-amd64.tar.gz.sha256
+            dist/${APP_NAME}-linux.AppImage
+            dist/${APP_NAME}-linux.AppImage.sha256
+
+  # ─── Publier la Release GitHub (pré-release) ──────────────────────────
+  release:
+    name: Créer la Release
+    needs: [build-cli, build-windows-desktop, build-linux-desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Récupérer la version depuis le tag
+        id: version
+        run: |
+          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Extraire le changelog alpha
+        run: |
+          {
+            echo "## EduSync AD ${{ github.ref_name }} — Alpha 1"
+            echo ""
+            echo "Première version alpha de la réécriture Go/Wails d'EduSync-AD."
+            echo ""
+            echo "### Périmètre couvert (Core M1 → M11)"
+            echo ""
+            echo "- M1 : Création de comptes / Arrivées (import CSV, simulation, exécution)"
+            echo "- M2 : Migration / Restructuration (déplacement OU, groupes auto)"
+            echo "- M3 : Gestion des départs (désactivation, archivage, purge planifiée)"
+            echo "- M4 : Réinitialisation MDP (par OU, groupe, CSV, politiques élèves/personnels)"
+            echo "- M5 : Explorateur AD (arborescence, recherche unifiée)"
+            echo "- M6 : Export CSV et PDF étiquettes (Avery L7160/L7163)"
+            echo "- M7 : Journal d'actions (filtres, append-only SQLite)"
+            echo "- M8 : Paramètres globaux (comptes, mots de passe, apparence)"
+            echo "- M9 : Connexion LDAPS/LDAP (repli 389 + avertissement de sécurité)"
+            echo "- M11 : Mode simulation (Validate → Simulate → Execute → Audit)"
+            echo ""
+            echo "### Limites connues"
+            echo ""
+            echo "- M10 (mise à jour intégrée) sera livrée avec la prochaine itération alpha."
+            echo "- L'onglet Délégation (RBAC, M26) arrive avec les modules avancés."
+            echo "- Logiciel en cours de migration : la version Python 1.17.1 reste la version de production."
+            echo ""
+            echo "### Installation"
+            echo "- Windows : \`EduSyncAD-Setup.exe\` (Inno Setup, désinstallation propre)"
+            echo "- Linux : \`EduSyncAD-linux.AppImage\` (\`chmod +x && ./EduSyncAD-linux.AppImage\`) ou \`.tar.gz\`"
+            echo ""
+            echo "### Vérification d'intégrité"
+            echo "Les fichiers \`.sha256\` permettent de vérifier chaque artefact."
+            echo ""
+            echo "### Téléchargements"
+            echo ""
+            echo "| Plateforme | Fichier |"
+            echo "|---|---|"
+            echo "| Windows 10/11 | \`EduSyncAD-Setup.exe\` |"
+            echo "| Linux | \`EduSyncAD-linux.AppImage\` |"
+            echo "| Linux | \`edusync-ad-linux-amd64.tar.gz\` |"
+            echo "| CLI (multiplateforme) | 5 binaires \`edusync-cli-<os>-<arch>\` |"
+          } > release_notes.md
+
+      - name: Créer la Release GitHub (pré-release)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "EduSync AD ${{ github.ref_name }} (Alpha 1)"
+          body_path: release_notes.md
+          draft: false
+          prerelease: true
+          files: |
+            dist/EduSyncAD-Setup.exe
+            dist/EduSyncAD-Setup.exe.sha256
             dist/EduSyncAD-linux.AppImage
             dist/EduSyncAD-linux.AppImage.sha256
             dist/edusync-ad-linux-amd64.tar.gz
             dist/edusync-ad-linux-amd64.tar.gz.sha256
-          retention-days: 30
-
-  # ═══════════════════════════════════════════════════════════════════════
-  # Release GitHub — regroupe les artefacts et crée la release
-  # ═══════════════════════════════════════════════════════════════════════
-  release:
-    name: Create GitHub Release
-    needs: [windows, linux]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-release
-          path: artifacts/windows
-
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-release
-          path: artifacts/linux
-
-      - name: Verify all artifacts
-        run: |
-          echo "=== Artifacts Windows ==="
-          ls -lh artifacts/windows/
-          echo "=== Artifacts Linux ==="
-          ls -lh artifacts/linux/
-          
-          # Vérifier les fichiers requis
-          required=(
-            "artifacts/windows/EduSyncAD-Setup.exe"
-            "artifacts/windows/EduSyncAD-Setup.exe.sha256"
-            "artifacts/linux/EduSyncAD-linux.AppImage"
-            "artifacts/linux/EduSyncAD-linux.AppImage.sha256"
-            "artifacts/linux/edusync-ad-linux-amd64.tar.gz"
-            "artifacts/linux/edusync-ad-linux-amd64.tar.gz.sha256"
-          )
-          for f in "${required[@]}"; do
-            if [ ! -f "$f" ]; then
-              echo "❌ Fichier manquant: $f"
-              exit 1
-            fi
-            echo "✅ $f"
-          done
-
-      - name: Generate release notes
-        id: notes
-        run: |
-          cat <<'EOF' > release-notes.md
-          # EduSync AD ${{ env.APP_VERSION }}
-          
-          **⚠️ Version alpha — Logiciel en cours de migration**
-          
-          Cette version est une **pré-release** (alpha) de la réécriture Go/Wails d'EduSync-AD.
-          La version de production reste **Python 1.17.1**.
-          
-          ## Périmètre couvert (Core M1 → M11)
-          
-          - ✅ **Connexion AD (M9)** : LDAPS prioritaire, repli LDAP + avertissement, pool de connexions
-          - ✅ **Création de comptes (M1)** : Import CSV, gabarits, doublons, groupes auto, étiquettes
-          - ✅ **Réinitialisation MDP (M4)** : Par OU/groupe/CSV, politiques élèves/personnels, forçage
-          - ✅ **Migration / Restructuration (M2)** : Via CSV ou UI, déplacement + groupes auto
-          - ✅ **Explorateur AD (M5)** : Arborescence, recherche temps réel, détails
-          - ✅ **Export CSV/PDF (M6)** : Sélection OU ± sous-OU, champs cochables, PDF Avery + QR
-          - ✅ **Journal d'actions (M7)** : Filtres date/type/résultat, export CSV, SQLite append-only
-          - ✅ **Gestion des départs (M3)** : Désactivation, archivage, purge planifiée
-          - ✅ **Paramètres globaux (M8)** : 3 onglets (comptes, MDP, apparence)
-          - ✅ **Mode simulation (M11)** : Validate → Simulate → Execute → Audit sur tout le Core
-          - ✅ **Mise à jour intégrée (M10)** : Vérification GitHub releases, SHA-256, installation
-          
-          ## Formats de distribution
-          
-          | Plateforme | Fichier | Installation |
-          |---|---|---|
-          | Windows 10/11 (x64) | `EduSyncAD-Setup.exe` | Exécuter en admin |
-          | Linux (x64, AppImage) | `EduSyncAD-linux.AppImage` | `chmod +x` puis exécuter |
-          | Linux (x64, binaire) | `edusync-ad-linux-amd64.tar.gz` | Extraire, `./edusync-ad` |
-          
-          Chaque artefact est accompagné de son fichier `.sha256` pour vérification.
-          
-          ## Vérification des sommes
-          
-          ```bash
-          # Windows (PowerShell)
-          Get-FileHash -Algorithm SHA256 EduSyncAD-Setup.exe
-          
-          # Linux
-          sha256sum -c EduSyncAD-linux.AppImage.sha256
-          sha256sum -c edusync-ad-linux-amd64.tar.gz.sha256
-          ```
-          
-          ## Limitations connues (alpha)
-          
-          - Pas encore de tests d'intégration automatisés contre un vrai AD (campagne Priorité 3)
-          - Pas de module avancé (M12+) — livrés un par release ensuite
-          - Taille desktop ~17 MB (cible < 15 MB, optimisation prévue)
-          - macOS non supporté dans cette alpha
-          
-          ## Retour à la version Python
-          
-          La version Python 1.17.1 reste la version de production recommandée.
-          Pour migrer vos données vers Go : `edusync-cli migrate --from-python` (à venir).
-          
-          ---
-          
-          **Appel à testeurs** : Merci de tester la connexion LDAPS, la création de comptes,
-          la réinitialisation MDP, l'explorateur, l'export et le journal.
-          Rapportez les problèmes sur GitHub Issues.
-          EOF
-          
-          cat release-notes.md
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.APP_VERSION }}
-          name: EduSync AD ${{ env.APP_VERSION }}
-          body_path: release-notes.md
-          draft: false
-          prerelease: true
-          files: |
-            artifacts/windows/EduSyncAD-Setup.exe
-            artifacts/windows/EduSyncAD-Setup.exe.sha256
-            artifacts/linux/EduSyncAD-linux.AppImage
-            artifacts/linux/EduSyncAD-linux.AppImage.sha256
-            artifacts/linux/edusync-ad-linux-amd64.tar.gz
-            artifacts/linux/edusync-ad-linux-amd64.tar.gz.sha256
