@@ -129,12 +129,6 @@ tasks:
           ldapsearch -x -H ldap://localhost -D "Administrator@EDUSYNC.LOCAL" -w TestPass123 \
           -b "DC=EDUSYNC,DC=LOCAL" "(objectClass=user)" dn
 
-  build:appimage:
-    desc: Construit l'AppImage Linux (nécessite libwebkit2gtk-4.1-dev)
-    cmds:
-      - chmod +x build/appimage/build-appimage.sh
-      - VERSION={{.VERSION}} OUT_DIR=dist ./build/appimage/build-appimage.sh
-
   clean:
     desc: Supprime les artefacts de build Go
     cmds:
