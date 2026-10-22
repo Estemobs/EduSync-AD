@@ -55,9 +55,9 @@ build_desktop() {
   # Détection de la chaîne d'outillage requise.
   case "${goos}/${goarch}" in
     linux/amd64)
-      if ! command -v pkg-config >/dev/null || ! pkg-config --exists webkit2gtk-4.1; then
-        echo "⏭  Desktop linux/amd64 ignoré : libwebkit2gtk-4.1-dev absent"
-        SAUTS+=("desktop linux/amd64 (webkit2gtk manquant)")
+      if ! command -v pkg-config >/dev/null || ! pkg-config --exists gtk4 webkitgtk-6.0 libsoup-3.0; then
+        echo "⏭  Desktop linux/amd64 ignoré : libgtk-4-dev / libwebkitgtk-6.0-dev absents"
+        SAUTS+=("desktop linux/amd64 (gtk4/webkitgtk-6.0 manquant)")
         return
       fi
       cgo=1
