@@ -80,12 +80,17 @@ jobs:
           go-version: "1.27.x"
           cache: true
 
-      # WebKitGTK est requis pour Wails v3 (cgo). X11 est requis par
-      # wails/v3/pkg/application (global_shortcut_linux_x11.go).
+      # Wails v3 utilise GTK4 + WebKitGTK 6.0 (cgo), et non webkit2gtk-4.1.
+      # X11 est requis par wails/v3/pkg/application
+      # (global_shortcut_linux_x11.go).
       - name: Dépendances système
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libx11-dev
+          sudo apt-get install -y libwebkitgtk-6.0-dev libgtk-4-dev libsoup-3.0-dev \
+            libglib2.0-dev libgdk-pixbuf-2.0-dev libx11-dev pkg-config
+
+      - name: Vérification des dépendances pkg-config
+        run: pkg-config --cflags gtk4 webkitgtk-6.0 libsoup-3.0
 
       - name: Build desktop
         run: |
