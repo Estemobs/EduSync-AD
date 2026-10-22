@@ -12,11 +12,11 @@ Le dépôt contient **deux implémentations** de la même application :
 | Stack | État | Où |
 |---|---|---|
 | **Python / PyQt6** | publiée (1.17.1), version de production | `src/edusync_ad/`, `tests/core/` |
-| **Go / Wails v3** | migration en cours — Phase 0 livrée, câblage du Core en cours | `cmd/`, `internal/`, `web/` |
+| **Go / Wails v3** | migration terminée — M31 non porté, validation alpha en cours | `cmd/`, `internal/`, `web/` |
 
 La cible est une réécriture **sans perte fonctionnelle** en Go, testable et
-pilotable par l'IA. Tant que la migration n'est pas terminée, les deux stacks
-doivent rester utilisables et leurs tests verts.
+pilotable par l'IA. Tant que la version Go n'est pas publiée en stable, les
+deux stacks doivent rester utilisables et leurs tests verts.
 
 ## Commandes
 
@@ -107,20 +107,12 @@ _ = s.journal.Record(entree)     // jamais de Delete ni d'UPDATE
   déclenchée **après l'alpha** (voir la priorité 3 de la roadmap).
 - **Benchmarks** : `go test -bench=. ./internal/...`.
 
-## État de la migration (mise à jour à chaque livraison)
+## État de la migration
 
-Voir la section « État d'avancement » (§0) de `ROADMAP_GO_MIGRATION.md`
-(version 3.0, 15 octobre 2026).
+**Source de vérité : `docs/STATUS.md`** (état constaté, métriques, releases, prochaines actions).
+Le plan et l'inventaire fonctionnel sont dans `ROADMAP_GO_MIGRATION.md`.
 
-En résumé : **Phase 0 livrée** (config, crypto, modèles, audit, pool AD
-TLS/SASL, CLI, UI Wails/HTMX, testutil Samba) + **A1/M9 livré**
-(connexion : `BindPassword`, repli LDAPS→LDAP, erreurs fr/en). Stratégie
-décidée le 15/10/2026 : **1) finir le Core M1→M11** — câblage UI, les
-backends existent déjà dans `internal/ad/` (voir le tableau « constat
-réel dans le code » du §0) —, **2) sortir l'alpha 1 dès que M11 est
-prêt**, puis **un module avancé livré = une release** (M12→M32),
-**3) campagne de tests intégrée aux releases**. La boucle
-`task lint && task test` reste obligatoire à chaque livraison.
+En résumé : Phase 0, Core M1→M11 et modules M12→M30 + M32 livrés ; M31 non porté (priorité basse) ; restent la validation manuelle de l'alpha (P2.5) et la campagne de tests P3. La boucle `task lint && task test` reste obligatoire à chaque livraison.
 
 ## Prompts réutilisables
 

@@ -137,37 +137,18 @@ task build:all       # cross-build → dist/ (5 cibles CLI)
 
 ---
 
-## État d'avancement — Résumé visuel
+## État d'avancement
 
-| Priorité | Description | Progression |
-|----------|-------------|-------------|
-| **P0** | Starter kit Go, config, crypto, pool AD, modèles, audit, testutil, CLI, Wails v3 | ✅ **100%** |
-| **P1** | Câblage Core M1→M11 (UI bout en bout) | ✅ **100%** |
-| **P2.1** | Pipeline release α1 (Windows InnoSetup + Linux AppImage) | ✅ **100%** (CI prêt) |
-| **P2.2** | Un module avancé = une release (M13→M32) | ✅ Code livré (M31 non porté, M32 UI/CLI à câbler) |
-| **P2.5** | Checklist pré-alpha (tests manuels Windows + AD réel) | 🔲 **En attente validation** |
-| **P3** | Campagne tests (intégration Samba, e2e, benchmarks) | ⏳ Démarre post-α1 |
+| Priorité | État |
+|----------|------|
+| **P0** — Fondations Go (config, crypto, pool AD, modèles, audit, CLI, Wails v3) | ✅ **100%** |
+| **P1** — Câblage Core M1→M11 (UI bout en bout) | ✅ **100%** |
+| **P2.1** — Pipeline release α1 (Windows InnoSetup + Linux AppImage) | ✅ **100%** (CI prêt) |
+| **P2.2** — Modules avancés M12→M30 + M32 | ✅ Code livré (M31 non porté, M32 UI/CLI à câbler) |
+| **P2.5** — Checklist pré-alpha (tests manuels Windows + AD réel) | 🔲 **En attente validation** |
+| **P3** — Campagne tests (intégration Samba, e2e, benchmarks) | ⏳ Démarre post-α1 |
 
-### Prochaines releases planifiées (prêtes à être taguées)
-
-| Tag | Module | État |
-|-----|--------|------|
-| `v0.1.0-alpha.1` | **Core M1→M11** (α1) | ✅ CI déclenchée |
-| `v0.2.0` | M13 Profils utilisateurs | ✅ Implémenté |
-| `v0.3.0` | M16 Heures de connexion | ✅ Implémenté |
-| `v0.4.0` | M15 Scripts logon/logoff | ✅ Implémenté |
-| `v0.5.0` | M17 Dossiers personnels | ✅ Implémenté |
-| `v0.6.0` | M14 Quotas disque | ✅ Implémenté |
-| `v0.7.0` | M18 Espaces partagés classe | ✅ Implémenté |
-| `v0.8.0` | T2 Cache AD SQLite | ✅ Implémenté |
-| `v0.9.0` | M12 Photos d'identité | ✅ Implémenté |
-| `v0.10.0` | M22 Import/Export avancés | ✅ Implémenté |
-| `v0.11.0` | M19 Microsoft 365 / Entra ID | ✅ Implémenté |
-| `v0.12.0` | M20 Exchange | ✅ Implémenté |
-| `v0.13.0` | M21 RDS / Bureau à distance | ✅ Implémenté |
-| `v0.14.0` | M23 Modèles de groupes | ✅ Implémenté |
-| `v0.15.0` | M24 Étiquettes avancées | ✅ Implémenté |
-| `v0.16.0+` | M25→M30, M32 + Coffre MDP | ✅ Implémenté (M31 non porté) |
+Le détail par module, les métriques de build, les releases planifiées et les prochaines actions sont centralisés dans **[docs/STATUS.md](docs/STATUS.md)**.
 
 ---
 
@@ -176,7 +157,7 @@ task build:all       # cross-build → dist/ (5 cibles CLI)
 | Document | Description |
 |----------|-------------|
 | [Feuille de route Go](ROADMAP_GO_MIGRATION.md) | 3 priorités, phases, critères acceptation, risques, prompts IA |
-| [État d'avancement](docs/STATUS.md) | Vue rapide modules, tests, build, prochaine action |
+| [État d'avancement](docs/STATUS.md) | **Source de vérité** : modules, métriques, releases, prochaines actions |
 | [Architecture Go](docs/ARCHITECTURE.md) | Architecture cible, flux UI, paquets, formats partagés Python↔Go |
 | [Environnement test AD](docs/AD_TEST_ENV.md) | Samba AD DC en container (LDAPS, Kerberos, DNS, GPO, PSO) |
 | [Guide utilisateur](docs/guide_utilisateur.md) | Manuel complet v1.x (modules, connexion, dépannage) |
@@ -190,15 +171,7 @@ task build:all       # cross-build → dist/ (5 cibles CLI)
 ![Go Tests](https://github.com/estemobs/EduSync-AD/actions/workflows/ci.yml/badge.svg)
 ![Release Go](https://github.com/estemobs/EduSync-AD/actions/workflows/release-go.yml/badge.svg)
 
-| Métrique | Cible | Actuel |
-|----------|-------|--------|
-| `gofmt -l` | 0 fichier | ✅ 0 |
-| `go vet` | Vert | ✅ Vert |
-| Tests Go | >0 | ✅ 28 packages OK |
-| Tests Python | Vert | ✅ 843 passés |
-| CLI cross-build | 5 cibles | ✅ Linux/Win/macOS |
-| Taille CLI (`-s -w`) | 8-12 MB | ✅ 9 MB |
-| Taille Desktop | < 15 MB | ⚠️ 17 MB (optimisation α) |
+`gofmt`, `go vet` et `go test ./...` sont verts en local et en CI. Les métriques détaillées (paquets testés, tailles des binaires, cibles cross-build) sont dans **[docs/STATUS.md](docs/STATUS.md)**.
 
 ---
 

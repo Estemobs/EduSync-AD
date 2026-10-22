@@ -1,6 +1,7 @@
 # État d'avancement — EduSync AD (Migration Go)
 
-> **Mise à jour : 22 octobre 2026** — Données vérifiées dans le code réel (`go test ./...`, `go vet`, `gofmt`).
+> **Source de vérité de l'avancement.** Mise à jour : 22 octobre 2026 — données vérifiées dans le code réel (`go test ./...`, `go vet`, `gofmt`).
+> La feuille de route ([`ROADMAP_GO_MIGRATION.md`](../ROADMAP_GO_MIGRATION.md)) décrit le plan et l'inventaire ; ce document décrit l'état constaté.
 
 ---
 
@@ -10,7 +11,7 @@
 |-----------|----------------------------|------------------------|
 | **Core v1.x (M1-M11)** | ✅ 1.17.1 | ✅ **Terminé** |
 | **Modules avancés (M12-M24)** | ✅ Déployé | ✅ **Terminé** (code complet) |
-| **Modules v4.0 (M25-M32)** | ✅ Déployé | ✅ **Terminé** (code complet) |
+| **Modules v4.0 (M25-M32)** | ✅ Déployé | ✅ **Terminé** sauf M31 (non porté) et M32 (UI/CLI à câbler) |
 | **Fondations (T0-T2)** | ✅ Livré | ✅ Config, Crypto, Modèles, Audit, Pool AD, CLI, UI Wails, Cache AD |
 
 ---
@@ -107,8 +108,29 @@
 |-------|-------------|------|
 | `release-go.yml` | Workflow CI tags `v0.*` (Windows + Linux + Release) | ✅ **Pushé** |
 | `v0.1.0-alpha.1` | Core M1→M11 — artefacts Windows/Linux | ✅ **Tag poussé, CI en cours** |
-| `v0.2.0` → `v0.24.0` | Un module = une release (M13→M32) | ✅ Code prêt, à déclencher |
+| `v0.2.0` → `v0.24.0` | Un module = une release (M13→M30, M32) | ✅ Code prêt, à déclencher |
 | `release.yml` | Python v1.* (inchangé) | ✅ Préservé |
+
+### Releases planifiées (prêtes à être taguées)
+
+| Tag | Module | État |
+|-----|--------|------|
+| `v0.1.0-alpha.1` | **Core M1→M11** (α1) | ✅ CI déclenchée |
+| `v0.2.0` | M13 Profils utilisateurs | ✅ Implémenté |
+| `v0.3.0` | M16 Heures de connexion | ✅ Implémenté |
+| `v0.4.0` | M15 Scripts logon/logoff | ✅ Implémenté |
+| `v0.5.0` | M17 Dossiers personnels | ✅ Implémenté |
+| `v0.6.0` | M14 Quotas disque | ✅ Implémenté |
+| `v0.7.0` | M18 Espaces partagés classe | ✅ Implémenté |
+| `v0.8.0` | T2 Cache AD SQLite | ✅ Implémenté |
+| `v0.9.0` | M12 Photos d'identité | ✅ Implémenté |
+| `v0.10.0` | M22 Import/Export avancés | ✅ Implémenté |
+| `v0.11.0` | M19 Microsoft 365 / Entra ID | ✅ Implémenté |
+| `v0.12.0` | M20 Exchange | ✅ Implémenté |
+| `v0.13.0` | M21 RDS / Bureau à distance | ✅ Implémenté |
+| `v0.14.0` | M23 Modèles de groupes | ✅ Implémenté |
+| `v0.15.0` | M24 Étiquettes avancées | ✅ Implémenté |
+| `v0.16.0+` | M25→M30, M32 + Coffre MDP | ✅ Implémenté (M31 non porté) |
 
 ---
 
@@ -119,19 +141,8 @@
 | 1 | **Valider α1 manuellement** (P2.5) | Utilisateur | 5 points : install Win, désinstall, config Python, LDAPS réel, thème/i18n |
 | 2 | Publier notes release α1 | Auto (CI) | Release GitHub pré-release avec 3 artefacts + SHA256 |
 | 3 | Tag `v0.2.0` (M13 Profils) | Utilisateur | `git tag v0.2.0 && git push origin v0.2.0` |
-| 4 | Suivre releases M13→M32 | Utilisateur | Un tag = une release via `release-go.yml` |
+| 4 | Suivre releases M13→M30, M32 | Utilisateur | Un tag = une release via `release-go.yml` |
 | 5 | Campagne tests P3 (Samba, e2e, bench) | Dev/IA | Intégrée aux releases post-α1 |
-
----
-
-## Ordre de travail (rappel roadmap)
-
-1. **Lot A** : Core M1-M11 ✅ **Terminé**
-2. **P2.1** : Pipeline release α1 ✅ **Terminé** (CI prêt)
-3. **P2.5** : Checklist pré-alpha 🔲 **En attente validation manuelle**
-4. **P2.2** : Releases modules avancés (un module = une release) ✅ Code prêt
-5. **Clôture P2** : Script migration Python→Go + checklist §4
-6. **Priorité 3** : Campagne tests (intégration, e2e, benchmarks)
 
 ---
 

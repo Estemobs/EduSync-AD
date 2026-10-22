@@ -1,6 +1,6 @@
 # 🗺️ Feuille de route — Migration EduSync-AD : Python/PyQt6 → Go/Wails
 
-> **Version** : 3.0 — 15 octobre 2026
+> **Version** : 3.1 — 22 octobre 2026
 > **Objectif** : réécrire **toutes** les fonctionnalités d'EduSync-AD en Go
 > (backend + UI desktop Wails) **sans perte de fonctionnalité**, **sortir une
 > première alpha dès le Core câblé (M1 → M11)**, puis **livrer les modules
@@ -9,7 +9,7 @@
 > **Priorités ordonnées (décision utilisateur, 15 octobre 2026)** :
 >
 > 1. **Finir le Core (M1 → M11)** — câblage UI de bout en bout ; la logique
->    métier existe **déjà** dans `internal/ad/` (voir le constat §0).
+>    métier existe **déjà** dans `internal/ad/` (état constaté : `docs/STATUS.md`).
 > 2. **Alpha 1 dès que M11 est atteint** — Windows
 >    (`EduSyncAD-Setup.exe`) + Linux (AppImage + `.tar.gz`). Ensuite :
 >    **un module avancé livré = une release** (M12 → release, M13 → release,
@@ -26,7 +26,7 @@
 
 ## Table des matières
 
-1. [État d'avancement](#0-état-davancement-mise-à-jour--15-octobre-2026)
+1. [État d'avancement](#0-état-davancement)
 2. [Contexte et motivations](#1-contexte-et-motivations)
 3. [Décisions validées](#2-décisions-validées)
 4. [Architecture cible](#3-architecture-cible)
@@ -42,60 +42,12 @@
 
 ---
 
-## 0. État d'avancement (mise à jour : 15 octobre 2026)
+## 0. État d'avancement
 
-> Statut vérifié **dans le code et les tests**, pas dans les intentions.
+> **Source de vérité : [`docs/STATUS.md`](docs/STATUS.md)** (mise à jour du 22 octobre 2026).
+> Cette feuille de route décrit le plan, l'inventaire fonctionnel et les décisions ; l'état constaté (module par module, métriques, releases, prochaines actions) est maintenu dans `docs/STATUS.md` pour éviter les doublons.
 
-### Phase 0 (semaines 1-2) — ✅ livrée
-
-| Jours | Livrable | Statut | Où |
-|---|---|---|---|
-| 1-2 | Starter kit : repo Go, `go.mod`, `Taskfile.yml`, CI, `CLAUDE.md`/`AGENTS.md`, cross-build | ✅ Livré | `go.mod`, `Taskfile.yml`, `.github/workflows/ci.yml`, `build/cross-build.sh` |
-| 3-4 | Config chiffrée multi-profil, lecture des fichiers Python | ✅ Livré (testé) | `internal/config` (+ fixture `testdata/config_python.json` généré par Python) |
-| 3-4 | Crypto compatible Python (AES-256-GCM) | ✅ Livré (testé) | `internal/crypto`, avec vecteur d'interopérabilité Python → Go |
-| 5-6 | **Core AD : pool de connexions + TLS + SASL/GSSAPI** | ✅ Livré | `internal/ad/pool.go` (pool, health check, LDAPS/StartTLS, `AuthMethod` simple/NTLM/SASL-GSSAPI + client `gokrb5`) |
-| 7-8 | Modèles domaine + audit SQLite | ✅ Livré (testé) | `internal/models`, `internal/audit` (schéma identique à Python, append-only) |
-| 9-10 | Testutil container Samba + fixtures | ✅ Livré (hors campagne de tests) | `internal/testutil/samba.go` (testcontainers-go), `Dockerfile.samba-ad`, `provision-ad.sh`, `docs/AD_TEST_ENV.md` |
-| 11-12 | CLI squelette | ✅ Livré (testé) | `cmd/edusync-cli` : `version`, `paths`, `config show`, `audit list`, `connect` (DNS + TCP + TLS) |
-| 13-14 | Wails v3 + HTMX/Alpine/Tailwind embeddé | ✅ Livré (testé) | `cmd/edusync-ad`, `internal/ui`, `web/` — login, dashboard, thème clair/sombre, i18n fr/en + gabarits `users`, `password`, `migration` |
-
-### Phase 1 — ✅ livrée
-
-| Module | Avancement constaté | Où |
-|---|---|---|
-| Réinitialisation MDP | ✅ Gabarit HTMX + routes + logique AD + i18n fr/en | `internal/ad/password.go`, `internal/ui/server.go`, `web/templates/password*.html` |
-| Migration / restructuration | ✅ Gabarits HTMX + routes + logique AD + i18n fr/en | `internal/ad/migration.go`, `internal/ui/server.go`, `web/templates/migration*.html` |
-
-### Priorité 1 — ✅ livrée (constat réel dans le code, 22/10)
-
-| Module | Réel dans le code | Manque pour le dire « fini » |
-|---|---|---|
-| Login / dashboard / thème / i18n | ✅ Fonctionnel et testé | — |
-| Connexion AD (M9) | ✅ **Livré et testé** (commit `86414c0`) | — (`BindPassword` câblé, repli LDAPS→LDAP + avertissement, erreurs fr/en, pool nettoyé à la déconnexion) |
-| Création de comptes (M1) | ✅ **Livré et testé** (commit `f705d80`) | — (`usersSimulate`/`usersExecute` + gabarits, doublons, AD check, groupes auto, export étiquettes) |
-| Réinitialisation MDP (M4) | ✅ **Livré et testé** (commit `7eacd2b`) | — (`passwordSimulate`/`passwordExecute` + gabarits, 3 modes OU/groupe/CSV, politiques élèves/perso, forçage MDP, export CSV) |
-| Migration / restructuration (M2) | ✅ **Livré et testé** | `migrationPlan` / `migrationSimulate` / `migrationExecute` + 3 gabarits |
-| Explorateur AD (M5) | ✅ **Livré et testé** | `pool.Search` / `pool.BuildTree` / `pool.GetSubTree` + 4 gabarits (`explorer.html`, `explorer_results.html`, `explorer_tree.html`, `explorer_details.html`) |
-| Export CSV/PDF (M6) | ✅ **Livré et testé** | Vrais handlers `ExportCSV` / `ExportLabelsPDF` + gabarit `export.html` |
-| Journal d'actions (M7) | ✅ **Livré et testé** | `auditFilter` réel + gabarits `audit.html` + `audit_results.html` |
-| Gestion des départs (M3) | ✅ **Livré et testé** | `internal/ad/depart.go`, routes, gabarit `departs.html`, CLI `departs`, i18n fr/en |
-| Paramètres globaux (M8) | ✅ **Livré et testé** | 3 onglets (comptes, mots de passe, apparence), routes, gabarit `parametres.html`, i18n fr/en |
-| Mode simulation (M11) | ✅ **Livré et testé** | `Validate → Simulate → Execute → Audit` généralisé + progression/annulation |
-| Mise à jour intégrée (M10) | ✅ **Livrée et testée** | `internal/updater` (vérification GitHub releases, téléchargement, SHA-256, préparation installation) + routes UI `/app/updater/check` et `/app/updater/install`, i18n fr/en |
-
-### Mesures constatées (Linux amd64 — Go 1.27.2, Wails v3.0.0-beta.29) — vérifiées le 15/10/2026
-
-| Critère | Cible | Réel |
-|---|---|---|
-| `gofmt -l cmd internal web` | rien | **rien** ✅ |
-| `go vet ./...` | vert | **vert** ✅ |
-| Tests Go | — | **8 paquets verts** ; 3 paquets sans test (`cmd/edusync-ad`, `internal/testutil`, `web`) — `go test ./...` en **0,8 s** ✅ |
-| Tests Python | vert | **843 tests passés** en **3,0 s** ✅ |
-| CLI cross-compilée | toutes cibles | **5 cibles** produites en une commande (`./build/cross-build.sh cli`) |
-| Taille CLI (`-s -w`) | 8-12 MB | **9,5 MB** ✅ |
-| Taille app desktop (`-s -w`) | < 15 MB | **17,2 MB** ⚠️ (glue cgo/WebKit — optimisation au chantier alpha) |
-| CI | vertes | `ci.yml` : job Go (fmt/vet/test/build/smoke) + job Python (pytest) |
-| Release | alpha Win + Linux | ✅ `release-go.yml` (Windows InnoSetup + Linux AppImage/tar.gz) ; `release.yml` (Python) préservé |
+**Résumé** : Phase 0 ✅, Core M1→M11 ✅, modules M12→M30 + M32 ✅ (M31 non porté, M32 UI/CLI à câbler), pipeline release Go ✅. Restent la validation manuelle de l'alpha (P2.5) et la campagne de tests P3.
 
 ### Décisions d'implémentation (à conserver)
 
