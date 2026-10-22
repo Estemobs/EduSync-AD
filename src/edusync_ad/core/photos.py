@@ -282,6 +282,7 @@ def map_photos_from_csv(
 def create_photo_preview_pixmap(photo_data: bytes, size: int = 80) -> Optional["QPixmap"]:
     """Crée un QPixmap depuis des données JPEG pour affichage Qt."""
     try:
+        from PyQt6.QtCore import Qt
         from PyQt6.QtGui import QPixmap
         pixmap = QPixmap()
         pixmap.loadFromData(photo_data)
@@ -299,6 +300,7 @@ def create_photo_preview_pixmap(photo_data: bytes, size: int = 80) -> Optional["
 def photo_to_qicon(photo_data: bytes, size: int = 32) -> Optional["QIcon"]:
     """Convertit des données photo en QIcon pour Qt."""
     try:
+        from PyQt6.QtCore import Qt
         from PyQt6.QtGui import QIcon, QPixmap
         pixmap = QPixmap()
         pixmap.loadFromData(photo_data)
@@ -314,6 +316,6 @@ def photo_to_qicon(photo_data: bytes, size: int = 32) -> Optional["QIcon"]:
     return None
 
 
-# Import Qt pour les annotations de type
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap, QIcon
+# Note : PyQt6 est importé paresseusement à l'intérieur des fonctions ci-dessus
+# afin que le cœur métier reste importable sans environnement graphique
+# (ex. CI, tests headless sans libEGL).
