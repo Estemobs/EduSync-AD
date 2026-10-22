@@ -9,7 +9,7 @@
 Import CSV → comptes créés. Restructuration → comptes migrés. Départ → compte archivé.
 En quelques clics, pas en PowerShell.
 
-📖 [Guide utilisateur](docs/guide_utilisateur.md) · 📥 [Télécharger la dernière version](../../releases/latest) · 🗺️ [Feuille de route Go](ROADMAP_GO_MIGRATION.md) · 📊 [État avancement](docs/STATUS.md)
+📖 [Guide utilisateur](docs/guide_utilisateur.md) · 📥 [Télécharger la dernière release](https://github.com/estemobs/EduSync-AD/releases/latest) · 🗺️ [Feuille de route Go](ROADMAP_GO_MIGRATION.md) · 📊 [État d'avancement détaillé](docs/STATUS.md)
 
 </div>
 
@@ -23,38 +23,43 @@ En quelques clics, pas en PowerShell.
 | **Admin PME / Collectivité** | Onboarding/offboarding collaborateurs, gestion OU par service/équipe, délégation helpdesk, conformité RGPD |
 | **MSSP / Intégrateur** | Multi-clients (multisite), déploiement standardisé, audit centralisé, modèles réutilisables |
 
-> **Pas seulement éducation** : la logique « prénom/nom/équipe » s'applique à toute structure
-> hiérarchique (service, équipe, projet, site) — il suffit de renommer « classe » en « équipe » dans l'UI.
+> **Pas seulement éducation** : la logique « prénom/nom/équipe » s'applique à toute structure hiérarchique (service, équipe, projet, site) — il suffit de renommer « classe » en « équipe » dans l'UI.
 
 ---
 
 ## Fonctionnalités clés
 
-### Cycle de vie complet (v1.x — Déployé)
+### ✅ Core v1.x — **Terminé** (M1 → M11 + M10/M11)
 
-| Module | Description |
-|--------|-------------|
-| **Création de comptes / Arrivées** | Import CSV, génération identifiants/MDP/mail auto, résolution doublons, vérification AD existants, export CSV étiquettes prêt à imprimer |
-| **Migration (restructuration)** | Via CSV (prénom/nom/équipe) ou interface (sélection OU), déplacement AD + groupes auto, résolution par prénom/nom |
-| **Gestion des départs** | Désactivation immédiate ou archivage + purge planifiée (délai configurable, 30j par défaut) |
-| **Réinitialisation MDP** | Par OU, groupe AD ou CSV, politiques différées (élèves/personnels), forçage changement à la prochaine connexion |
-| **Explorateur AD** | Arborescence OUs/groupes, panneau central unifié (utilisateurs + groupes + sous-OU), clic droit complet (modif, move, MDP, groupes, suppr), recherche temps réel |
-| **Export (CSV / Étiquettes PDF)** | Sélection OU ± sous-OU, champs cochables (incl. MDP mémorisés), PDF Avery L7160/L7163, QR codes, couleurs pastel |
-| **Journal d'actions** | Filtres date/type/résultat/domaine/opérateur, export CSV, stockage local SQLite (append-only) |
-| **Mode simulation** | Toute écriture AD = prévisualisation modifiable avant validation |
+| Module | Statut | Description |
+|--------|--------|-------------|
+| **M1 — Création de comptes** | ✅ | Import CSV, génération identifiants/MDP/mail auto, résolution doublons, vérification AD existants, export CSV étiquettes |
+| **M2 — Migration / Restructuration** | ✅ | Via CSV (prénom/nom/équipe) ou UI (sélection OU), déplacement AD + groupes auto, résolution par prénom/nom |
+| **M3 — Gestion des départs** | ✅ | Désactivation immédiate ou archivage + purge planifiée (délai configurable, 30j défaut), restauration |
+| **M4 — Réinitialisation MDP** | ✅ | Par OU, groupe AD ou CSV, politiques différées (élèves/personnels), forçage changement 1er logon |
+| **M5 — Explorateur AD** | ✅ | Arborescence OUs/groupes, panneau central unifié, recherche temps réel, détails user/groupe/OU |
+| **M6 — Export (CSV / PDF étiquettes)** | ✅ | Sélection OU ± sous-OU, champs cochables, PDF Avery L7160/L7163, QR codes, trombinoscope |
+| **M7 — Journal d'actions** | ✅ | Filtres date/type/résultat/domaine/opérateur, export CSV, SQLite append-only |
+| **M8 — Paramètres globaux** | ✅ | 3 onglets : Comptes, Mots de passe, Apparence (thème/ langue) |
+| **M9 — Connexion LDAPS/LDAP** | ✅ | Pool connexions, TLS, SASL/GSSAPI, fallback LDAP 389 + avertissement, health check |
+| **M10 — Mise à jour intégrée** | ✅ | Vérification GitHub releases, téléchargement, SHA-256, installation préparée |
+| **M11 — Mode simulation + progression** | ✅ | Validate→Simulate→Execute→Audit sur toute écriture AD, barre progression + annulation |
+
+### ✅ Modules avancés — **Tous implémentés** (M12 → M32 + fondations)
+
+| Lot | Modules | État code |
+|-----|---------|-----------|
+| **Lot B** (M12-M24 + T2) | M12 Photos, M13 Profils, M14 Quotas, M15 Logon scripts, M16 Heures connexion, M17 Home dirs, M18 Class spaces, M19 M365/Graph, M20 Exchange, M21 RDS, M22 Advanced I/O, M23 Group templates, M24 Label Studio, T2 Cache AD | ✅ Code complet |
+| **Lot C** (M25-M32) | M25 Multisite, M26 RBAC, M27 Portail, M28 API/Webhooks, M29 Assistant IA, M30 Conformité, M31 DFS, M32 Backup/Restore, Coffre MDP | ✅ Code complet |
 
 ### Sécurité & Exploitation
 
 - **LDAPS par défaut** (port 636), fallback LDAP explicite avec avertissement, certificat CA custom
 - **Coffre MDP AES-256** local (machines admin), jamais sur l'AD
-- **Mise à jour intégrée** : vérification, téléchargement, installation, redémarrage auto, vérification somme de contrôle
-- **Configuration chiffrée** (domaine, utilisateur) via `platformdirs` + AES
-
-### Disponible (v4.0 — Livré)
-
-Étiquettes avancées : éditeur WYSIWYG, badges/cartes, trombinoscope photo A4/A3 et envoi d'une étiquette par mail, **multisite : plusieurs domaines/forêts AD gérés depuis une seule instance (profils chiffrés, sélecteur de site, journal par domaine)**, **délégation d'administration (RBAC) : 5 rôles, portées par OU/groupe, garde-fou sur chaque écriture AD, journal filtrable par opérateur**, **portail auto-service élève/parent : réinitialisation MDP par code mail, consultation identifiant/mail, demande création compte avec validation admin (serveur web stdlib, sans dépendance externe)**, **API REST + Webhooks : intégration SIS (PRONOTE, etc.), notifications externes (Teams, Slack, mail, SIG), synchronisation bidirectionnelle**, **IA / Assistant : détection anomalies (doublons, comptes orphelins), suggestion nettoyage fin d'année, génération identifiants 'intelligents', analyse logs → recommandations sécurité**, **conformité RGPD (rapport, droit à l'oubli, chiffrement exports)**, **MFA admin, session unique, granularité MDP (PSO), signature numérique exports**, **sauvegarde & restauration (backup ZIP, restore 1-clic, migration vN→vN+1)**.
-
-### Prochainement (v5+)
+- **Mise à jour intégrée** : vérification, téléchargement, installation, redémarrage auto, checksum
+- **Configuration chiffrée** (domaine, utilisateur) via `platformdirs` + AES-GCM
+- **RBAC 5 rôles** + portées OU/groupe, garde-fou sur chaque écriture AD
+- **Conformité** : RGPD, MFA admin (TOTP), session unique, PSO, signature exports HMAC-SHA256
 
 ---
 
@@ -66,15 +71,21 @@ En quelques clics, pas en PowerShell.
 
 ---
 
-## Installation rapide
+## Installation
 
+### Windows 10/11
 ```bash
-# Windows 10/11
 EduSyncAD-Setup.exe
-# → Raccourcis Menu Démarrer/Bureau, désinstallation standard via Paramètres Windows
+```
+→ Raccourcis Menu Démarrer/Bureau, désinstallation standard via Paramètres Windows
 
-# Linux
-flatpak install EduSyncAD-linux.flatpak
+### Linux
+```bash
+# AppImage (recommandé - WebKitGTK embarqué)
+chmod +x EduSyncAD-linux.AppImage && ./EduSyncAD-linux.AppImage
+
+# Archive binaire (nécessite libwebkit2gtk-4.1-0 installé)
+tar xzf edusync-ad-linux-amd64.tar.gz && ./edusync-ad
 ```
 
 ---
@@ -88,8 +99,8 @@ flatpak install EduSyncAD-linux.flatpak
 | Utilisateur | `admin` (ou `ENTREPRISE\admin`) |
 | Mot de passe | *Jamais stocké* |
 
-La connexion **LDAPS chiffrée** est tentée en priorité. Repli automatique sur LDAP (port 389) si indisponible.
-Si le contrôleur utilise un certificat émis par une autorité interne (cas courant), voir la [section dépannage du guide](docs/guide_utilisateur.md#10-dépannage--erreur-de-certificat-ldaps).
+La connexion **LDAPS chiffrée** est tentée en priorité. Repli automatique sur LDAP (port 389 + StartTLS) si indisponible.
+Si le contrôleur utilise un certificat émis par une autorité interne, voir la [section dépannage du guide](docs/guide_utilisateur.md#10-dépannage--erreur-de-certificat-ldaps).
 
 ---
 
@@ -103,61 +114,60 @@ Léa;Petit;IT
 
 Seuls `prenom` et `nom` sont obligatoires. `equipe` (ex `classe`, `service`, `projet`, `site`) → OU auto-résolue.
 Colonne `ou` (DN complet) acceptée pour cas avancés — voir [guide utilisateur](docs/guide_utilisateur.md).
-
-Des exemples sont disponibles dans le dossier [`exemples/`](exemples/).
-
----
-
-## Build depuis les sources
-
-```bash
-git clone <url-du-depot>
-cd EduSync-AD
-python -m venv .venv && source .venv/bin/activate  # Windows : .venv\Scripts\activate
-pip install -e ".[dev]"
-python src/edusync_ad/app.py
-```
-
-**Build Windows (.exe) :**
-```bash
-pip install pyinstaller cairosvg pillow
-python tools/generate_icon.py
-pyinstaller packaging/edusync_ad.spec
-# → dist/EduSyncAD/EduSyncAD.exe
-```
-
-**Tests :**
-```bash
-pytest
-```
+Des exemples dans le dossier [`exemples/`](exemples/).
 
 ---
 
-## Migration Go / Wails (en cours)
-
-La prochaine génération d'EduSync AD est réécrite en **Go** (backend + UI
-desktop Wails v3, HTML + HTMX embarqués) : binaire unique léger, LDAP
-natif concurrent, démarrage instantané, cross-compile en une commande —
-**sans perte de fonctionnalité**.
-
-📖 [Feuille de route de migration](ROADMAP_GO_MIGRATION.md) ·
-[Architecture](docs/ARCHITECTURE.md) ·
-[État d'avancement](docs/STATUS.md) ·
-[Résumé migration](docs/migration/README.md) ·
-[`CLAUDE.md`](CLAUDE.md) / [`AGENTS.md`](AGENTS.md) (contexte IA)
+## Build depuis les sources (Go)
 
 ```bash
 # Prérequis : Go 1.27+, Task (go install github.com/go-task/task/v3/cmd/task@latest)
+git clone https://github.com/estemobs/EduSync-AD.git
+cd EduSync-AD
+
 task --list          # toutes les commandes
-task dev             # application desktop
-task cli -- paths --json
-task test            # tests Go (65 tests)
+task dev             # application desktop (Wails v3, mode dev)
+task cli -- paths --json   # CLI
+task test            # tests Go (28 packages)
 task lint            # gofmt + go vet
 task build:all       # cross-build → dist/ (5 cibles CLI)
 ```
 
-La version Python publiée reste la version de production jusqu'à la fin de la
-migration : les deux stacks sont testées à chaque commit (`ci.yml`).
+> La version Python 1.17.1 reste en production jusqu'à la fin de la migration. Les deux stacks sont testées en CI (`ci.yml`).
+
+---
+
+## État d'avancement — Résumé visuel
+
+| Priorité | Description | Progression |
+|----------|-------------|-------------|
+| **P0** | Starter kit Go, config, crypto, pool AD, modèles, audit, testutil, CLI, Wails v3 | ✅ **100%** |
+| **P1** | Câblage Core M1→M11 (UI bout en bout) | ✅ **100%** |
+| **P2.1** | Pipeline release α1 (Windows InnoSetup + Linux AppImage) | ✅ **100%** (CI prêt) |
+| **P2.2** | Un module avancé = une release (M13→M32) | ✅ Code 100% — releases à déclencher |
+| **P2.5** | Checklist pré-alpha (tests manuels Windows + AD réel) | 🔲 **En attente validation** |
+| **P3** | Campagne tests (intégration Samba, e2e, benchmarks) | ⏳ Démarre post-α1 |
+
+### Prochaines releases planifiées (prêtes à être taguées)
+
+| Tag | Module | État |
+|-----|--------|------|
+| `v0.1.0-alpha.1` | **Core M1→M11** (α1) | ✅ CI déclenchée |
+| `v0.2.0` | M13 Profils utilisateurs | ✅ Implémenté |
+| `v0.3.0` | M16 Heures de connexion | ✅ Implémenté |
+| `v0.4.0` | M15 Scripts logon/logoff | ✅ Implémenté |
+| `v0.5.0` | M17 Dossiers personnels | ✅ Implémenté |
+| `v0.6.0` | M14 Quotas disque | ✅ Implémenté |
+| `v0.7.0` | M18 Espaces partagés classe | ✅ Implémenté |
+| `v0.8.0` | T2 Cache AD SQLite | ✅ Implémenté |
+| `v0.9.0` | M12 Photos d'identité | ✅ Implémenté |
+| `v0.10.0` | M22 Import/Export avancés | ✅ Implémenté |
+| `v0.11.0` | M19 Microsoft 365 / Entra ID | ✅ Implémenté |
+| `v0.12.0` | M20 Exchange | ✅ Implémenté |
+| `v0.13.0` | M21 RDS / Bureau à distance | ✅ Implémenté |
+| `v0.14.0` | M23 Modèles de groupes | ✅ Implémenté |
+| `v0.15.0` | M24 Étiquettes avancées | ✅ Implémenté |
+| `v0.16.0+` | M25→M32 + Coffre MDP | ✅ Implémenté |
 
 ---
 
@@ -165,22 +175,30 @@ migration : les deux stacks sont testées à chaque commit (`ci.yml`).
 
 | Document | Description |
 |----------|-------------|
-| [État d'avancement](docs/STATUS.md) | Vue rapide de l'avancement réel (modules, tests, build, prochaine action) |
+| [Feuille de route Go](ROADMAP_GO_MIGRATION.md) | 3 priorités, phases, critères acceptation, risques, prompts IA |
+| [État d'avancement](docs/STATUS.md) | Vue rapide modules, tests, build, prochaine action |
 | [Architecture Go](docs/ARCHITECTURE.md) | Architecture cible, flux UI, paquets, formats partagés Python↔Go |
 | [Environnement test AD](docs/AD_TEST_ENV.md) | Samba AD DC en container (LDAPS, Kerberos, DNS, GPO, PSO) |
 | [Guide utilisateur](docs/guide_utilisateur.md) | Manuel complet v1.x (modules, connexion, dépannage) |
-| **Migration Go** | |
-| [Résumé migration](docs/migration/README.md) | 3 priorités, phases, critères acceptation, risques |
-| [Phase 0 + Core M1-M11](docs/migration/01-core.md) | Fondations + câblage bout en bout (Lot A en cours) |
-| [Modules avancés M12-M24](docs/migration/02-modules-avances.md) | Photos, profils, quotas, scripts, M365, Exchange, RDS, cache T2 (Lot B) |
-| [Modules v4.0 M25-M32](docs/migration/03-modules-v4.md) | Multisite, RBAC, portail, API, IA, conformité, sauvegarde (Lot C) |
-| [Alpha Windows/Linux](docs/migration/04-alpha.md) | Packaging InnoSetup, AppImage, auto-update, checklist |
-| [Campagne tests post-alpha](docs/migration/05-tests.md) | Intégration Samba, e2e Playwright, benchmarks, couverture |
-| **Modules (fiches détaillées)** | `docs/modules/MXX-*.md` — une fiche par module (objectif, Python ref, Go à faire, validation) |
-| **Python v1.x (référence parité)** | |
-| [Fonctionnalités](docs/python/FEATURES.md) | Périmètre complet M1-M32 + fondations T0-T2 |
-| [État réel](docs/python/STATUS.md) | Statut vérifié dans le code, dette tests identifiée |
-| [Tests manquants](docs/python/TEST_GAPS.md) | Gaps à combler en Go (M26-M32, scénarios erreur, perf) |
+| [Migration Go - modules](docs/migration/) | Fiches détaillées par module (objectif, ref Python, Go, validation) |
+| [Référence Python v1.x](docs/python/) | Périmètre complet M1-M32 + fondations T0-T2 pour parité |
+
+---
+
+## Statut CI / Qualité
+
+![Go Tests](https://github.com/estemobs/EduSync-AD/actions/workflows/ci.yml/badge.svg)
+![Release Go](https://github.com/estemobs/EduSync-AD/actions/workflows/release-go.yml/badge.svg)
+
+| Métrique | Cible | Actuel |
+|----------|-------|--------|
+| `gofmt -l` | 0 fichier | ✅ 0 |
+| `go vet` | Vert | ✅ Vert |
+| Tests Go | >0 | ✅ 28 packages OK |
+| Tests Python | Vert | ✅ 843 passés |
+| CLI cross-build | 5 cibles | ✅ Linux/Win/macOS |
+| Taille CLI (`-s -w`) | 8-12 MB | ✅ 9 MB |
+| Taille Desktop | < 15 MB | ⚠️ 17 MB (optimisation α) |
 
 ---
 
