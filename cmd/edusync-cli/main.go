@@ -173,6 +173,7 @@ Commandes :
   compliance verify        Vérifie la signature d'un export (M30)
   compliance rgpd          Génère le rapport RGPD (M30)
   connect                 Teste l'accessibilité d'un contrôleur (TCP + TLS)
+  migrate from-python       Migre config/coffre/journal Python → Go (--force, --dry-run, --json)
 
 Exemples :
   edusync-cli paths
@@ -258,6 +259,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return cmdCompliance(args[1:], stdout, stderr)
 	case "connect":
 		return cmdConnect(args[1:], stdout, stderr)
+	case "migrate":
+		return cmdMigrate(args[1:], stdout, stderr)
 	default:
 		return &codeSortie{code: 2, err: fmt.Errorf("commande inconnue %q (voir « edusync-cli help »)", args[0])}
 	}

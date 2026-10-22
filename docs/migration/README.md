@@ -87,7 +87,7 @@
 - ✅ Chaque écriture AD passe par `Validate → Simulate → Execute → Audit`
 - ✅ `gofmt`, `go vet`, `go test ./...`, `pytest -q` tous verts
 - ✅ Toutes les clés i18n ajoutées existent en français **et** anglais
-- 🔲 `edusync-cli migrate --from-python` livré (fin P2, §6 roadmap)
+- ✅ `edusync-cli migrate from-python` livré (implémenté: config, vault, audit, multisite, clé)
 - ✅ Roadmap + `CLAUDE.md` reflètent le code
 
 ### Porte 2 — « Alpha publiée » (fin Priorité 2) 🔲 **EN ATTENTE VALIDATION**
@@ -139,8 +139,8 @@ task ad:start         # Démarrer Samba AD (docs/AD_TEST_ENV.md)
 task ad:reset         # Reset domaine
 task ad:shell         # Shell dans le container
 
-# Migration données (à créer fin P2)
-edusync-cli migrate --from-python --config-dir ... --vault-dir ...
+# Migration données (✅ Implémentée)
+edusync-cli migrate from-python [--config-dir PATH] [--vault-dir PATH] [--audit-path PATH] [--multisite-path PATH] [--dry-run] [--force] [--json]
 ```
 
 ---
