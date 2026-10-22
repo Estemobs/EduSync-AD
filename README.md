@@ -4,107 +4,101 @@
 
 # EduSync AD
 
-**La gestion du cycle de vie Active Directory — Sans jamais ouvrir une console Microsoft.**
+**Gérez le cycle de vie de votre Active Directory sans PowerShell.**
 
-Import CSV → comptes créés. Restructuration → comptes migrés. Départ → compte archivé.
-En quelques clics, pas en PowerShell.
+Import CSV, création de comptes, migration, départs, mots de passe : tout se fait depuis une interface unique.
 
-📖 [Guide utilisateur](docs/guide_utilisateur.md) · 📥 [Télécharger la dernière release](https://github.com/estemobs/EduSync-AD/releases/latest) · 🗺️ [Feuille de route Go](ROADMAP_GO_MIGRATION.md) · 📊 [État d'avancement détaillé](docs/STATUS.md)
+[Guide utilisateur](docs/guide_utilisateur.md) · [Télécharger](https://github.com/estemobs/EduSync-AD/releases/latest) · [Documentation](docs/)
 
 </div>
 
 ---
 
-## Pour qui ?
+> **Statut** — La version Go (desktop + CLI) est en alpha. La version Python 1.17.1 reste la version stable en production.
 
-| Profil | Cas d'usage typiques |
-|--------|---------------------|
-| **Admin réseau établissement** | Rentrée 1 500 élèves, mutations fin d'année, départs ponctuels, réinitialisation MDP classe complète |
-| **Admin PME / Collectivité** | Onboarding/offboarding collaborateurs, gestion OU par service/équipe, délégation helpdesk, conformité RGPD |
-| **MSSP / Intégrateur** | Multi-clients (multisite), déploiement standardisé, audit centralisé, modèles réutilisables |
+## Présentation
 
-> **Pas seulement éducation** : la logique « prénom/nom/équipe » s'applique à toute structure hiérarchique (service, équipe, projet, site) — il suffit de renommer « classe » en « équipe » dans l'UI.
+EduSync AD est une application desktop qui simplifie l'administration quotidienne d'un Active Directory : arrivées, changements de classe ou de service, départs, réinitialisations de mots de passe. Elle s'adresse aux établissements scolaires, aux PME et aux collectivités, avec une interface pensée pour les opérations en masse.
 
----
+Chaque écriture dans l'annuaire suit le même chemin : **validation → simulation → exécution → journalisation**. Rien n'est appliqué sans prévisualisation.
 
-## Fonctionnalités clés
+## Aperçu
 
-### ✅ Core v1.x — **Terminé** (M1 → M11 + M10/M11)
+**Création de comptes** — import CSV, prévisualisation et validation avant écriture dans l'AD.
 
-| Module | Statut | Description |
-|--------|--------|-------------|
-| **M1 — Création de comptes** | ✅ | Import CSV, génération identifiants/MDP/mail auto, résolution doublons, vérification AD existants, export CSV étiquettes |
-| **M2 — Migration / Restructuration** | ✅ | Via CSV (prénom/nom/équipe) ou UI (sélection OU), déplacement AD + groupes auto, résolution par prénom/nom |
-| **M3 — Gestion des départs** | ✅ | Désactivation immédiate ou archivage + purge planifiée (délai configurable, 30j défaut), restauration |
-| **M4 — Réinitialisation MDP** | ✅ | Par OU, groupe AD ou CSV, politiques différées (élèves/personnels), forçage changement 1er logon |
-| **M5 — Explorateur AD** | ✅ | Arborescence OUs/groupes, panneau central unifié, recherche temps réel, détails user/groupe/OU |
-| **M6 — Export (CSV / PDF étiquettes)** | ✅ | Sélection OU ± sous-OU, champs cochables, PDF Avery L7160/L7163, QR codes, trombinoscope |
-| **M7 — Journal d'actions** | ✅ | Filtres date/type/résultat/domaine/opérateur, export CSV, SQLite append-only |
-| **M8 — Paramètres globaux** | ✅ | 3 onglets : Comptes, Mots de passe, Apparence (thème/ langue) |
-| **M9 — Connexion LDAPS/LDAP** | ✅ | Pool connexions, TLS, SASL/GSSAPI, fallback LDAP 389 + avertissement, health check |
-| **M10 — Mise à jour intégrée** | ✅ | Vérification GitHub releases, téléchargement, SHA-256, installation préparée |
-| **M11 — Mode simulation + progression** | ✅ | Validate→Simulate→Execute→Audit sur toute écriture AD, barre progression + annulation |
+![Création de comptes](docs/screenshots/module1_creation_comptes.png)
 
-### ✅ Modules avancés — **M12 → M30 + M32 + fondations** (M31 priorité basse non porté)
+| Connexion | Explorateur AD |
+|:---:|:---:|
+| <img src="docs/screenshots/login.png" alt="Écran de connexion" width="420"> | <img src="docs/screenshots/module6_explorateur_ad.png" alt="Explorateur AD" width="520"> |
+| Connexion LDAPS et certificat CA | Arborescence des OU, recherche et actions |
 
-| Lot | Modules | État code |
-|-----|---------|-----------|
-| **Lot B** (M12-M24 + T2) | M12 Photos, M13 Profils, M14 Quotas, M15 Logon scripts, M16 Heures connexion, M17 Home dirs, M18 Class spaces, M19 M365/Graph, M20 Exchange, M21 RDS, M22 Advanced I/O, M23 Group templates, M24 Label Studio, T2 Cache AD | ✅ Code complet |
-| **Lot C** (M25-M30, M32) | M25 Multisite, M26 RBAC, M27 Portail, M28 API/Webhooks, M29 Assistant IA, M30 Conformité, M32 Backup/Restore, Coffre MDP | ✅ Code complet (M31 DFS/IIS/WebDAV/FTP non porté) |
+## Fonctionnalités
 
-### Sécurité & Exploitation
+**Gestion des comptes**
+- Création depuis un CSV, avec génération des identifiants, mots de passe et adresses mail
+- Migration ou restructuration par CSV ou sélection d'OU
+- Départs : désactivation immédiate ou archivage avec purge planifiée
+- Réinitialisation des mots de passe par OU, groupe ou CSV
+- Photos, profils, quotas, scripts de connexion, heures d'accès et dossiers personnels
 
-- **LDAPS par défaut** (port 636), fallback LDAP explicite avec avertissement, certificat CA custom
-- **Coffre MDP AES-256** local (machines admin), jamais sur l'AD
-- **Mise à jour intégrée** : vérification, téléchargement, installation, redémarrage auto, checksum
-- **Configuration chiffrée** (domaine, utilisateur) via `platformdirs` + AES-GCM
-- **RBAC 5 rôles** + portées OU/groupe, garde-fou sur chaque écriture AD
-- **Conformité** : RGPD, MFA admin (TOTP), session unique, PSO, signature exports HMAC-SHA256
+**Annuaire et exploitation**
+- Explorateur AD : arborescence des OU et groupes, recherche en temps réel
+- Export CSV et PDF (étiquettes, trombinoscope)
+- Journal d'actions filtrable et exportable
+- Connexion LDAPS par défaut, avec repli LDAP explicite
+- Mise à jour intégrée depuis les releases GitHub
 
----
+**Sécurité**
+- Mode simulation obligatoire avant toute écriture
+- Journal append-only, sans suppression possible
+- Coffre de mots de passe local chiffré en AES-256
+- RBAC à 5 rôles avec portées OU/groupe
+- Conformité : RGPD, MFA admin, PSO, signature des exports
+
+**Modules avancés**
+- Microsoft 365 / Entra ID, Exchange, RDS
+- Multisite, portail d'auto-service, API REST et webhooks
+- Modèles de groupes, espaces partagés, sauvegarde/restauration
 
 ## Prérequis
 
 - Active Directory accessible (Windows Server 2012 → 2025)
-- Compte avec droits création/modification utilisateurs (Délégation OU ciblée recommandée)
-- **Pas de Python requis** sur le poste admin (binaires Windows/Linux fournis)
-
----
+- Un compte disposant des droits de création et de modification des utilisateurs (délégation d'OU recommandée)
+- Aucun Python requis sur le poste d'administration
 
 ## Installation
 
-### Windows 10/11
+**Windows 10/11**
+
 ```bash
 EduSyncAD-Setup.exe
 ```
-→ Raccourcis Menu Démarrer/Bureau, désinstallation standard via Paramètres Windows
 
-### Linux
+Raccourcis dans le menu Démarrer et sur le Bureau, désinstallation standard via les paramètres Windows.
+
+**Linux**
+
 ```bash
-# AppImage (recommandé - WebKitGTK embarqué)
+# AppImage (recommandé, WebKitGTK embarqué)
 chmod +x EduSyncAD-linux.AppImage && ./EduSyncAD-linux.AppImage
 
-# Archive binaire (nécessite libwebkit2gtk-4.1-0 installé)
+# Archive binaire (nécessite libwebkit2gtk-4.1-0)
 tar xzf edusync-ad-linux-amd64.tar.gz && ./edusync-ad
 ```
-
----
 
 ## Connexion
 
 | Champ | Exemple |
 |-------|---------|
-| Domaine | `entreprise.local` ou `lycee-victor-hugo.fr` |
+| Domaine | `entreprise.local` |
 | Contrôleur | `dc01.entreprise.local` ou `10.0.0.5` |
-| Utilisateur | `admin` (ou `ENTREPRISE\admin`) |
-| Mot de passe | *Jamais stocké* |
+| Utilisateur | `admin` ou `ENTREPRISE\admin` |
+| Mot de passe | jamais stocké |
 
-La connexion **LDAPS chiffrée** est tentée en priorité. Repli automatique sur LDAP (port 389 + StartTLS) si indisponible.
-Si le contrôleur utilise un certificat émis par une autorité interne, voir la [section dépannage du guide](docs/guide_utilisateur.md#10-dépannage--erreur-de-certificat-ldaps).
+La connexion chiffrée LDAPS (port 636) est tentée en priorité, avec repli sur LDAP + StartTLS si nécessaire. En cas de certificat émis par une autorité interne, consultez la [section dépannage du guide](docs/guide_utilisateur.md#10-dépannage--erreur-de-certificat-ldaps).
 
----
-
-## Format CSV (exemple universel)
+## Format CSV
 
 ```csv
 prenom;nom;equipe
@@ -112,69 +106,38 @@ Thomas;Martin;Comptabilité
 Léa;Petit;IT
 ```
 
-Seuls `prenom` et `nom` sont obligatoires. `equipe` (ex `classe`, `service`, `projet`, `site`) → OU auto-résolue.
-Colonne `ou` (DN complet) acceptée pour cas avancés — voir [guide utilisateur](docs/guide_utilisateur.md).
-Des exemples dans le dossier [`exemples/`](exemples/).
+Seuls `prenom` et `nom` sont obligatoires. La colonne `equipe` (classe, service, projet, site) sert à résoudre automatiquement l'OU de destination. Des exemples sont disponibles dans [`exemples/`](exemples/).
 
----
+## Développement
 
-## Build depuis les sources (Go)
+Prérequis : Go 1.27+ et [Task](https://taskfile.dev).
 
 ```bash
-# Prérequis : Go 1.27+, Task (go install github.com/go-task/task/v3/cmd/task@latest)
 git clone https://github.com/estemobs/EduSync-AD.git
 cd EduSync-AD
 
-task --list          # toutes les commandes
-task dev             # application desktop (Wails v3, mode dev)
-task cli -- paths --json   # CLI
-task test            # tests Go (28 packages)
-task lint            # gofmt + go vet
-task build:all       # cross-build → dist/ (5 cibles CLI)
+task --list                  # liste des commandes
+task dev                     # application desktop (Wails v3)
+task cli -- paths --json     # CLI
+task test                    # tests Go
+task lint                    # gofmt + go vet
+task build:all               # cross-build vers dist/
 ```
 
-> La version Python 1.17.1 reste en production jusqu'à la fin de la migration. Les deux stacks sont testées en CI (`ci.yml`).
-
----
-
-## État d'avancement
-
-| Priorité | État |
-|----------|------|
-| **P0** — Fondations Go (config, crypto, pool AD, modèles, audit, CLI, Wails v3) | ✅ **100%** |
-| **P1** — Câblage Core M1→M11 (UI bout en bout) | ✅ **100%** |
-| **P2.1** — Pipeline release α1 (Windows InnoSetup + Linux AppImage) | ✅ **100%** (CI prêt) |
-| **P2.2** — Modules avancés M12→M30 + M32 | ✅ Code livré (M31 non porté, M32 UI/CLI à câbler) |
-| **P2.5** — Checklist pré-alpha (tests manuels Windows + AD réel) | 🔲 **En attente validation** |
-| **P3** — Campagne tests (intégration Samba, e2e, benchmarks) | ⏳ Démarre post-α1 |
-
-Le détail par module, les métriques de build, les releases planifiées et les prochaines actions sont centralisés dans **[docs/STATUS.md](docs/STATUS.md)**.
-
----
+La CLI `edusync-cli` expose les mêmes opérations que l'interface, avec une sortie JSON stable pour les scripts. Lancez `task cli -- help` pour la liste des commandes.
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [Feuille de route Go](ROADMAP_GO_MIGRATION.md) | 3 priorités, phases, critères acceptation, risques, prompts IA |
-| [État d'avancement](docs/STATUS.md) | **Source de vérité** : modules, métriques, releases, prochaines actions |
-| [Architecture Go](docs/ARCHITECTURE.md) | Architecture cible, flux UI, paquets, formats partagés Python↔Go |
-| [Environnement test AD](docs/AD_TEST_ENV.md) | Samba AD DC en container (LDAPS, Kerberos, DNS, GPO, PSO) |
-| [Guide utilisateur](docs/guide_utilisateur.md) | Manuel complet v1.x (modules, connexion, dépannage) |
-| [Migration Go - modules](docs/migration/) | Fiches détaillées par module (objectif, ref Python, Go, validation) |
-| [Référence Python v1.x](docs/python/) | Périmètre complet M1-M32 + fondations T0-T2 pour parité |
+- [Guide utilisateur](docs/guide_utilisateur.md) — prise en main, modules, dépannage
+- [Architecture](docs/ARCHITECTURE.md) — paquets, flux UI, formats de données
+- [État d'avancement](docs/STATUS.md) — modules livrés et prochaines étapes
+- [Feuille de route Go](ROADMAP_GO_MIGRATION.md) — plan de migration
+- [Environnement de test AD](docs/AD_TEST_ENV.md) — Samba AD DC en conteneur
 
----
+## Contribution
 
-## Statut CI / Qualité
-
-![Go Tests](https://github.com/estemobs/EduSync-AD/actions/workflows/ci.yml/badge.svg)
-![Release Go](https://github.com/estemobs/EduSync-AD/actions/workflows/release-go.yml/badge.svg)
-
-`gofmt`, `go vet` et `go test ./...` sont verts en local et en CI. Les métriques détaillées (paquets testés, tailles des binaires, cibles cross-build) sont dans **[docs/STATUS.md](docs/STATUS.md)**.
-
----
+Les contributions sont bienvenues. Voir [CONTRIBUTING.md](CONTRIBUTING.md) et [SECURITY.md](SECURITY.md) pour signaler une vulnérabilité.
 
 ## Licence
 
-MIT — Usage libre, modification, distribution, usage commercial autorisé.
+MIT.
