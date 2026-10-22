@@ -47,28 +47,19 @@ jobs:
           echo "C:\Program Files (x86)\Inno Setup 6" >> $GITHUB_PATH
 
       - name: Build binaire Windows (wails build)
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails@latest
-          wails build -platform windows/amd64 -ldflags "-s -w -X main.version=${{ env.VERSION }}"
+        run: go run github.com/wailsapp/wails/v3/cmd/wails@v3.0.0-beta.31 build -platform windows/amd64 -ldflags "-s -w -X main.version=${{ env.VERSION }}"
 
       - name: Générer Setup.exe avec InnoSetup
+        shell: bash
         run: |
           # Copier le binaire généré par wails
           mkdir -p build/inno/bin
           cp build/bin/edusync-ad.exe build/inno/bin/
-          # Créer un ICO minimal depuis le SVG (fallback si pas d'icon.ico)
-          if [ ! -f assets/icon.ico ]; then
-            cat > build/inno/icon.ico <<'ICOEOF'
-            # Minimal ICO placeholder - à remplacer par un vrai icon.ico
-            # Pour l'instant, InnoSetup utilisera l'icône par défaut de Windows
-            ICOEOF
-          else
-            cp assets/icon.ico build/inno/
-          fi
-          # Compiler l'installateur
+          # Compiler l'installateur (sortie : dist/EduSyncAD-Setup.exe)
           iscc /DMyAppVersion=${{ env.VERSION }} build/inno/installer.iss
 
       - name: SHA256 Setup.exe
+        shell: bash
         run: |
           cd dist
           sha256sum EduSyncAD-Setup.exe > EduSyncAD-Setup.exe.sha256
@@ -92,7 +83,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-4-dev libsoup-3.0-dev \
+          sudo apt-get install -y libwebkitgtk-6.0-dev libgtk-4-dev libsoup-3.0-dev \
             libglib2.0-dev libgdk-pixbuf-2.0-dev libc6-dev gcc make pkg-config
 
       - name: Setup Go
