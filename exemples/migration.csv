@@ -1,0 +1,3 @@
+identifiant;ou_source;ou_cible;prenom;nom
+eleve01;OU=Eleves,DC=EDUSYNC,DC=LOCAL;OU=Eleves,DC=EDUSYNC,DC=LOCAL,OU=Classe_6e_A;Léa;Martin
+eleve02;OU=Eleves,DC=EDUSYNC,DC=LOCAL;OU=Eleves,DC=EDUSYNC,DC=LOCAL,OU=Classe_6e_B;Çagla;Durand
