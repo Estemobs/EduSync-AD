@@ -559,10 +559,9 @@ Validé le **12 octobre 2026** avec `ubuntu:24.04` + `samba 4.19.5`, Docker 29.
    utilisez `ldapsearch` ou `samba-tool`.
 6. **Bruit de logs bénin** : `samba_dnsupdate … Record already exists` au
    démarrage (les enregistrements existent déjà depuis la provision).
-7. **`task ad:start` / `task ad:reset` / `task ad:shell`** (roadmap §5) ne
-   sont pas encore câblés : le `Taskfile.yml` n'existe pas encore dans ce
-   dépôt. Les commandes Docker brutes de ce guide font foi ; à réutiliser
-   telles quelles quand le Taskfile sera créé.
+7. **`task ad:start` / `task ad:reset` / `task ad:shell`** sont câblés dans
+   `Taskfile.yml` (section AD de test). Les commandes Docker brutes de ce
+   guide restent la référence pour le détail de ce qu'elles exécutent.
 8. Le réseau `--network` par défaut (bridge) convient ; sur un réseau
    *user-defined*, le DNS intégré de Docker (`127.0.0.11`) et celui de Samba
    coexistent (vérifié : le bind du port 53 fonctionne dans les deux cas).

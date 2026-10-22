@@ -121,6 +121,12 @@ tasks:
     cmds:
       - docker rm -f edusync-ad-test || true
 
+  ad:reset:
+    desc: Recrée l'AD de test (container et données effacés)
+    cmds:
+      - task: ad:stop
+      - task: ad:start
+
   ad:shell:
     desc: Ouvre une ldapsearch dans l'AD de test
     cmds:

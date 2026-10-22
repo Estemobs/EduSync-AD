@@ -64,8 +64,8 @@
 | M28 API REST + Webhooks | ✅ | ✅ `internal/api/` + `internal/webhooks/` + UI + CLI | |
 | M29 IA / Assistant | ✅ | ✅ `internal/assistant/` + `internal/config/identifiers.go` + UI + CLI | |
 | M30 Conformité & Sécurité | ✅ | ✅ `internal/compliance/` + UI + CLI | |
-| M31 DFS/IIS/WebDAV/FTP | ✅ | ✅ Squelette `internal/dfs/` | |
-| M32 Sauvegarde/Restauration | ✅ | ✅ `internal/backup/` + UI + CLI | |
+| M31 DFS/IIS/WebDAV/FTP | ✅ (squelette) | ⬜ Non porté (priorité basse) | |
+| M32 Sauvegarde/Restauration | ✅ | 🔨 `internal/backup/` (logique livrée, UI/CLI à câbler, sans tests) | |
 | Coffre MDP | ✅ | ✅ `internal/vault/` + UI + CLI | |
 
 ---
@@ -81,7 +81,7 @@
 | CLI (5 cibles cross-compile) | ✅ | 9 MB stripped |
 | UI Wails v3 + HTMX/Alpine/Tailwind | ✅ | Login, dashboard, thème, i18n fr/en |
 | Testutil Samba AD (container) | ✅ | `internal/testutil/samba.go` |
-| Migration données Python → Go | 🔲 | Script `edusync-cli migrate` à créer (fin P2) |
+| Migration données Python → Go | ✅ | `edusync-cli migrate from-python` (+ tests) |
 | Cache AD SQLite (T2) | ✅ | `internal/ad/cache.go` |
 
 ---
@@ -120,8 +120,7 @@
 | 2 | Publier notes release α1 | Auto (CI) | Release GitHub pré-release avec 3 artefacts + SHA256 |
 | 3 | Tag `v0.2.0` (M13 Profils) | Utilisateur | `git tag v0.2.0 && git push origin v0.2.0` |
 | 4 | Suivre releases M13→M32 | Utilisateur | Un tag = une release via `release-go.yml` |
-| 5 | Script `edusync-cli migrate --from-python` | Dev | Fin P2 (clôture §6 roadmap) |
-| 6 | Campagne tests P3 (Samba, e2e, bench) | Dev/IA | Intégrée aux releases post-α1 |
+| 5 | Campagne tests P3 (Samba, e2e, bench) | Dev/IA | Intégrée aux releases post-α1 |
 
 ---
 
@@ -140,7 +139,7 @@
 
 - [README principal](../README.md)
 - [Feuille de route détaillée](../ROADMAP_GO_MIGRATION.md)
-- [Architecture Go](../ARCHITECTURE.md)
-- [Environnement de test AD](../AD_TEST_ENV.md)
+- [Architecture Go](ARCHITECTURE.md)
+- [Environnement de test AD](AD_TEST_ENV.md)
 - [Guide utilisateur](guide_utilisateur.md)
 - [Inventaire complet des modules](../ROADMAP_GO_MIGRATION.md#4-inventaire--la-r%C3%A9f%C3%A9rence-logiciel-fini)

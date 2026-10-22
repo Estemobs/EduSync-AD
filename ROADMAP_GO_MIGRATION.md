@@ -59,14 +59,14 @@
 | 11-12 | CLI squelette | ✅ Livré (testé) | `cmd/edusync-cli` : `version`, `paths`, `config show`, `audit list`, `connect` (DNS + TCP + TLS) |
 | 13-14 | Wails v3 + HTMX/Alpine/Tailwind embeddé | ✅ Livré (testé) | `cmd/edusync-ad`, `internal/ui`, `web/` — login, dashboard, thème clair/sombre, i18n fr/en + gabarits `users`, `password`, `migration` |
 
-### Phase 1 (amorcée côté UI — semaine 3)
+### Phase 1 — ✅ livrée
 
 | Module | Avancement constaté | Où |
 |---|---|---|
-| Réinitialisation MDP | 🔨 Gabarit HTMX + routes + i18n fr/en livrés (logique AD à brancher) | `web/templates/password.html`, `internal/ui/server.go`, `internal/ui/i18n.go` |
-| Migration / restructuration | 🔨 Gabarit HTMX + routes + i18n fr/en livrés (logique AD à brancher) | `web/templates/migration.html`, `internal/ui/server.go`, `internal/ui/i18n.go` |
+| Réinitialisation MDP | ✅ Gabarit HTMX + routes + logique AD + i18n fr/en | `internal/ad/password.go`, `internal/ui/server.go`, `web/templates/password*.html` |
+| Migration / restructuration | ✅ Gabarits HTMX + routes + logique AD + i18n fr/en | `internal/ad/migration.go`, `internal/ui/server.go`, `web/templates/migration*.html` |
 
-### Priorité 1 en cours — câblage du Core (constat réel dans le code, 15/10)
+### Priorité 1 — ✅ livrée (constat réel dans le code, 22/10)
 
 | Module | Réel dans le code | Manque pour le dire « fini » |
 |---|---|---|
@@ -74,13 +74,13 @@
 | Connexion AD (M9) | ✅ **Livré et testé** (commit `86414c0`) | — (`BindPassword` câblé, repli LDAPS→LDAP + avertissement, erreurs fr/en, pool nettoyé à la déconnexion) |
 | Création de comptes (M1) | ✅ **Livré et testé** (commit `f705d80`) | — (`usersSimulate`/`usersExecute` + gabarits, doublons, AD check, groupes auto, export étiquettes) |
 | Réinitialisation MDP (M4) | ✅ **Livré et testé** (commit `7eacd2b`) | — (`passwordSimulate`/`passwordExecute` + gabarits, 3 modes OU/groupe/CSV, politiques élèves/perso, forçage MDP, export CSV) |
-| Migration / restructuration (M2) | 🔨 Gabarit `migration.html` + routes | `migrationPlan` / `migrationSimulate` / `migrationExecute` = TODO ; 3 gabarits absents |
-| Explorateur AD (M5) | 🔨 Routes + i18n | Handlers `pool.Search` / `pool.BuildTree` = TODO ; 3 gabarits absents (`explorer.html`, `explorer_results.html`, `explorer_tree.html`) |
+| Migration / restructuration (M2) | ✅ **Livré et testé** | `migrationPlan` / `migrationSimulate` / `migrationExecute` + 3 gabarits |
+| Explorateur AD (M5) | ✅ **Livré et testé** | `pool.Search` / `pool.BuildTree` / `pool.GetSubTree` + 4 gabarits (`explorer.html`, `explorer_results.html`, `explorer_tree.html`, `explorer_details.html`) |
 | Export CSV/PDF (M6) | ✅ **Livré et testé** | Vrais handlers `ExportCSV` / `ExportLabelsPDF` + gabarit `export.html` |
 | Journal d'actions (M7) | ✅ **Livré et testé** | `auditFilter` réel + gabarits `audit.html` + `audit_results.html` |
 | Gestion des départs (M3) | ✅ **Livré et testé** | `internal/ad/depart.go`, routes, gabarit `departs.html`, CLI `departs`, i18n fr/en |
 | Paramètres globaux (M8) | ✅ **Livré et testé** | 3 onglets (comptes, mots de passe, apparence), routes, gabarit `parametres.html`, i18n fr/en |
-| Mode simulation (M11) | 🔨 Pattern `simulation.go` prêt | Câler `Validate → Simulate → Execute → Audit` sur tous les modules ci-dessus |
+| Mode simulation (M11) | ✅ **Livré et testé** | `Validate → Simulate → Execute → Audit` généralisé + progression/annulation |
 | Mise à jour intégrée (M10) | ✅ **Livrée et testée** | `internal/updater` (vérification GitHub releases, téléchargement, SHA-256, préparation installation) + routes UI `/app/updater/check` et `/app/updater/install`, i18n fr/en |
 
 ### Mesures constatées (Linux amd64 — Go 1.27.2, Wails v3.0.0-beta.29) — vérifiées le 15/10/2026
@@ -95,7 +95,7 @@
 | Taille CLI (`-s -w`) | 8-12 MB | **9,5 MB** ✅ |
 | Taille app desktop (`-s -w`) | < 15 MB | **17,2 MB** ⚠️ (glue cgo/WebKit — optimisation au chantier alpha) |
 | CI | vertes | `ci.yml` : job Go (fmt/vet/test/build/smoke) + job Python (pytest) |
-| Release | alpha Win + Linux | ⬜ `release.yml` construit **encore la version Python** (PyInstaller + Flatpak) — à réécrire en `release-go.yml` (§6 P1) |
+| Release | alpha Win + Linux | ✅ `release-go.yml` (Windows InnoSetup + Linux AppImage/tar.gz) ; `release.yml` (Python) préservé |
 
 ### Décisions d'implémentation (à conserver)
 
@@ -227,8 +227,8 @@ edusync-ad/
 └── docs/
     ├── ARCHITECTURE.md
     ├── AD_TEST_ENV.md
-    ├── MIGRATION_GUIDE.md     # Guide de migration des données Python → Go
-    └── IA_PROMPTS.md
+    ├── STATUS.md
+    └── migration/             # Guide de migration des données Python → Go
 ```
 
 ### Principes d'architecture
@@ -293,7 +293,7 @@ edusync-ad/
 | **M29 — IA / Assistant** | Détection anomalies, nettoyage fin d'année, identifiants intelligents, analyse logs | ✅ Livré et testé (C5) — `internal/config/identifiers.go` : **moteur d'identifiants** réellement porté de `core/identifiers.py` (19 préréglages + variantes camelCase, `{P}`/`{N}`/`{pN}`/`{nN}`/`{AN}`, règles prénom composé, 6 règles de doublons — suffixe numérique, suffixe/préfixe lettres, `NomPrenom`, `TRONCATURE`, plafond sAMAccountName 20 caractères, candidats successifs avec ou sans troncature), `StripAccents`/`CleanToken`/`RenderTemplate`/`MoteurIdentifiants().GenererUnique()` ; **parité Python corrigée** au passage (les préréglages étaient rendus littéralement, `002` devient `2`, `ResolveDuplicate` utilise `-`) ; `internal/assistant/` (analyse en **lecture seule** sur un `Inventaire` injectable : `DetecterAnomalies` — identifiants en double, comptes orphelins (OU disparue, conteneurs par défaut ignorés), OU vides, groupes sans membre ; `SuggererNettoyage` — archivage des comptes désactivés, suppression des groupes/OU vides, replacement des orphelins, **aucune suppression automatique** ; `AnalyserSecurite` — politiques MDP élèves/personnels, rôle RBAC et portées vides, score /100 ; `AnalyserJournal` — comptage par type et opérateur, échecs, suppressions, activité hors horaires 7 h→20 h) + `CollecteurAD` (parcours récursif des OU, erreurs contextuelles) ; CLI `assistant anomalies/cleanup/smart-id/security/journal` ; page UI `/app/assistant` (+ identifiant/anomalies/cleanup/securite/journal), gabarit `assistant.html`, i18n fr/en ; parité du moteur d'identifiants vérifiée sur **5280 cas** (préréglages + modèles libres × prénoms × noms × règles de doublons × jeux d'identifiants existants) **identiques octet pour octet** à la version Python |
 | **M30 — Conformité & sécurité** | Rapport RGPD + droit à l'oubli, MFA admin (TOTP + codes de secours), session unique, PSO (analyse élèves/personnels + script PowerShell), signature exports (HMAC-SHA256) | ✅ Livré et testé — `internal/compliance/` (`config.go` : `conformite.json` + validation, `totp.go` : RFC 6238 HMAC-SHA1 30s 6 chiffres ±1, `mfa.go` : `VerifierMFAAdmin` + `CleSeche` + `VerifierSessionUnique` + `AnalyserGranulariteMDP`/`ScriptPSO` + `SignerExport`/`VerifierExport` HMAC-SHA256 canonique, `rgpd.go` : `GenererRapportRGPD`/`ChercherDroitOubli`/`ExporterRapportRGPDCSV` — lecture seule, append-only respecté) + CLI `compliance mfa/secret/session/pso/sign/verify/rgpd` + page UI `/app/compliance` (`compliance.html`, HTMX) + i18n fr/en (`compliance.fr.json`/`compliance.en.json`) + aller-retour Go ↔ Python vérifié pour le format JSON/crypto/schéma SQLite partagés |
 | **M31 — DFS / IIS / WebDAV / FTP** | Espaces DFS, publication WebDAV/IIS, FTP isolé (priorité basse) | ⬜ |
-| **M32 — Sauvegarde / Restauration** | Backup ZIP chiffré, restore 1-clic, migration vN→vN+1 | ⬜ |
+| **M32 — Sauvegarde / Restauration** | Backup ZIP chiffré, restore 1-clic, migration vN→vN+1 | 🔨 Logique livrée (`internal/backup`) — UI/CLI et tests à câbler |
 | **Coffre MDP** | AES-256 local (machines admin), jamais sur l'AD | ✅ Livré et testé (B13) — `internal/vault/vault.go` : coffre SQLite local `password_vault.sqlite3` (schéma et chiffrement AES-256-GCM identiques à Python, relu dans les deux sens), stockage des mots de passe *positionnés par l'application* uniquement, recherche insensible à la casse, suppression/purge, permissions 0600 ; CLI `vault set/get/has/delete/list/count/clear`, page UI `/app/vault` |
 
 ### 4.4 Fondations Python (T0-T2) — équivalents Go
@@ -310,7 +310,7 @@ edusync-ad/
 |---|---|
 | Configuration chiffrée (domaine, utilisateur) via platformdirs + AES | ✅ |
 | Thème dark/light, i18n fr/en | ✅ (toutes les clés des nouveaux modules en **français ET anglais**) |
-| Migration des données Python (`edusync-cli migrate --from-python`) | ⬜ script à livrer en fin de Priorité 1 (§8) |
+| Migration des données Python (`edusync-cli migrate from-python`) | ✅ Livré (config, coffre, journal, multisite, clé) |
 | Historique / mode démo VM (protocole de test) | ⬜ |
 
 ---
@@ -650,7 +650,7 @@ Ajoute le support multisite (multi-domaine/forêt).
    switch de site, opérations croisées.
 ```
 
-*(Voir `docs/IA_PROMPTS.md` pour la bibliothèque complète.)*
+*(Voir §10 ci-dessus pour la bibliothèque complète.)*
 
 ---
 

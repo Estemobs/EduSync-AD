@@ -9,7 +9,7 @@
 
 | Priorité | Objectif | État |
 |----------|----------|------|
-| **1. Finir le logiciel en Go** | Migration complète : Core v1.x (M1-M11) + Modules avancés (M12-M24) + Modules v4.0 (M25-M32) + Fondations | ✅ **Terminée** (code complet, tests verts) |
+| **1. Finir le logiciel en Go** | Migration complète : Core v1.x (M1-M11) + Modules avancés (M12-M24) + Modules v4.0 (M25-M30, M32) + Fondations | ✅ **Terminée** (M31 priorité basse non porté, code + tests verts) |
 | **2. Sortir l'alpha** | Windows `EduSyncAD-Setup.exe` + Linux `AppImage` + `.tar.gz` | ✅ Pipeline CI prêt — 🔲 **En attente validation manuelle** |
 | **3. Campagne de tests** | Intégration Samba, e2e Playwright, benchmarks vs Python, couverture > 90% | ⏳ Démarre post-α1 |
 
@@ -24,7 +24,7 @@
 | **0. Fondations** | `01-core.md` | Starter kit, config, crypto, modèles, audit, pool AD, CLI, UI Wails, testutil Samba | ✅ **Terminée** |
 | **1. Core v1.x (M1-M11)** | `01-core.md` (suite) | Câblage bout en bout : création, migration, départs, MDP, explorateur, export, journal, paramètres, simulation | ✅ **Terminée** |
 | **2. Modules avancés (M12-M24)** | `02-modules-avances.md` | Photos, profils, quotas, scripts, heures, dossiers, partages, M365, Exchange, RDS, imports avancés, modèles groupes, Label Studio, Cache T2 | ✅ **Terminée** |
-| **3. Modules v4.0 (M25-M32)** | `03-modules-v4.md` | Multisite, RBAC, portail auto-service, API REST, IA, conformité, DFS, sauvegarde, coffre MDP | ✅ **Terminée** |
+| **3. Modules v4.0 (M25-M32)** | `03-modules-v4.md` | Multisite, RBAC, portail auto-service, API REST, IA, conformité, DFS, sauvegarde, coffre MDP | ✅ **Terminée** (M31 non porté, priorité basse) |
 | **4. Alpha & Packaging** | `04-alpha.md` | `release-go.yml`, InnoSetup Windows, AppImage Linux, M10 auto-update, checklist pré-alpha | ✅ **CI prête** — validation manuelle en attente |
 | **5. Tests post-alpha** | `05-tests.md` | Couverture unitaire, intégration Samba, e2e, benchmarks, charge, sécurité, beta → stable 1.0 | ⏳ Prêt à démarrer |
 
@@ -75,7 +75,7 @@
 | C4 | M27 Portail auto-service | Serveur web stdlib, code mail, PBKDF2 usage unique, RBAC, audit `utilisateur="portail"` | ✅ Code complet |
 | C5 | M28 API REST + Webhooks | OpenAPI, webhooks SIS, sync bidirectionnelle | ✅ Code complet |
 | C6 | M29 IA + M30 Conformité | Anomalies, nettoyage fin d'année, RGPD/MFA/PSO/signature | ✅ Code complet |
-| C7 | M31 DFS/IIS/WebDAV/FTP | Priorité basse, squelette livré | ✅ Squelette |
+| C7 | M31 DFS/IIS/WebDAV/FTP | Priorité basse | ⬜ Non porté (squelette Python uniquement) |
 
 ---
 
@@ -118,8 +118,7 @@
 | 2 | Publier notes release α1 | Auto (CI) | Release GitHub pré-release avec 3 artefacts + SHA256 |
 | 3 | Tag `v0.2.0` (M13 Profils) | Utilisateur | `git tag v0.2.0 && git push origin v0.2.0` |
 | 4 | Suivre releases M13→M32 | Utilisateur | Un tag = une release via `release-go.yml` |
-| 5 | Script `edusync-cli migrate --from-python` | Dev | Fin P2 (clôture §6 roadmap) |
-| 6 | Campagne tests P3 (Samba, e2e, bench) | Dev/IA | Intégrée aux releases post-α1 |
+| 5 | Campagne tests P3 (Samba, e2e, bench) | Dev/IA | Intégrée aux releases post-α1 |
 
 ---
 
@@ -136,7 +135,6 @@ task build:all        # Cross-build → dist/ (5 cibles CLI)
 
 # AD de test (si Docker dispo)
 task ad:start         # Démarrer Samba AD (docs/AD_TEST_ENV.md)
-task ad:reset         # Reset domaine
 task ad:shell         # Shell dans le container
 
 # Migration données (✅ Implémentée)
@@ -149,7 +147,7 @@ edusync-cli migrate from-python [--config-dir PATH] [--vault-dir PATH] [--audit-
 
 - `CLAUDE.md` — Architecture, règles d'or, conventions, prompts réutilisables
 - `AGENTS.md` — Boucle de travail : spec → test d'abord → implémentation → gofmt/vet/test → lint CI → revue → commit
-- `docs/IA_PROMPTS.md` — Bibliothèque de prompts (nouveau module, optimisation, multisite, etc.)
+- `ROADMAP_GO_MIGRATION.md` §10 — Bibliothèque de prompts (nouveau module, optimisation, multisite, etc.)
 
 ---
 

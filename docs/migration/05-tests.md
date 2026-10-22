@@ -93,7 +93,7 @@ tests/
 
 **Outillage pour l'IA** : `go vet`, `staticcheck`, `golangci-lint`, `go test -race`, benchmarks avec profils CPU/mém.
 
-**Fichiers de contexte IA** : `CLAUDE.md` + `AGENTS.md` + `docs/IA_PROMPTS.md`
+**Fichiers de contexte IA** : `CLAUDE.md` + `AGENTS.md` + prompts du `ROADMAP_GO_MIGRATION.md` §10
 
 ---
 
@@ -298,7 +298,7 @@ jobs:
 - [ ] `docs/guide_utilisateur.md` : reflète version Go (UI, raccourcis, nouvelles fonctionnalités)
 - [ ] `docs/AD_TEST_ENV.md` : commandes `task ad:start/reset/shell` câblées
 - [ ] `docs/ARCHITECTURE.md` : packages M12-M32, RBAC, Multisite, API, Portail, IA, Compliance
-- [ ] `docs/IA_PROMPTS.md` : bibliothèque prompts complète (nouveau module, optimisation, multisite, etc.)
+- [ ] Bibliothèque de prompts : consolidée dans `ROADMAP_GO_MIGRATION.md` §10 (nouveau module, optimisation, multisite, etc.)
 - [ ] `CLAUDE.md` : état migration final, patterns modules avancés
 - [ ] `ROADMAP_GO_MIGRATION.md` : statuts §4 = ✅ partout, roadmap reflète code
 

@@ -45,12 +45,12 @@ En quelques clics, pas en PowerShell.
 | **M10 — Mise à jour intégrée** | ✅ | Vérification GitHub releases, téléchargement, SHA-256, installation préparée |
 | **M11 — Mode simulation + progression** | ✅ | Validate→Simulate→Execute→Audit sur toute écriture AD, barre progression + annulation |
 
-### ✅ Modules avancés — **Tous implémentés** (M12 → M32 + fondations)
+### ✅ Modules avancés — **M12 → M30 + M32 + fondations** (M31 priorité basse non porté)
 
 | Lot | Modules | État code |
 |-----|---------|-----------|
 | **Lot B** (M12-M24 + T2) | M12 Photos, M13 Profils, M14 Quotas, M15 Logon scripts, M16 Heures connexion, M17 Home dirs, M18 Class spaces, M19 M365/Graph, M20 Exchange, M21 RDS, M22 Advanced I/O, M23 Group templates, M24 Label Studio, T2 Cache AD | ✅ Code complet |
-| **Lot C** (M25-M32) | M25 Multisite, M26 RBAC, M27 Portail, M28 API/Webhooks, M29 Assistant IA, M30 Conformité, M31 DFS, M32 Backup/Restore, Coffre MDP | ✅ Code complet |
+| **Lot C** (M25-M30, M32) | M25 Multisite, M26 RBAC, M27 Portail, M28 API/Webhooks, M29 Assistant IA, M30 Conformité, M32 Backup/Restore, Coffre MDP | ✅ Code complet (M31 DFS/IIS/WebDAV/FTP non porté) |
 
 ### Sécurité & Exploitation
 
@@ -144,7 +144,7 @@ task build:all       # cross-build → dist/ (5 cibles CLI)
 | **P0** | Starter kit Go, config, crypto, pool AD, modèles, audit, testutil, CLI, Wails v3 | ✅ **100%** |
 | **P1** | Câblage Core M1→M11 (UI bout en bout) | ✅ **100%** |
 | **P2.1** | Pipeline release α1 (Windows InnoSetup + Linux AppImage) | ✅ **100%** (CI prêt) |
-| **P2.2** | Un module avancé = une release (M13→M32) | ✅ Code 100% — releases à déclencher |
+| **P2.2** | Un module avancé = une release (M13→M32) | ✅ Code livré (M31 non porté, M32 UI/CLI à câbler) |
 | **P2.5** | Checklist pré-alpha (tests manuels Windows + AD réel) | 🔲 **En attente validation** |
 | **P3** | Campagne tests (intégration Samba, e2e, benchmarks) | ⏳ Démarre post-α1 |
 
@@ -167,7 +167,7 @@ task build:all       # cross-build → dist/ (5 cibles CLI)
 | `v0.13.0` | M21 RDS / Bureau à distance | ✅ Implémenté |
 | `v0.14.0` | M23 Modèles de groupes | ✅ Implémenté |
 | `v0.15.0` | M24 Étiquettes avancées | ✅ Implémenté |
-| `v0.16.0+` | M25→M32 + Coffre MDP | ✅ Implémenté |
+| `v0.16.0+` | M25→M30, M32 + Coffre MDP | ✅ Implémenté (M31 non porté) |
 
 ---
 

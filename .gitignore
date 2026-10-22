@@ -21,6 +21,7 @@ env/
 # font partie du dépôt, les artefacts de packaging Python restent ignorés.
 build/*
 !build/*.sh
+!build/inno/
 dist/
 *.spec
 !packaging/edusync_ad.spec
@@ -41,3 +42,17 @@ bin/
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Divers
+*.log
+*.bak
+coverage.xml
+node_modules/
+.wails/
