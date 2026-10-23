@@ -13,7 +13,7 @@
 # (provision-ad.sh) qui le fait au premier démarrage du conteneur.
 # =============================================================================
 
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 # --- Paramètres globaux ------------------------------------------------------
 # DEBIAN_FRONTEND=noninteractive : aucune question interactive pendant apt.
