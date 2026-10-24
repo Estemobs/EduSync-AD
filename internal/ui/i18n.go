@@ -27,6 +27,8 @@ var messages = map[string]map[string]string{
 		"login.controleur":  "Contrôleur de domaine",
 		"login.utilisateur": "Utilisateur",
 		"login.mdp":         "Mot de passe",
+		"login.memoriser":   "Mémoriser les identifiants",
+		"login.skip_verify": "Connexion sans vérification du certificat",
 		"login.action":      "Se connecter",
 		"login.exemple":     "ex. EDUSYNC.LOCAL, dc1.edusync.local, Administrator",
 
@@ -1033,6 +1035,8 @@ var messages = map[string]map[string]string{
 		"login.controleur":  "Domain controller",
 		"login.utilisateur": "User",
 		"login.mdp":         "Password",
+		"login.memoriser":   "Remember credentials",
+		"login.skip_verify": "Connect without certificate verification",
 		"login.action":      "Sign in",
 		"login.exemple":     "e.g. EDUSYNC.LOCAL, dc1.edusync.local, Administrator",
 

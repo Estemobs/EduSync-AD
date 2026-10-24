@@ -747,6 +747,8 @@ func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
 	controleur := strings.TrimSpace(r.PostFormValue("controleur"))
 	utilisateur := strings.TrimSpace(r.PostFormValue("utilisateur"))
 	motDePasse := r.PostFormValue("motdepasse") // jamais logué, jamais persisté sur disque
+	memoriser := r.PostFormValue("remember") == "on"
+	skipVerify := r.PostFormValue("skip_verify") == "on"
 
 	var erreurs []string
 	if domaine == "" {
@@ -765,12 +767,13 @@ func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
 
 	// Tentative de création du pool AD (sans validation immédiate).
 	// La validation réelle aura lieu lors de l'accès aux routes protégées (requireAuth).
+	// skipVerify = true -> TLSSkipVerify = true
 	ldapFallback := false
-	pool, err := s.creerPoolADSansValidation(domaine, controleur, utilisateur, motDePasse, true)
+	pool, err := s.creerPoolADSansValidationAvecSkipVerify(domaine, controleur, utilisateur, motDePasse, true, skipVerify)
 	if err != nil {
 		// Repli LDAP 389 + StartTLS
 		ldapFallback = true
-		pool, err = s.creerPoolADSansValidation(domaine, controleur, utilisateur, motDePasse, false)
+		pool, err = s.creerPoolADSansValidationAvecSkipVerify(domaine, controleur, utilisateur, motDePasse, false, skipVerify)
 		if err != nil {
 			// Impossible de créer le pool même en no-validate : erreur de config
 			msg := formaterErreurConnexion(err, langue)
@@ -802,11 +805,19 @@ func (s *Server) connexion(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   int(dureeSession.Seconds()),
 	})
 
+	// Si "Mémoriser les identifiants" coché, enregistrer le site en multisite
+	if memoriser && motDePasse != "" {
+		s.enregistrerSiteMultisite(domaine, controleur, utilisateur, motDePasse, skipVerify)
+	}
+
 	// Traçabilité : toute connexion est journalisée (append-only).
 	if s.journal != nil {
 		detail := fmt.Sprintf("Domaine %s, contrôleur %s", domaine, controleur)
 		if ldapFallback {
 			detail += " (repli LDAP 389)"
+		}
+		if skipVerify {
+			detail += " (certificat non vérifié)"
 		}
 		entree := nouvelleEntree("connexion", utilisateur, "succes", detail)
 		entree.Utilisateur = utilisateur
@@ -841,6 +852,11 @@ func (s *Server) creerPoolAD(domaine, controleur, utilisateur, motDePasse string
 // creerPoolADSansValidation crée un pool sans pré-validation de la connexion.
 // Utile pour la phase de login : on ne bloque pas l'utilisateur si l'AD est inaccessible.
 func (s *Server) creerPoolADSansValidation(domaine, controleur, utilisateur, motDePasse string, useLDAPS bool) (*ad.Pool, error) {
+	return s.creerPoolADSansValidationAvecSkipVerify(domaine, controleur, utilisateur, motDePasse, useLDAPS, true)
+}
+
+// creerPoolADSansValidationAvecSkipVerify crée un pool sans pré-validation, avec option TLSSkipVerify.
+func (s *Server) creerPoolADSansValidationAvecSkipVerify(domaine, controleur, utilisateur, motDePasse string, useLDAPS bool, skipVerify bool) (*ad.Pool, error) {
 	port := 636
 	if !useLDAPS {
 		port = 389
@@ -853,10 +869,54 @@ func (s *Server) creerPoolADSansValidation(domaine, controleur, utilisateur, mot
 		AuthMethod:    ad.AuthSimple,
 		BindDN:        utilisateur,
 		BindPassword:  motDePasse,
-		TLSSkipVerify: true, // Phase 0 : certificats auto-signés (labo)
+		TLSSkipVerify: skipVerify, // skip_verify = true -> pas de vérification du certificat
 		Timeout:       10 * time.Second,
 		MaxConns:      10,
 	})
+}
+
+// enregistrerSiteMultisite enregistre le site dans la configuration multisite si l'utilisateur a coché "Mémoriser".
+func (s *Server) enregistrerSiteMultisite(domaine, controleur, utilisateur, motDePasse string, skipVerify bool) {
+	// Charger la config multisite existante
+	sites, err := multisite.ChargerSites("", "")
+	if err != nil {
+		sites = []multisite.ProfilDomaine{}
+	}
+
+	// Normaliser pour la comparaison (domaine en minuscules comme dans le stockage)
+	domaineNorm := strings.ToLower(strings.TrimSpace(domaine))
+	controleurNorm := strings.TrimSpace(controleur)
+
+	// Vérifier si le site existe déjà (même domaine + contrôleur)
+	for i, site := range sites {
+		if site.Domain == domaineNorm && site.Controller == controleurNorm {
+			// Mettre à jour
+			sites[i].Username = utilisateur
+			sites[i].Password = motDePasse
+			sites[i].RememberPassword = true
+			sites[i].VerifyCertificate = !skipVerify
+			_ = multisite.SauvegarderSites(sites, "", "")
+			return
+		}
+	}
+
+	// Générer un ID unique
+	id := multisite.NewSiteID(sites)
+
+	// Ajouter nouveau site
+	label := fmt.Sprintf("%s (%s)", domaineNorm, controleurNorm)
+	profil := multisite.ProfilDomaine{
+		ID:                id,
+		Label:             label,
+		Domain:            domaineNorm,
+		Controller:        controleurNorm,
+		Username:          utilisateur,
+		Password:          motDePasse,
+		RememberPassword:  true,
+		VerifyCertificate: !skipVerify,
+	}
+	sites = append(sites, profil)
+	_ = multisite.SauvegarderSites(sites, "", "")
 }
 
 // formaterErreurConnexion transforme une erreur AD en message utilisateur localisé.

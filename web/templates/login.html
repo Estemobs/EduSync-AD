@@ -42,6 +42,16 @@
                class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 dark:border-slate-700 dark:bg-slate-800 dark:focus:ring-indigo-900">
       </div>
 
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="remember" name="remember" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+        <label for="remember" class="text-sm text-slate-600 dark:text-slate-300">{{tr .Langue "login.memoriser"}}</label>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <input type="checkbox" id="skip_verify" name="skip_verify" class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+        <label for="skip_verify" class="text-sm text-slate-600 dark:text-slate-300">{{tr .Langue "login.skip_verify"}}</label>
+      </div>
+
       <div id="erreurs" role="alert" aria-live="polite"></div>
 
       <button type="submit"
