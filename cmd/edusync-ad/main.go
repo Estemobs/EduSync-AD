@@ -46,6 +46,11 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+		Linux: application.LinuxOptions{
+			// Désactiver l'accélération GPU pour éviter les problèmes Vulkan/WebKitGTK sur Linux
+			// (problème connu Wails v3 beta : VK_SUBOPTIMAL_KHR, écran blanc)
+		},
+		// DisableDefaultSignalHandler: true, // Garde le handler par défaut pour SIGUSR1 (WebKitGC)
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -55,6 +60,11 @@ func main() {
 		MinWidth:  940,
 		MinHeight: 620,
 		URL:       "/",
+		Linux: application.LinuxWindow{
+			// Désactiver l'accélération GPU (WebKitGTK + Vulkan cause écran blanc sur Linux)
+			WebviewGpuPolicy: application.WebviewGpuPolicyNever,
+		},
+		DevToolsEnabled: true, // Pour debug
 	})
 
 	if err := app.Run(); err != nil {
