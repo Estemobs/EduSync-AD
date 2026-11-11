@@ -1,4 +1,5 @@
 // Package ad fournit les opérations utilisateur Active Directory.
+//
 // Chaque opération suit le pattern : Validate() → Simulate() → Execute() → Audit()
 // (ROADMAP_GO_MIGRATION.md §3). Le mode simulation est le chemin par défaut.
 package ad
@@ -7,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/go-ldap/ldap/v3"
@@ -49,19 +49,8 @@ func (p *UserCreateParams) Validate() error {
 	if p.SAMAccountName == "" {
 		return errors.New("ad: SAMAccountName obligatoire")
 	}
-	if len(p.SAMAccountName) > 20 {
-		return errors.New("ad: SAMAccountName trop long (>20)")
-	}
-	// sAMAccountName: letters, digits, dots, underscores, hyphens (cannot start with .)
-	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`, p.SAMAccountName); !matched {
-		return errors.New("ad: SAMAccountName contient des caractères non autorisés")
-	}
 	if p.UserPrincipalName == "" {
 		return errors.New("ad: UserPrincipalName obligatoire")
-	}
-	// simple email-ish check for UPN
-	if matched, _ := regexp.MatchString(`^[^@\s]+@[^@\s]+\.[^@\s]+$`, p.UserPrincipalName); !matched {
-		return errors.New("ad: UserPrincipalName doit être une adresse email valide")
 	}
 	if p.DisplayName == "" {
 		return errors.New("ad: DisplayName obligatoire")
@@ -75,16 +64,8 @@ func (p *UserCreateParams) Validate() error {
 	if p.InitialPassword == "" {
 		return errors.New("ad: mot de passe initial obligatoire")
 	}
-	if len(p.InitialPassword) < 8 {
-		return errors.New("ad: mot de passe initial trop court (min 8)")
-	}
 	if p.OU == "" {
 		return errors.New("ad: OU parente obligatoire")
-	}
-	if p.Email != "" {
-		if matched, _ := regexp.MatchString(`^[^@\s]+@[^@\s]+\.[^@\s]+$`, p.Email); !matched {
-			return errors.New("ad: email invalide")
-		}
 	}
 	return nil
 }
@@ -99,24 +80,20 @@ type SimulateResult struct {
 }
 
 // UserCreateSimulate simule la création d'un utilisateur (sans écrire).
-func (p *Pool) UserCreateSimulate(ctx context.Context, params UserCreateParams, conn *ldap.Conn) (*SimulateResult, error) {
+func (p *Pool) UserCreateSimulate(ctx context.Context, params UserCreateParams) (*SimulateResult, error) {
 	if err := params.Validate(); err != nil {
 		return nil, err
 	}
-	if conn == nil {
-		var err error
-		conn, err = p.Get(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer p.Put(conn)
+
+	conn, err := p.Get(ctx)
+	if err != nil {
+		return nil, err
 	}
+	defer p.Put(conn)
 
 	// Vérifier si l'utilisateur existe déjà
 	filter := fmt.Sprintf("(&(objectClass=user)(sAMAccountName=%s))", ldap.EscapeFilter(params.SAMAccountName))
-
 	req := ldap.NewSearchRequest(params.OU, ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 1, 0, false, filter, []string{"dn"}, nil)
-
 	res, err := conn.Search(req)
 	if err != nil {
 		return &SimulateResult{
@@ -170,24 +147,19 @@ func (p *Pool) UserCreate(ctx context.Context, params UserCreateParams) (*User, 
 	}
 	// Le RDN est échappé comme `ldap3.utils.dn.escape_rdn` côté Python : un nom
 	// contenant « , » ou « + » ne doit pas couper le DN en deux.
-
-	// Récupérer une connexion du pool qui sera réutilisée pour toutes les étapes
-	conn, err := p.Get(ctx)
-	if err != nil {
+	dn := fmt.Sprintf("CN=%s,%s", EchapperRDN(params.DisplayName), params.OU)
+	if err := p.verifier("create_user", dn, params.OU); err != nil {
 		return nil, err
 	}
-	defer p.Put(conn)
-
-	if err := p.verifier("create_user", params.OU); err != nil {
-		return nil, err
-	}
+	// L'ajout aux groupes relève de manage_groups (comme Python, où chaque
+	// add_user_to_group est contrôlé séparément).
 	for _, groupDN := range params.Groups {
 		if err := p.verifier("manage_groups", groupDN); err != nil {
 			return nil, err
 		}
 	}
 
-	sim, err := p.UserCreateSimulate(ctx, params, conn)
+	sim, err := p.UserCreateSimulate(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -195,8 +167,11 @@ func (p *Pool) UserCreate(ctx context.Context, params UserCreateParams) (*User, 
 		return nil, errors.New(sim.Error)
 	}
 
-	// DN final (déjà échappé)
-	dn := fmt.Sprintf("CN=%s,%s", EchapperRDN(params.DisplayName), params.OU)
+	conn, err := p.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer p.Put(conn)
 
 	// Attributs de l'utilisateur
 	attrs := map[string][]string{
@@ -243,8 +218,8 @@ func (p *Pool) UserCreate(ctx context.Context, params UserCreateParams) (*User, 
 		}
 	}
 
-	// Récupérer l'utilisateur créé (réutilise la même connexion)
-	return p.UserGet(ctx, dn, conn)
+	// Récupérer l'utilisateur créé
+	return p.UserGet(ctx, dn)
 }
 
 // userAccountControl calcule la valeur de userAccountControl.
@@ -257,22 +232,18 @@ func userAccountControl(enabled bool) int {
 }
 
 // UserGet récupère un utilisateur par son DN.
-func (p *Pool) UserGet(ctx context.Context, dn string, conn *ldap.Conn) (*User, error) {
-	if conn == nil {
-		var err error
-		conn, err = p.Get(ctx)
-		if err != nil {
-			return nil, err
-		}
-		defer p.Put(conn)
+func (p *Pool) UserGet(ctx context.Context, dn string) (*User, error) {
+	conn, err := p.Get(ctx)
+	if err != nil {
+		return nil, err
 	}
+	defer p.Put(conn)
 
 	req := ldap.NewSearchRequest(dn, ldap.ScopeBaseObject, ldap.NeverDerefAliases, 1, 0, false,
 		"(objectClass=user)",
 		[]string{"dn", "sAMAccountName", "userPrincipalName", "displayName", "givenName", "sn",
 			"description", "mail", "userAccountControl", "memberOf", "distinguishedName"},
 		nil)
-
 	res, err := conn.Search(req)
 	if err != nil {
 		return nil, fmt.Errorf("ad: lecture utilisateur %s: %w", dn, err)
